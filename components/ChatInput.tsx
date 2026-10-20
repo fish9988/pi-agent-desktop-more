@@ -56,6 +56,7 @@ import { SessionAutomationMenu } from "./SessionAutomationMenu";
 import { ComposerProjectChip, getProjectLabel } from "./ComposerProjectChip";
 import { ComposerOutbox, type ComposerQueueAction } from "./ComposerOutbox";
 import { useSessionMentionPalette } from "@/hooks/useSessionMentionPalette";
+import { PromptOptimizeButton } from "./PromptOptimizeButton";
 
 
 export interface AttachedImage {
@@ -142,6 +143,8 @@ interface Props {
   onBuiltinCommand?: (message: string) => Promise<BuiltinSlashCommandResult>;
   onAudioUnlock?: () => void;
   draftKey?: string;
+  /** Plus: the conversation this composer sends to, for prompt optimisation context. */
+  sessionId?: string;
   /** Session working directory — enables the @ file autocomplete menu */
   cwd?: string | null;
   /** The hidden model-only chat workspace: images only, no file/shell mentions. */
@@ -802,6 +805,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   onAudioUnlock,
   onPromptWithStreamingBehavior,
   draftKey,
+  sessionId,
   cwd,
   chatOnly = false,
   projectPath,
@@ -2776,6 +2780,19 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             <span className="composer-trigger-hint" aria-hidden="true">
               {t(chatOnly ? "chat.composerHintChatOnly" : "chat.composerHint")}
             </span>
+          )}
+
+          {!compact && !isStreaming && !bashMode && (
+            <PromptOptimizeButton
+              value={value}
+              model={model}
+              sessionId={sessionId}
+              onReplace={(text) => {
+                valueRef.current = text;
+                setValue(text);
+                textareaRef.current?.focus();
+              }}
+            />
           )}
 
           <button

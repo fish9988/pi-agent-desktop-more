@@ -202,6 +202,29 @@ export function setUserThemeCss(css: string | null): void {
 }
 
 /**
+ * Switch the shared custom.css <link> on or off.
+ *
+ * `link.disabled` alone is not enough: a sheet that was already loading when
+ * the attribute was set (the link starts loading during HTML parsing, before
+ * the init script runs) still applies, so custom.css leaked into every theme.
+ * The sheet itself is disabled too, now and on every later load.
+ */
+export function setCustomCssEnabled(enabled: boolean): void {
+  if (typeof document === "undefined") return;
+  const link = document.querySelector<HTMLLinkElement>("link[data-custom-css]");
+  if (!link) return;
+  link.dataset.plusOff = enabled ? "0" : "1";
+  link.disabled = !enabled;
+  if (link.sheet) link.sheet.disabled = !enabled;
+  if (!link.dataset.plusGuard) {
+    link.dataset.plusGuard = "1";
+    link.addEventListener("load", () => {
+      if (link.sheet) link.sheet.disabled = link.dataset.plusOff === "1";
+    });
+  }
+}
+
+/**
  * Apply settings to <html> and the custom.css <link>. `userBase` is the base
  * of the active imported theme when known. Browser only.
  */
@@ -227,8 +250,7 @@ export function applyPlusTheme(settings: PlusThemeSettings, userBase?: ThemeBase
     }
   }
   if (!isUserTheme(settings.theme)) setUserThemeCss(null);
-  const link = document.querySelector<HTMLLinkElement>("link[data-custom-css]");
-  if (link) link.disabled = !settings.customCssOverlay;
+  setCustomCssEnabled(settings.customCssOverlay);
 }
 
 /**
@@ -236,5 +258,5 @@ export function applyPlusTheme(settings: PlusThemeSettings, userBase?: ThemeBase
  * `bases` maps built-in ids to their base.
  */
 export function plusThemeInitScript(bases: Record<string, ThemeBase>): string {
-  return `(function(){try{var r=document.documentElement;var s={};try{s=JSON.parse(localStorage.getItem(${JSON.stringify(PLUS_THEME_STORAGE_KEY)})||"{}")||{}}catch(e){}var B=${JSON.stringify(bases)};var t=typeof s.theme==="string"?s.theme:(s.style==="native"||s.style==="clean"?s.style:${JSON.stringify(DEFAULT_THEME_ID)});var u=t.indexOf(${JSON.stringify(USER_THEME_PREFIX)})===0;if(!u&&!B[t])t=${JSON.stringify(DEFAULT_THEME_ID)};r.dataset.plusTheme=t;var base=B[t]||"native";if(u){try{var c=JSON.parse(localStorage.getItem(${JSON.stringify(PLUS_USER_THEME_CACHE_KEY)})||"null");if(c&&c.id===t.slice(5)&&typeof c.css==="string"){base=c.base==="clean"?"clean":"native";var st=document.createElement("style");st.id=${JSON.stringify(PLUS_USER_THEME_STYLE_ID)};st.textContent=c.css;document.head.appendChild(st)}}catch(e){}}r.dataset.plusStyle=base;function accentExtra(a){return [a,"color-mix(in srgb, "+a+" 86%, black)","#ffffff","color-mix(in srgb, "+a+" 80%, var(--text-muted))",a,a,"color-mix(in srgb, "+a+" 10%, transparent)"]}var F=${JSON.stringify(FONT_FALLBACKS)};var G=${JSON.stringify([...GENERIC_FAMILIES])};function stack(v,k){if(typeof v!=="string")return null;var p=v.split(",").map(function(x){return x.replace(/["'\\\\;{}<>()]/g,"").trim()}).filter(Boolean);if(!p.length)return null;return p.map(function(n){return G.indexOf(n.toLowerCase())>=0?n:'"'+n+'"'}).join(", ")+", "+F[k]}var L={inter:"Inter",harmony:"HarmonyOS Sans SC",misans:"MiSans",serif:"Georgia, Noto Serif SC, SimSun"};var R=[["ui","Ui",s.uiFont!=null?s.uiFont:L[s.font]],["chat","Chat",s.chatFont],["code","Code",s.codeFont]];for(var i=0;i<R.length;i++){var v=stack(R[i][2],R[i][0]);if(v){r.style.setProperty("--plus-font-"+R[i][0],v);r.dataset["plus"+R[i][1]+"Font"]=""}}var a=typeof s.accent==="string"&&/^#[0-9a-f]{6}$/i.test(s.accent)?s.accent:"";if(a){r.style.setProperty("--accent",a);r.style.setProperty("--accent-hover","color-mix(in srgb, "+a+" 86%, black)");r.style.setProperty("--accent-contrast","#ffffff");r.style.setProperty("--accent-soft","color-mix(in srgb, "+a+" 12%, transparent)");r.style.setProperty("--accent-border","color-mix(in srgb, "+a+" 42%, transparent)");r.style.setProperty("--focus-ring","color-mix(in srgb, "+a+" 40%, transparent)");r.style.setProperty("--selection","color-mix(in srgb, "+a+" 24%, transparent)");var A=${JSON.stringify(ACCENT_EXTRA_KEYS)};var X=accentExtra(a);for(var j=0;j<A.length;j++)r.style.setProperty(A[j],X[j])}if(s.customCssOverlay!==true){var l=document.querySelector("link[data-custom-css]");if(l)l.disabled=true}}catch(e){}})();`;
+  return `(function(){try{var r=document.documentElement;var s={};try{s=JSON.parse(localStorage.getItem(${JSON.stringify(PLUS_THEME_STORAGE_KEY)})||"{}")||{}}catch(e){}var B=${JSON.stringify(bases)};var t=typeof s.theme==="string"?s.theme:(s.style==="native"||s.style==="clean"?s.style:${JSON.stringify(DEFAULT_THEME_ID)});var u=t.indexOf(${JSON.stringify(USER_THEME_PREFIX)})===0;if(!u&&!B[t])t=${JSON.stringify(DEFAULT_THEME_ID)};r.dataset.plusTheme=t;var base=B[t]||"native";if(u){try{var c=JSON.parse(localStorage.getItem(${JSON.stringify(PLUS_USER_THEME_CACHE_KEY)})||"null");if(c&&c.id===t.slice(5)&&typeof c.css==="string"){base=c.base==="clean"?"clean":"native";var st=document.createElement("style");st.id=${JSON.stringify(PLUS_USER_THEME_STYLE_ID)};st.textContent=c.css;document.head.appendChild(st)}}catch(e){}}r.dataset.plusStyle=base;function accentExtra(a){return [a,"color-mix(in srgb, "+a+" 86%, black)","#ffffff","color-mix(in srgb, "+a+" 80%, var(--text-muted))",a,a,"color-mix(in srgb, "+a+" 10%, transparent)"]}var F=${JSON.stringify(FONT_FALLBACKS)};var G=${JSON.stringify([...GENERIC_FAMILIES])};function stack(v,k){if(typeof v!=="string")return null;var p=v.split(",").map(function(x){return x.replace(/["'\\\\;{}<>()]/g,"").trim()}).filter(Boolean);if(!p.length)return null;return p.map(function(n){return G.indexOf(n.toLowerCase())>=0?n:'"'+n+'"'}).join(", ")+", "+F[k]}var L={inter:"Inter",harmony:"HarmonyOS Sans SC",misans:"MiSans",serif:"Georgia, Noto Serif SC, SimSun"};var R=[["ui","Ui",s.uiFont!=null?s.uiFont:L[s.font]],["chat","Chat",s.chatFont],["code","Code",s.codeFont]];for(var i=0;i<R.length;i++){var v=stack(R[i][2],R[i][0]);if(v){r.style.setProperty("--plus-font-"+R[i][0],v);r.dataset["plus"+R[i][1]+"Font"]=""}}var a=typeof s.accent==="string"&&/^#[0-9a-f]{6}$/i.test(s.accent)?s.accent:"";if(a){r.style.setProperty("--accent",a);r.style.setProperty("--accent-hover","color-mix(in srgb, "+a+" 86%, black)");r.style.setProperty("--accent-contrast","#ffffff");r.style.setProperty("--accent-soft","color-mix(in srgb, "+a+" 12%, transparent)");r.style.setProperty("--accent-border","color-mix(in srgb, "+a+" 42%, transparent)");r.style.setProperty("--focus-ring","color-mix(in srgb, "+a+" 40%, transparent)");r.style.setProperty("--selection","color-mix(in srgb, "+a+" 24%, transparent)");var A=${JSON.stringify(ACCENT_EXTRA_KEYS)};var X=accentExtra(a);for(var j=0;j<A.length;j++)r.style.setProperty(A[j],X[j])}var l=document.querySelector("link[data-custom-css]");if(l){var off=s.customCssOverlay!==true;l.dataset.plusOff=off?"1":"0";l.dataset.plusGuard="1";l.addEventListener("load",function(){if(l.sheet)l.sheet.disabled=l.dataset.plusOff==="1"});if(off){l.disabled=true;if(l.sheet)l.sheet.disabled=true}}}catch(e){}})();`;
 }

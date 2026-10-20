@@ -7,6 +7,7 @@ import {
   applyPlusTheme,
   isUserTheme,
   PLUS_ACCENT_PRESETS,
+  setCustomCssEnabled,
   setUserThemeCss,
   USER_THEME_PREFIX,
   writeUserThemeCache,
@@ -560,10 +561,9 @@ export function PlusAppearanceSettings() {
           title={t("plus.cssEditor")}
           onPreview={(css) => {
             let style = document.getElementById(CUSTOM_CSS_PREVIEW_ID) as HTMLStyleElement | null;
-            const link = document.querySelector<HTMLLinkElement>("link[data-custom-css]");
             if (css === null) {
               style?.remove();
-              if (link) link.disabled = !settings.customCssOverlay;
+              setCustomCssEnabled(settings.customCssOverlay);
               return;
             }
             if (!style) {
@@ -572,7 +572,7 @@ export function PlusAppearanceSettings() {
               document.head.appendChild(style);
             }
             style.textContent = css;
-            if (link) link.disabled = true;
+            setCustomCssEnabled(false);
           }}
           onSave={async (css) => {
             const response = await fetch("/api/custom-css", {

@@ -1172,6 +1172,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
       onAudioUnlock={unlockAudio}
       autoFocus={isNew}
       draftKey={session?.id ?? newSessionDraftKey ?? undefined}
+      sessionId={session?.id}
       cwd={chatOnly ? undefined : session?.cwd ?? newSessionCwd}
       projectPath={chatOnly ? undefined : session?.projectRoot ?? session?.cwd ?? newSessionCwd}
       onSelectProject={chatOnly ? undefined : onSelectProject}
