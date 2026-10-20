@@ -6,7 +6,7 @@
    settings.css stay byte-identical to upstream pi-web, and native-theme.css
    to upstream pi-agent-desktop, so upstream fixes can still be picked over.
    -------------------------------------------------------------------------- */
-/* ── Plus: chat column resize handles ─────────────────────────────────── */
+/* -- Plus: chat column resize handles ----------------------------------- */
 .chat-column-resize-handle {
   position: absolute;
   top: 0;
@@ -43,7 +43,7 @@ html.is-resizing-chat-column * {
   .chat-column-resize-handle { display: none; }
 }
 .settings-chat-width-unit { margin-left: auto; margin-right: 8px; }
-/* ── Plus: work groups (finished + live) ──────────────────────────────── */
+/* -- Plus: work groups (finished + live) -------------------------------- */
 .work-group { margin-bottom: 14px; }
 .work-group-header {
   display: flex;
@@ -182,7 +182,7 @@ html.is-resizing-chat-column * {
 }
 .work-details-menu-chip:hover { background: var(--bg-hover); }
 
-/* ── Plus: find in conversation ───────────────────────────────────────── */
+/* -- Plus: find in conversation ----------------------------------------- */
 .chat-find-bar {
   position: absolute;
   top: 10px;
@@ -228,6 +228,8 @@ html.is-resizing-chat-column * {
 }
 .chat-find-bar button:hover:not(:disabled) { background: var(--bg-hover); color: var(--text); }
 .chat-find-bar button:disabled { opacity: 0.4; cursor: default; }
-::highlight(pi-chat-find) { background-color: rgba(250, 204, 21, 0.35); color: inherit; }
-::highlight(pi-chat-find-current) { background-color: rgba(249, 115, 22, 0.55); color: inherit; }.settings-work-details-label { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.settings-work-details-option .settings-choice-group { flex-wrap: wrap; justify-content: flex-end; }
+
+/* -- Plus: settings rows --------------------------------------------- */
+.settings-work-details-label { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.settings-chat-option.settings-work-details-option { flex-direction: column; align-items: stretch; gap: 8px; }
+.settings-work-details-option .settings-choice-group { flex-wrap: wrap; justify-content: flex-start; }

@@ -1,0 +1,329 @@
+/* --------------------------------------------------------------------------
+   Plus interface styles.
+
+   "native" keeps upstream Pi Agent's look untouched. "clean" is a calm,
+   neutral style modelled on Magpie: light grey chrome, white working
+   surfaces, hairline borders, pill controls and a violet accent.
+
+   Selectors carry html[data-plus-style]:root (0,2,1) so they win over
+   upstream's :root / html.dark and over custom.css palettes written on
+   html:root / html.dark:root. Users who want their custom.css palette can pick
+   the "native" style, or turn custom.css off for Plus in Settings.
+   -------------------------------------------------------------------------- */
+
+html[data-plus-style="clean"]:root {
+  color-scheme: light;
+  --bg: #f4f4f5;
+  --bg-panel: #f4f4f5;
+  --workbench-bg: #fbfbfc;
+  --surface: #ffffff;
+  --surface-muted: rgba(255, 255, 255, 0.7);
+  --surface-elevated: #ffffff;
+  --bg-hover: rgba(24, 24, 27, 0.045);
+  --bg-selected: rgba(24, 24, 27, 0.07);
+  --bg-subtle: rgba(24, 24, 27, 0.035);
+  --border: rgba(24, 24, 27, 0.09);
+  --separator: rgba(24, 24, 27, 0.07);
+  --text: #18181b;
+  --text-muted: #52525b;
+  --text-dim: #6b6b74;
+  --text-meta: #71717a;
+  --accent: #5b4fe0;
+  --accent-hover: #4b3fd1;
+  --accent-contrast: #ffffff;
+  --accent-soft: rgba(91, 79, 224, 0.1);
+  --accent-border: rgba(91, 79, 224, 0.36);
+  --focus-ring: rgba(91, 79, 224, 0.34);
+  --selection: rgba(91, 79, 224, 0.18);
+  --user-bg: #f0f0f3;
+  --assistant-bg: transparent;
+  --tool-bg: rgba(24, 24, 27, 0.03);
+  --scroll-thumb: rgba(24, 24, 27, 0.2);
+  --radius-sm: 7px;
+  --radius-md: 9px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --shadow-control: 0 1px 2px rgba(16, 16, 20, 0.05);
+  --shadow-composer: 0 1px 2px rgba(16, 16, 20, 0.04), 0 8px 24px rgba(16, 16, 20, 0.06);
+  --shadow-popover: 0 12px 36px rgba(16, 16, 20, 0.12), 0 2px 6px rgba(16, 16, 20, 0.05);
+}
+
+html.dark[data-plus-style="clean"]:root {
+  color-scheme: dark;
+  --bg: #161618;
+  --bg-panel: #161618;
+  --workbench-bg: #1b1b1e;
+  --surface: #222226;
+  --surface-muted: rgba(34, 34, 38, 0.8);
+  --surface-elevated: #26262b;
+  --bg-hover: rgba(255, 255, 255, 0.06);
+  --bg-selected: rgba(255, 255, 255, 0.09);
+  --bg-subtle: rgba(255, 255, 255, 0.045);
+  --border: rgba(255, 255, 255, 0.09);
+  --separator: rgba(255, 255, 255, 0.07);
+  --text: #f4f4f5;
+  --text-muted: #b4b4bb;
+  --text-dim: #8e8e97;
+  --text-meta: #8b8b94;
+  --accent: #8f86ff;
+  --accent-hover: #a59eff;
+  --accent-contrast: #14141a;
+  --accent-soft: rgba(143, 134, 255, 0.16);
+  --accent-border: rgba(143, 134, 255, 0.42);
+  --focus-ring: rgba(143, 134, 255, 0.42);
+  --selection: rgba(143, 134, 255, 0.28);
+  --user-bg: #26262b;
+  --tool-bg: rgba(255, 255, 255, 0.035);
+  --scroll-thumb: rgba(255, 255, 255, 0.2);
+  --shadow-control: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-composer: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 28px rgba(0, 0, 0, 0.32);
+  --shadow-popover: 0 16px 44px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* UI font override (Settings › Appearance › Font). */
+html[data-plus-font]:not([data-plus-font="system"]):root {
+  --font-ui: var(--plus-font-ui);
+  --font-display: var(--plus-font-ui);
+}
+
+/* ---- clean: chrome ------------------------------------------------------- */
+
+html[data-plus-style="clean"] .app-sidebar {
+  background: var(--bg-panel) !important;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border-right: var(--hairline) solid var(--separator) !important;
+}
+
+html[data-plus-style="clean"] .session-item {
+  border-radius: 9px;
+}
+
+html[data-plus-style="clean"] .session-item.is-selected {
+  background: var(--surface) !important;
+  box-shadow: 0 0 0 var(--hairline) var(--border), 0 1px 2px rgba(16, 16, 20, 0.06);
+}
+
+html.dark[data-plus-style="clean"] .session-item.is-selected {
+  background: var(--bg-selected) !important;
+  box-shadow: 0 0 0 var(--hairline) var(--border);
+}
+
+html[data-plus-style="clean"] .sidebar-project-tree-row {
+  border-radius: 9px;
+}
+
+/* Breathing room between project groups (pi-web #1338). */
+html[data-plus-style="clean"] .sidebar-project-tree-group + .sidebar-project-tree-group {
+  margin-top: 8px;
+}
+
+html[data-plus-style="clean"] .app-topbar {
+  background: var(--workbench-bg) !important;
+  border-bottom: var(--hairline) solid var(--separator);
+}
+
+/* ---- clean: conversation ------------------------------------------------- */
+
+html[data-plus-style="clean"] .chat-composer {
+  border-radius: 16px !important;
+  border-color: var(--border) !important;
+  background: var(--surface) !important;
+  box-shadow: var(--shadow-composer) !important;
+}
+
+html[data-plus-style="clean"] .chat-composer:focus-within {
+  border-color: var(--accent-border) !important;
+  box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow-composer) !important;
+}
+
+html[data-plus-style="clean"] .message-user > div,
+html[data-plus-style="clean"] .message-user [data-message-bubble] {
+  border-radius: 14px;
+}
+
+html[data-plus-style="clean"] .work-group-trigger {
+  border-color: var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-control);
+}
+
+html[data-plus-style="clean"] .work-group-trigger:hover,
+html[data-plus-style="clean"] .work-group.is-open .work-group-trigger {
+  border-color: var(--accent-border);
+  background: var(--surface);
+}
+
+html[data-plus-style="clean"] .work-group-body {
+  border-left-color: var(--accent-soft);
+}
+
+html[data-plus-style="clean"] .markdown-body a {
+  color: var(--accent);
+}
+
+/* ---- clean: menus and settings ------------------------------------------- */
+
+html[data-plus-style="clean"] .native-popover,
+html[data-plus-style="clean"] .app-menu {
+  border-radius: 12px;
+}
+
+html[data-plus-style="clean"] .config-button-primary {
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+  color: var(--accent-contrast) !important;
+}
+
+html[data-plus-style="clean"] .config-button-primary:hover:not(:disabled) {
+  background: var(--accent-hover) !important;
+  border-color: var(--accent-hover) !important;
+}
+
+html[data-plus-style="clean"] .settings-choice-group .config-button,
+html[data-plus-style="clean"] .work-details-menu-chip {
+  border-radius: 999px;
+}
+
+/* ---- Plus appearance settings block --------------------------------------- */
+
+.plus-appearance {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.plus-appearance-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 32px;
+  font-size: 12px;
+}
+
+.plus-appearance-row > span:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.plus-style-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.plus-style-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: var(--hairline) solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.plus-style-card[aria-checked="true"] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.plus-style-swatch {
+  display: grid;
+  grid-template-columns: 30% 1fr;
+  height: 44px;
+  overflow: hidden;
+  border-radius: 8px;
+  border: var(--hairline) solid var(--border);
+}
+
+.plus-style-swatch > span:first-child { background: var(--swatch-side); }
+.plus-style-swatch > span:last-child {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 6px;
+  background: var(--swatch-main);
+}
+.plus-style-swatch > span:last-child::after {
+  content: "";
+  width: 24px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--swatch-accent);
+}
+
+.plus-accent-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.plus-accent-swatch {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 2px solid var(--surface);
+  border-radius: 999px;
+  box-shadow: 0 0 0 var(--hairline) var(--border);
+  cursor: pointer;
+}
+
+.plus-accent-swatch[aria-checked="true"] {
+  box-shadow: 0 0 0 2px var(--text);
+}
+
+.plus-accent-custom {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.plus-css-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.plus-css-editor textarea {
+  width: 100%;
+  min-height: 220px;
+  padding: 10px 12px;
+  border: var(--hairline) solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  resize: vertical;
+  tab-size: 2;
+}
+
+.plus-css-editor textarea:focus {
+  outline: none;
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.plus-css-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+.plus-css-editor-actions .spacer { flex: 1; }

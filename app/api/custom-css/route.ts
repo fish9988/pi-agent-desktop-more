@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { isApiRequestAllowed } from "@/lib/request-security";
@@ -83,4 +83,41 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({ path: filePath, created });
+}
+
+/** Largest stylesheet the in-app editor may save (Plus). */
+const MAX_CUSTOM_CSS_BYTES = 1024 * 1024;
+
+/**
+ * Plus: save the stylesheet from the in-app editor. Written to a temp file
+ * and renamed so a half-written file is never served; the page picks the
+ * change up through /api/custom-css/version without a reload.
+ */
+export async function PUT(request: NextRequest) {
+  if (!isApiRequestAllowed(request)) {
+    return NextResponse.json({ error: "Not allowed" }, { status: 403 });
+  }
+  let css: unknown;
+  try {
+    css = ((await request.json()) as { css?: unknown }).css;
+  } catch {
+    return NextResponse.json({ error: "Invalid body" }, { status: 400 });
+  }
+  if (typeof css !== "string") {
+    return NextResponse.json({ error: "css must be a string" }, { status: 400 });
+  }
+  if (Buffer.byteLength(css, "utf8") > MAX_CUSTOM_CSS_BYTES) {
+    return NextResponse.json({ error: "custom.css is limited to 1 MB" }, { status: 413 });
+  }
+  const filePath = join(getAgentDir(), "desktop", "custom.css");
+  try {
+    await mkdir(dirname(filePath), { recursive: true });
+    const temp = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+    await writeFile(temp, css, "utf8");
+    await rename(temp, filePath);
+  } catch (error) {
+    console.error(`custom-css: failed to save ${filePath}:`, error);
+    return NextResponse.json({ error: "Failed to save custom.css" }, { status: 500 });
+  }
+  return NextResponse.json({ path: filePath, saved: true });
 }

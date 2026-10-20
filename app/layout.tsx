@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Noto_Sans_Mono } from "next/font/google";
 import { PwaRegistration } from "@/components/PwaRegistration";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
+import { PLUS_THEME_INIT_SCRIPT } from "@/lib/plus-theme";
+import { PlusAppearanceRuntime } from "@/components/PlusAppearanceRuntime";
 import "katex/dist/katex.min.css";
 import "./globals.css";
 import "./settings.css";
@@ -9,6 +11,7 @@ import "./settings.css";
 // equal-specificity rules win the cascade. See app/native-theme.css.
 import "./native-theme.css";
 import "./plus.css";
+import "./plus-theme.css";
 import { PRODUCT_NAME } from "@/lib/branding";
 
 const CUSTOM_CSS_ACTIVATE_SCRIPT = `(function(){var l=document.querySelector("link[data-custom-css]");if(!l)return;var a=function(){l.media="all"};l.addEventListener("load",a);l.addEventListener("error",a);if(l.sheet)a()})();`;
@@ -85,10 +88,13 @@ export default function RootLayout({
             __html: THEME_INIT_SCRIPT,
           }}
         />
+        {/* Plus: interface style, accent, font and custom.css switch, before first paint. */}
+        <script dangerouslySetInnerHTML={{ __html: PLUS_THEME_INIT_SCRIPT }} />
       </head>
       <body translate="no" className="notranslate" suppressHydrationWarning>
         {children}
         <PwaRegistration />
+        <PlusAppearanceRuntime />
       </body>
     </html>
   );

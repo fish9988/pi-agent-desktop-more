@@ -46,6 +46,7 @@ import { AppUpdatesSection } from "./AppUpdatesSection";
 import { DesktopAppSection } from "./desktop";
 import { McpConfig } from "./McpConfig";
 import { ConfigButton, ConfigSwitch } from "./SettingsUi";
+import { PlusAppearanceSettings } from "./PlusAppearanceSettings";
 import { ArtifactsSettingRow } from "./ArtifactsSettingRow";
 import { ChatsSettingsSection } from "./ChatsSettingsSection";
 
@@ -471,6 +472,7 @@ function GeneralSettings({
                 );
               })}
             </div>
+            <PlusAppearanceSettings />
             <div className="settings-option-list">
               <div className="settings-option">
                 <span className="settings-option-text">

@@ -28,6 +28,18 @@ function highlightRegistry(): HighlightRegistry | null {
   return css?.highlights ?? null;
 }
 
+// Injected at runtime: the build's CSS parser does not know ::highlight() yet
+// and would warn about (or drop) the rule.
+const HIGHLIGHT_STYLE_ID = "pi-chat-find-highlight-style";
+function ensureHighlightStyle(): void {
+  if (typeof document === "undefined" || document.getElementById(HIGHLIGHT_STYLE_ID)) return;
+  const style = document.createElement("style");
+  style.id = HIGHLIGHT_STYLE_ID;
+  style.textContent = `::highlight(${HIGHLIGHT_ALL}) { background-color: rgba(250, 204, 21, 0.38); color: inherit; }
+::highlight(${HIGHLIGHT_CURRENT}) { background-color: rgba(249, 115, 22, 0.6); color: inherit; }`;
+  document.head.appendChild(style);
+}
+
 function clearHighlights(): void {
   const registry = highlightRegistry();
   registry?.delete(HIGHLIGHT_ALL);
@@ -98,6 +110,7 @@ export function useChatFind({ messages, entryIds, toolResults, scrollContainerRe
     }
     const HighlightCtor = (globalThis as { Highlight?: new (...ranges: Range[]) => unknown }).Highlight;
     if (!HighlightCtor) return;
+    ensureHighlightStyle();
     let timer: number | null = null;
     const paint = () => {
       timer = null;
