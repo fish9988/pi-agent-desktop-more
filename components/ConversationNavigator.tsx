@@ -27,6 +27,26 @@ export function ConversationNavigator({ turns, scrollContainerRef, onSelect }: P
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [isHovering, setIsHovering] = useState(false);
   const draggingRef = useRef(false);
+  // Plus: the preview card sits beside the rail with a gap, so leaving the
+  // rail used to unmount the card before the pointer could reach it, and the
+  // card could never be clicked (#130 regressed for mouse users). Hide it after
+  // a short grace period instead; entering the card cancels the hide.
+  const hideTimerRef = useRef<number | null>(null);
+  const cancelHide = useCallback(() => {
+    if (hideTimerRef.current !== null) {
+      window.clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
+  }, []);
+  const scheduleHide = useCallback(() => {
+    cancelHide();
+    hideTimerRef.current = window.setTimeout(() => {
+      hideTimerRef.current = null;
+      setIsHovering(false);
+      if (!draggingRef.current) setPreviewIndex(null);
+    }, 350);
+  }, [cancelHide]);
+  useEffect(() => cancelHide, [cancelHide]);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -80,11 +100,11 @@ export function ConversationNavigator({ turns, scrollContainerRef, onSelect }: P
     <div
       className={`conversation-navigator${isHovering ? " is-hovering" : ""}`}
       style={{ height: navigatorHeight }}
-      onPointerEnter={() => setIsHovering(true)}
-      onPointerLeave={() => {
-        setIsHovering(false);
-        if (!draggingRef.current) setPreviewIndex(null);
+      onPointerEnter={() => {
+        cancelHide();
+        setIsHovering(true);
       }}
+      onPointerLeave={scheduleHide}
     >
       {preview && (
         // Clicking the card jumps to its turn, like clicking the tick beside it.
@@ -94,10 +114,14 @@ export function ConversationNavigator({ turns, scrollContainerRef, onSelect }: P
           className="conversation-navigator-preview"
           tabIndex={-1}
           title={t("chat.conversationNavigatorJump")}
+          onPointerEnter={cancelHide}
           onClick={() => {
             if (previewIndex == null) return;
             setActiveIndex(previewIndex);
             onSelect(previewIndex);
+            cancelHide();
+            setIsHovering(false);
+            setPreviewIndex(null);
           }}
         >
           <span className="conversation-navigator-question">{preview.question}</span>
