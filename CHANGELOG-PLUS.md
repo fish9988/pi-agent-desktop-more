@@ -3,6 +3,12 @@
 Pi Agent Plus 是 [abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop) 的个人二次开发版（仅 Windows），
 与官方版可同时安装、互不覆盖。版本规则见 [VERSIONING-PLUS.md](./VERSIONING-PLUS.md)。
 
+## [1.4.1] - 2026-10-20
+
+基于 Pi Agent 0.7.5。
+
+- 用于验证应用内一键升级（1.4.0 → 1.4.1），没有功能变化。
+
 ## [1.4.0] - 2026-10-20
 
 基于 Pi Agent 0.7.5。
