@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Agent, AgentMessage } from "@earendil-works/pi-agent-core";
 import {
+  getSupportedThinkingLevels,
   normalizeContext,
   type Api,
   type AssistantMessage,
@@ -13,6 +14,7 @@ import { ModelRuntime, getAgentDir } from "@earendil-works/pi-coding-agent";
 import { join } from "node:path";
 import { createModelRuntimeWithExtensions } from "./model-runtime";
 import { buildTitleTranscript, resolveTitleThinkingLevel } from "./session-title";
+import { DEFAULT_OPTIMIZER_SETTINGS, type OptimizerThinkingLevel, type PromptOptimizerSettings } from "./prompt-optimizer-settings";
 
 /**
  * Plus: rewrite a rough draft from the composer into a clear prompt with the
@@ -38,8 +40,25 @@ Rules:
 - Do not answer or carry out the request.
 - Output only the rewritten prompt, with no preface, quotes, or explanation.`;
 
+const STYLE_RULES: Record<PromptOptimizerSettings["style"], string> = {
+  auto: "",
+  concise: "- Keep the result short: a few plain sentences, no headings or bullet lists unless the user wrote them.",
+  structured: "- Always organise the result into short labelled parts — goal, context, requirements, constraints, expected result — written in the user's language, leaving out any part with nothing to say.",
+};
+
+/** Built-in rules plus the chosen style and the user's own extra rules. */
+export function buildOptimizeSystemPrompt(settings: Pick<PromptOptimizerSettings, "style" | "instructions"> = DEFAULT_OPTIMIZER_SETTINGS): string {
+  const parts = [OPTIMIZE_SYSTEM_PROMPT];
+  if (STYLE_RULES[settings.style]) parts.push(STYLE_RULES[settings.style]);
+  const extra = settings.instructions.trim();
+  if (extra) parts.push(`\nAdditional rules from the user (follow them unless they conflict with keeping the user's meaning):\n${extra}`);
+  return parts.join("\n");
+}
+
 export interface OptimizeInput {
   text: string;
+  /** Settings from Settings › Prompt optimiser; defaults when absent. */
+  settings?: PromptOptimizerSettings;
   /** Composer model; required unless a live session agent is supplied. */
   provider?: string;
   modelId?: string;
@@ -52,7 +71,7 @@ export interface OptimizeResult {
   model: string;
 }
 
-export function buildOptimizeContext(text: string, history: AgentMessage[] = []): Context {
+export function buildOptimizeContext(text: string, history: AgentMessage[] = [], systemPrompt: string = OPTIMIZE_SYSTEM_PROMPT): Context {
   const transcript = history.length ? buildTitleTranscript(history) : "";
   const parts = [
     transcript.trim()
@@ -61,7 +80,7 @@ export function buildOptimizeContext(text: string, history: AgentMessage[] = [])
     `Message to rewrite:\n<message>\n${text}\n</message>`,
   ].filter(Boolean);
   return {
-    systemPrompt: OPTIMIZE_SYSTEM_PROMPT,
+    systemPrompt,
     messages: [{ role: "user", content: [{ type: "text", text: parts.join("\n") }], timestamp: Date.now() }],
   };
 }
@@ -88,8 +107,22 @@ function textOfReply(message: AssistantMessage): string {
   return text;
 }
 
-function budget(model: Model<Api>): { maxTokens: number; reasoning?: SimpleStreamOptions["reasoning"] } {
-  const level = resolveTitleThinkingLevel(model);
+/** The requested level if the model supports it, else the nearest supported one. */
+export function resolveOptimizerThinkingLevel(model: Model<Api>, requested: OptimizerThinkingLevel | null): string {
+  if (!requested) return resolveTitleThinkingLevel(model);
+  if (!model.reasoning) return "off";
+  const supported = getSupportedThinkingLevels(model) as string[];
+  if (supported.includes(requested)) return requested;
+  const order = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
+  const wanted = order.indexOf(requested);
+  const ranked = supported
+    .map((level) => ({ level, distance: Math.abs(order.indexOf(level) - wanted) }))
+    .sort((a, b) => a.distance - b.distance);
+  return ranked[0]?.level ?? resolveTitleThinkingLevel(model);
+}
+
+function budget(model: Model<Api>, requested: OptimizerThinkingLevel | null = null): { maxTokens: number; reasoning?: SimpleStreamOptions["reasoning"] } {
+  const level = resolveOptimizerThinkingLevel(model, requested);
   const wanted = level === "off" ? MAX_TOKENS : REASONING_MAX_TOKENS;
   return {
     maxTokens: model.maxTokens > 0 ? Math.min(wanted, model.maxTokens) : wanted,
@@ -97,14 +130,14 @@ function budget(model: Model<Api>): { maxTokens: number; reasoning?: SimpleStrea
   };
 }
 
-async function viaAgent(agent: Agent, context: Context): Promise<OptimizeResult> {
+async function viaAgent(agent: Agent, context: Context, level: OptimizerThinkingLevel | null): Promise<OptimizeResult> {
   const model = agent.state.model;
   const apiKey = await agent.getApiKey?.(model.provider);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
     const stream = await agent.streamFunction(model, normalizeContext(context), {
-      ...budget(model),
+      ...budget(model, level),
       cacheRetention: "none",
       sessionId: randomUUID(),
       transport: agent.transport,
@@ -122,7 +155,7 @@ async function viaAgent(agent: Agent, context: Context): Promise<OptimizeResult>
   }
 }
 
-async function viaRuntime(provider: string, modelId: string, context: Context): Promise<OptimizeResult> {
+async function viaRuntime(provider: string, modelId: string, context: Context, level: OptimizerThinkingLevel | null): Promise<OptimizeResult> {
   const agentDir = getAgentDir();
   let runtime = await ModelRuntime.create({
     authPath: join(agentDir, "auth.json"),
@@ -144,7 +177,7 @@ async function viaRuntime(provider: string, modelId: string, context: Context): 
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
     const message = await completeSimple(model, normalizeContext(context), {
-      ...budget(model),
+      ...budget(model, level),
       apiKey: resolved.auth.apiKey,
       headers: resolved.auth.headers,
       cacheRetention: "none",
@@ -163,14 +196,19 @@ export async function optimizePrompt(input: OptimizeInput): Promise<OptimizeResu
   const text = input.text.trim();
   if (!text) throw new Error("Nothing to optimise");
   if (text.length > MAX_DRAFT_CHARS) throw new Error(`The draft is longer than ${MAX_DRAFT_CHARS} characters`);
+  const settings = input.settings ?? DEFAULT_OPTIMIZER_SETTINGS;
   const agent = input.agent;
-  const history = agent ? [...agent.state.messages] : [];
-  const context = buildOptimizeContext(text, history);
-  const sameModel = agent && (!input.provider || (agent.state.model.provider === input.provider && agent.state.model.id === input.modelId));
-  if (agent && sameModel) return viaAgent(agent, context);
-  if (!input.provider || !input.modelId) {
-    if (agent) return viaAgent(agent, context);
+  const history = agent && settings.useContext ? [...agent.state.messages] : [];
+  const context = buildOptimizeContext(text, history, buildOptimizeSystemPrompt(settings));
+  // A model chosen in settings wins over the composer's.
+  const provider = settings.model?.provider ?? input.provider;
+  const modelId = settings.model?.modelId ?? input.modelId;
+  const level = settings.thinkingLevel;
+  const sameModel = agent && (!provider || (agent.state.model.provider === provider && agent.state.model.id === modelId));
+  if (agent && sameModel) return viaAgent(agent, context, level);
+  if (!provider || !modelId) {
+    if (agent) return viaAgent(agent, context, level);
     throw new Error("No model selected");
   }
-  return viaRuntime(input.provider, input.modelId, context);
+  return viaRuntime(provider, modelId, context, level);
 }

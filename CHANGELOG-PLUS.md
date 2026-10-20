@@ -3,6 +3,29 @@
 Pi Agent Plus 是 [abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop) 的个人二次开发版（仅 Windows），
 与官方版可同时安装、互不覆盖。版本规则见 [VERSIONING-PLUS.md](./VERSIONING-PLUS.md)。
 
+## [1.4.0] - 2026-10-20
+
+基于 Pi Agent 0.7.5。
+
+### 新增
+- **应用内一键升级**：设置 › 版本与更新 › “升级”会下载本仓库的新版、校验签名、安装并重启。升级包用 Plus 自己的密钥签名，只认本仓库的 Release。
+- **设置不再因端口变化而“丢失”**：主题、字体、宽度、语言、侧栏状态等偏好同时保存在 `~/.pi/agent/desktop/plus-prefs.json`，启动时先恢复。端口被占用时也会先等几秒再换端口。
+- **提示词优化设置**（设置 › 常规 › 提示词优化）：指定使用的模型和思考强度、整理风格（按需 / 简洁 / 结构化）、是否参考当前对话，以及自己的额外要求。
+- **主题库**：收录 OpenCode 的 32 套主题（Dracula、One Dark、Tokyo Night、Catppuccin、Kanagawa、Everforest、Night Owl、Monokai、Material、Ayu、Synthwave '84 等，多数有浅色 + 深色），点一下即安装应用，可再编辑。
+- **导入 VS Code 主题**：“导入…”现在也接受 VS Code 配色主题的 .json（主题插件里的文件），自动转换成调色板主题，含代码高亮色。
+- **对话大纲增强**：大纲上方的列表按钮，悬停即显示全部提问，点击跳转；跳转后目标消息会闪一下高亮。
+- 每周自动生成上游更新报告（GitHub Issue），只报告、不自动合并，详见 VERSIONING-PLUS.md。
+
+### 改进
+- 内置主题精简为 6 个（简洁、原生、Claude 陶土、GitHub、护眼绿、石墨黑白）；北极、Solarized、Catppuccin、东京之夜、玫瑰松、Gruvbox 改由主题库提供（正在使用的不受影响）。
+- 输入框里的补全、插入引用和“优化提示词”现在都可以用 Ctrl+Z 撤销（上游 #127）。
+- 会话信息里的“活跃时间”在运行中持续更新，不再停在打开时的值（pi-web #1334）。
+- 扩展命令（不调用模型）不再触发“会话完成”通知（pi-web #1345）。
+
+### 修复
+- 聊天区滚动条拖到输入框高度时点不中。
+- 安全：每次启动重新生成 Next.js 预览密钥，防止用公开的安装包里的值绕过本地接口校验（移植自 pi-web cf3ebfba）。
+- 安全：git diff 接口不再能通过目录联接读到项目外文件；覆盖上传失败时不再删掉原文件（移植自 pi-web 1ddaf11f）。
 ## [1.3.0] - 2026-10-20
 
 基于 Pi Agent 0.7.5。

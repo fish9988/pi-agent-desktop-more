@@ -23,6 +23,11 @@ export type SyntaxKey = (typeof SYNTAX_KEYS)[number];
 export type SyntaxPalette = Record<SyntaxKey, string>;
 
 export interface ThemePalette {
+  /**
+   * Dark-looking palette regardless of the mode it is used for (a dark-only
+   * theme shown while the app is in light mode, or the reverse).
+   */
+  isDark?: boolean;
   /** Window canvas behind the sidebar. */
   bg: string;
   /** Sidebar / chrome. */
@@ -84,6 +89,8 @@ export interface ThemeDefinition {
 
 export interface BuiltinTheme extends ThemeDefinition {
   id: string;
+  /** Kept for existing selections but not offered in the theme grid (see the gallery). */
+  hidden?: boolean;
   name: { en: string; zh: string; tw?: string };
   base: ThemeBase;
   description?: { en: string; zh: string };
@@ -165,6 +172,7 @@ export const BUILTIN_THEMES: readonly BuiltinTheme[] = [
   },
   {
     id: "nord",
+    hidden: true,
     name: { en: "Nord", zh: "北极 Nord", tw: "北極 Nord" },
     description: { en: "Arctic blue-grey", zh: "北极冷蓝灰" },
     base: "clean",
@@ -183,6 +191,7 @@ export const BUILTIN_THEMES: readonly BuiltinTheme[] = [
   },
   {
     id: "solarized",
+    hidden: true,
     name: { en: "Solarized", zh: "Solarized", tw: "Solarized" },
     description: { en: "Ethan Schoonover's classic", zh: "经典低对比护眼配色" },
     base: "clean",
@@ -201,6 +210,7 @@ export const BUILTIN_THEMES: readonly BuiltinTheme[] = [
   },
   {
     id: "catppuccin",
+    hidden: true,
     name: { en: "Catppuccin", zh: "Catppuccin", tw: "Catppuccin" },
     description: { en: "Latte by day, Mocha by night", zh: "日用 Latte，夜用 Mocha，柔和粉彩" },
     base: "clean",
@@ -220,6 +230,7 @@ export const BUILTIN_THEMES: readonly BuiltinTheme[] = [
   },
   {
     id: "tokyonight",
+    hidden: true,
     name: { en: "Tokyo Night", zh: "东京之夜", tw: "東京之夜" },
     description: { en: "Neon city night", zh: "霓虹夜色" },
     base: "clean",
@@ -238,6 +249,7 @@ export const BUILTIN_THEMES: readonly BuiltinTheme[] = [
   },
   {
     id: "rosepine",
+    hidden: true,
     name: { en: "Rosé Pine", zh: "玫瑰松", tw: "玫瑰松" },
     description: { en: "Soho vibes, muted rose", zh: "低饱和玫瑰色" },
     base: "clean",
@@ -258,6 +270,7 @@ export const BUILTIN_THEMES: readonly BuiltinTheme[] = [
   },
   {
     id: "gruvbox",
+    hidden: true,
     name: { en: "Gruvbox", zh: "Gruvbox 复古", tw: "Gruvbox 復古" },
     description: { en: "Retro groove, warm contrast", zh: "复古暖色高对比" },
     base: "clean",
@@ -348,7 +361,8 @@ export function deriveSyntax(p: ThemePalette, dark: boolean): SyntaxPalette {
 }
 
 /** Colour tokens of one palette, as `name: value` pairs. */
-export function paletteTokens(p: ThemePalette, dark: boolean): Record<string, string> {
+export function paletteTokens(p: ThemePalette, mode: boolean): Record<string, string> {
+  const dark = p.isDark ?? mode;
   const danger = p.danger ?? (dark ? "#ff6961" : "#d92d20");
   const success = p.success ?? (dark ? "#30d158" : "#248a3d");
   const warning = p.warning ?? (dark ? "#ffd60a" : "#b87503");
@@ -485,6 +499,7 @@ export function sanitizeThemeDefinition(value: unknown): ThemeDefinition | undef
       const c = colour(p[key]);
       if (c) out[key] = c;
     }
+    if (typeof p.isDark === "boolean") out.isDark = p.isDark;
     if (p.syntax && typeof p.syntax === "object") {
       const syntax: Partial<SyntaxPalette> = {};
       for (const key of SYNTAX_KEYS) {

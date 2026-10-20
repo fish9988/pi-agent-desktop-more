@@ -875,12 +875,15 @@ export class AgentSessionWrapper {
           let preflightAccepted = false;
           let preflightSettled = false;
           let promptSettled = false;
-          let acceptPreflight!: () => void;
+          let acceptPreflight!: (disposition?: string) => void;
           let rejectPreflight!: (error: unknown) => void;
           const preflight = new Promise<void>((resolve, reject) => {
-            acceptPreflight = () => {
+            acceptPreflight = (disposition) => {
+              // Plus (pi-web #1345): an extension command handled without a
+              // model run is not a run, so it must not trigger a "Session
+              // complete" notification once the session goes idle.
+              if (!preflightAccepted && disposition !== "handled") this.agentRunNeedsCompletion = true;
               preflightAccepted = true;
-              this.agentRunNeedsCompletion = true;
               if (preflightSettled) return;
               preflightSettled = true;
               resolve();
@@ -960,7 +963,7 @@ export class AgentSessionWrapper {
               // validation and extension preflight have accepted the submission.
               // Every disposition (handled, queued, started) is an acceptance; a
               // rejected prompt never calls this and rejects `prompt` instead.
-              preflightResult: () => acceptPreflight(),
+              preflightResult: (disposition) => acceptPreflight(disposition),
             });
           } catch (error) {
             finishPrompt();

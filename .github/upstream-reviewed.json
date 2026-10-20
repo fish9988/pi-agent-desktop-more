@@ -1,0 +1,15 @@
+{
+  "_comment": "Last upstream commit reviewed for Pi Agent Plus. The weekly Upstream watch workflow reports commits after these; move them forward (scripts/upstream-reviewed.mjs) once a report has been handled.",
+  "sources": {
+    "pi-agent-desktop": {
+      "repository": "abcwyc/pi-agent-desktop",
+      "branch": "main",
+      "reviewed": "cbad09c80990b81e8f67827abb4512bd12a11520"
+    },
+    "pi-web": {
+      "repository": "agegr/pi-web",
+      "branch": "main",
+      "reviewed": "b017cd48425d05aa4952051db2e4fc031c134094"
+    }
+  }
+}

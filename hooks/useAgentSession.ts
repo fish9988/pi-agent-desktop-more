@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect, useLayoutEffect, useMemo, useReducer } from "react";
+import { liveSessionActiveMs } from "@/lib/session-timing";
 import type {
   AgentMessage,
   BlockingExtensionUiRequest,
@@ -716,7 +717,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       sessionId: sessionIdRef.current ?? session?.id ?? "",
       sessionName: session?.name,
       ...stats,
-      totalActiveMs: data?.totalActiveMs,
+      // Plus (pi-web #1334): grow with messages that arrived after the snapshot.
+      totalActiveMs: liveSessionActiveMs(data?.totalActiveMs, (data?.context.messages ?? []) as Array<{ role?: string; timestamp?: number }>, messages as Array<{ role?: string; timestamp?: number }>),
       ...(contextUsage ? { contextUsage } : {}),
       ...(cacheWarming ? { cacheWarming } : {}),
       ...(selectedModelKey ? { selectedModelKey } : {}),

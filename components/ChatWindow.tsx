@@ -1111,6 +1111,12 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
       if (!container || !anchor) return;
       const top = anchor.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop - 16;
       container.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+      // Plus: flash the question that was jumped to, so the eye finds it.
+      const target = anchor.querySelector<HTMLElement>(".message-user-bubble") ?? anchor;
+      target.classList.remove("plus-turn-flash");
+      void target.offsetWidth;
+      target.classList.add("plus-turn-flash");
+      window.setTimeout(() => target.classList.remove("plus-turn-flash"), 1800);
     }));
   }, [messages.length, scrollContainerRef]);
 
@@ -1710,13 +1716,15 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
       {/* Inset by the scrollbar track on both sides: the message column is
           inset by it on the left (padding) and right (the track itself), so
           the composer keeps the same width once the window is narrower than
-          the max column width. */}
+          the max column width. Plus: the right inset is the overlay's own
+          edge, not padding, so the overlay does not sit on top of the
+          scrollbar track and the thumb stays draggable down to the bottom. */}
       <div
         ref={composerOverlayRef}
-        className={isEmptyNew ? "relative shrink-0" : "absolute inset-x-0 z-20"}
+        className={isEmptyNew ? "relative shrink-0" : "absolute left-0 z-20"}
         style={{
-          ...(isEmptyNew ? {} : { bottom: "env(safe-area-inset-bottom)" }),
-          ...(scrollbarGutter > 0 ? { paddingInline: scrollbarGutter } : {}),
+          ...(isEmptyNew ? {} : { bottom: "env(safe-area-inset-bottom)", right: scrollbarGutter }),
+          ...(scrollbarGutter > 0 ? (isEmptyNew ? { paddingInline: scrollbarGutter } : { paddingLeft: scrollbarGutter }) : {}),
         }}
       >
         {!isEmptyNew && (

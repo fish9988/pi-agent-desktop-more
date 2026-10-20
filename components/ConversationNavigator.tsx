@@ -26,6 +26,23 @@ export function ConversationNavigator({ turns, scrollContainerRef, onSelect }: P
   const [activeIndex, setActiveIndex] = useState(0);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [isHovering, setIsHovering] = useState(false);
+  // Plus: list of every question, opened from the button above the rail.
+  const [listOpen, setListOpen] = useState(false);
+  const listTimerRef = useRef<number | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const openList = useCallback(() => {
+    if (listTimerRef.current !== null) window.clearTimeout(listTimerRef.current);
+    listTimerRef.current = null;
+    setListOpen(true);
+  }, []);
+  const closeListSoon = useCallback(() => {
+    if (listTimerRef.current !== null) window.clearTimeout(listTimerRef.current);
+    listTimerRef.current = window.setTimeout(() => {
+      listTimerRef.current = null;
+      setListOpen(false);
+    }, 300);
+  }, []);
+  useEffect(() => () => { if (listTimerRef.current !== null) window.clearTimeout(listTimerRef.current); }, []);
   const draggingRef = useRef(false);
   // Plus: the preview card sits beside the rail with a gap, so leaving the
   // rail used to unmount the card before the pointer could reach it, and the
@@ -87,6 +104,12 @@ export function ConversationNavigator({ turns, scrollContainerRef, onSelect }: P
     onSelect(index);
   }, [onSelect, turns.length]);
 
+  // Keep the current question in view when the list opens.
+  useEffect(() => {
+    if (!listOpen) return;
+    listRef.current?.querySelector<HTMLElement>(".is-active")?.scrollIntoView({ block: "nearest" });
+  }, [listOpen]);
+
   const preview = previewIndex == null ? null : turns[previewIndex];
   const navigatorHeight = turns.length * 2 + (turns.length - 1) * 8;
   const tickPositions = useMemo(() => turns.map((turn, index) => ({
@@ -106,7 +129,47 @@ export function ConversationNavigator({ turns, scrollContainerRef, onSelect }: P
       }}
       onPointerLeave={scheduleHide}
     >
-      {preview && (
+      <button
+        type="button"
+        className={`conversation-navigator-list-button${listOpen ? " is-open" : ""}`}
+        title={t("chat.conversationNavigatorList")}
+        aria-label={t("chat.conversationNavigatorList")}
+        aria-expanded={listOpen}
+        onPointerEnter={openList}
+        onPointerLeave={closeListSoon}
+        onClick={() => setListOpen((open) => !open)}
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><circle cx="3.5" cy="6" r="1" /><circle cx="3.5" cy="12" r="1" /><circle cx="3.5" cy="18" r="1" /></svg>
+      </button>
+      {listOpen && (
+        <div
+          ref={listRef}
+          className="conversation-navigator-list"
+          role="menu"
+          aria-label={t("chat.conversationNavigatorList")}
+          onPointerEnter={openList}
+          onPointerLeave={closeListSoon}
+        >
+          {turns.map((turn, index) => (
+            <button
+              key={turn.index}
+              type="button"
+              role="menuitem"
+              className={`conversation-navigator-list-item${turn.index === activeIndex ? " is-active" : ""}`}
+              title={turn.question}
+              onClick={() => {
+                setActiveIndex(index);
+                onSelect(index);
+                setListOpen(false);
+              }}
+            >
+              <span className="conversation-navigator-list-number">{index + 1}</span>
+              <span className="conversation-navigator-list-text">{turn.question}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {preview && !listOpen && (
         // Clicking the card jumps to its turn, like clicking the tick beside it.
         // It is not a tab stop: the track's arrow keys already move between turns.
         <button

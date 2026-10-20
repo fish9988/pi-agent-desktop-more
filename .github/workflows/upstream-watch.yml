@@ -1,0 +1,41 @@
+name: Upstream watch
+
+# Weekly, read-only: lists commits in abcwyc/pi-agent-desktop and agegr/pi-web
+# that have not been reviewed yet (.github/upstream-reviewed.json) and posts
+# them as one issue labelled "upstream". It never merges, pushes or opens a
+# pull request; taking a commit is a manual cherry-pick onto `plus`.
+on:
+  schedule:
+    - cron: "0 1 * * 1" # Mondays 01:00 UTC (09:00 Beijing)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Build the report
+        id: report
+        run: node scripts/upstream-report.mjs --out report.md
+
+      - name: Post or update the issue
+        if: steps.report.outputs.total != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create upstream --color 5319e7 --description "Upstream changes to review" --force
+          # One open report at a time: refresh it instead of piling up issues.
+          existing="$(gh issue list --label upstream --state open --json number --jq '.[0].number')"
+          title="Upstream watch: $(date -u +%Y-%m-%d) — ${{ steps.report.outputs.total }} commit(s) to review"
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" --title "$title" --body-file report.md
+          else
+            gh issue create --title "$title" --label upstream --body-file report.md
+          fi

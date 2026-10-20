@@ -59,6 +59,28 @@ import { useSessionMentionPalette } from "@/hooks/useSessionMentionPalette";
 import { PromptOptimizeButton } from "./PromptOptimizeButton";
 
 
+/**
+ * Replace [start, end) of the composer through the browser's own editing
+ * pipeline (execCommand insertText/delete) instead of setting React state:
+ * the edit lands on the native undo stack, so Ctrl+Z can undo completions,
+ * inserted quotes and rewritten prompts (upstream #127). The input event it
+ * fires runs the normal onChange. Returns false when the browser refused, so
+ * callers can fall back to setting the value directly.
+ */
+export function nativeTextareaEdit(ta: HTMLTextAreaElement, start: number, end: number, text: string): boolean {
+  try {
+    const expected = ta.value.slice(0, start) + text + ta.value.slice(end);
+    ta.focus();
+    ta.setSelectionRange(start, end);
+    const ok = text
+      ? document.execCommand("insertText", false, text)
+      : start === end || document.execCommand("delete", false);
+    return Boolean(ok) && ta.value === expected;
+  } catch {
+    return false;
+  }
+}
+
 export interface AttachedImage {
   data: string;   // base64, no prefix
   mimeType: string;
@@ -1112,6 +1134,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       const before = ta.value.slice(0, start);
       const after = ta.value.slice(end);
       const sep = before.length > 0 && !before.endsWith(" ") ? " " : "";
+      if (nativeTextareaEdit(ta, start, end, sep + text)) {
+        setAtQuery(null);
+        setHashQuery(null);
+        return;
+      }
       const newVal = before + sep + text + after;
       valueRef.current = newVal;
       setValue(newVal);
@@ -1513,6 +1540,13 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     const insert = buildAtInsertText(entry.path, entry.isDir, atQuery.quoted);
     const newValue = before + insert.text + after;
     const newPos = before.length + insert.cursorOffset;
+    const replacedEnd = value.length - after.length;
+    if (ta && ta.value === value && nativeTextareaEdit(ta, before.length, replacedEnd, insert.text)) {
+      ta.setSelectionRange(newPos, newPos);
+      setAtQuery(extractAtQuery(newValue.slice(0, newPos)));
+      setHashQuery(extractHashQuery(newValue.slice(0, newPos)));
+      return;
+    }
     setValue(newValue);
     // setValue alone does not fire onChange — re-derive the token here. Files
     // end with a space (token closes, menu hides); directories end with "/"
@@ -2788,9 +2822,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               model={model}
               sessionId={sessionId}
               onReplace={(text) => {
+                const ta = textareaRef.current;
+                // Through the native editing pipeline, so Ctrl+Z also undoes it.
+                if (ta && nativeTextareaEdit(ta, 0, ta.value.length, text)) {
+                  ta.setSelectionRange(text.length, text.length);
+                  return;
+                }
                 valueRef.current = text;
                 setValue(text);
-                textareaRef.current?.focus();
+                ta?.focus();
               }}
             />
           )}

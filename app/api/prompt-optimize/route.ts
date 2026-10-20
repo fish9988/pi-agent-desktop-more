@@ -3,6 +3,7 @@ import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
 import { getRpcSession } from "@/lib/rpc-manager";
 import { MAX_DRAFT_CHARS, optimizePrompt } from "@/lib/prompt-optimizer";
+import { readOptimizerSettings } from "@/lib/prompt-optimizer-settings";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,7 @@ export async function POST(req: Request) {
       provider: typeof body.provider === "string" ? body.provider : undefined,
       modelId: typeof body.modelId === "string" ? body.modelId : undefined,
       agent,
+      settings: await readOptimizerSettings(),
     });
     return NextResponse.json(result);
   } catch (error) {

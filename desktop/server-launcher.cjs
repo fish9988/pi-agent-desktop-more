@@ -175,6 +175,33 @@ try {
   console.error("[Pi Agent] route-cache cleanup failed:", cacheError);
 }
 
+// Plus (from pi-web cf3ebfba, reported by Tencent Xuanwu Lab): the build's
+// prerender manifest holds Next's preview-mode secrets, identical for every
+// copy of a release. A request whose x-prerender-revalidate header equals
+// previewModeId skips proxy.ts (Host/Origin checks, API token). Replace the
+// secrets with fresh random values on every start, before Next reads them.
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const crypto = require("node:crypto");
+  const manifestPath = path.join(__dirname, ".next-desktop", "prerender-manifest.json");
+  if (fs.existsSync(manifestPath)) {
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    if (manifest && typeof manifest.preview === "object") {
+      manifest.preview = {
+        ...manifest.preview,
+        previewModeId: crypto.randomBytes(16).toString("hex"),
+        previewModeSigningKey: crypto.randomBytes(32).toString("hex"),
+        previewModeEncryptionKey: crypto.randomBytes(32).toString("hex"),
+      };
+      const tempPath = `${manifestPath}.${process.pid}.tmp`;
+      fs.writeFileSync(tempPath, JSON.stringify(manifest));
+      fs.renameSync(tempPath, manifestPath);
+    }
+  }
+} catch (rotateError) {
+  console.error("[Pi Agent] could not rotate preview-mode secrets:", rotateError);
+}
+
 // The standalone Next.js entrypoint is CommonJS.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 require("./server.js");

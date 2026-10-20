@@ -4,6 +4,7 @@ import { PwaRegistration } from "@/components/PwaRegistration";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import { plusThemeInitScript } from "@/lib/plus-theme";
 import { BUILTIN_THEMES, builtinThemesCss } from "@/lib/plus-theme-catalog";
+import { PLUS_PREFS_SEED_SCRIPT } from "@/lib/plus-prefs";
 
 // Plus: every built-in theme palette, server-rendered so the first paint is right.
 const PLUS_BUILTIN_THEMES_CSS = builtinThemesCss();
@@ -78,6 +79,8 @@ export default function RootLayout({
     <html lang="en" translate="no" className={`${notoSansMono.variable} notranslate`} suppressHydrationWarning>
       <head>
         <meta name="google" content="notranslate" />
+        {/* Plus: restore mirrored preferences into localStorage before any other script reads them. */}
+        <script dangerouslySetInnerHTML={{ __html: PLUS_PREFS_SEED_SCRIPT }} />
         {/* Optional user stylesheet: <agentDir>/desktop/custom.css served by
             /api/custom-css. Empty when the file is absent; no-store so edits
             apply on reload. Loaded last so user rules win the cascade. */}

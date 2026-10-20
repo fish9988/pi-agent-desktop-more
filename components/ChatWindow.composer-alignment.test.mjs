@@ -37,9 +37,16 @@ test("puts the composer column on the message column's axis", () => {
   assert.match(source, /new ResizeObserver\(measure\)/);
   assert.match(source, /window\.addEventListener\("resize", measure\)/);
 
+  // Plus: inset on the left by padding and on the right by the overlay's own
+  // edge, so the overlay leaves the scrollbar track clickable.
   assert.match(
     source,
-    /\.\.\.\(scrollbarGutter > 0 \? \{ paddingInline: scrollbarGutter \} : \{\}\)/,
+    /\{ bottom: "env\(safe-area-inset-bottom\)", right: scrollbarGutter \}/,
+    "the floating composer must stop short of the scrollbar track",
+  );
+  assert.match(
+    source,
+    /isEmptyNew \? \{ paddingInline: scrollbarGutter \} : \{ paddingLeft: scrollbarGutter \}/,
     "the composer must be inset on both sides exactly like the message column",
   );
   assert.match(

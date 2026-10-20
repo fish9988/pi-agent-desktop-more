@@ -4,8 +4,10 @@ name: Plus Windows build
 # - push to `plus`  -> build <version>-dev.<run> and upload it as an artifact
 # - push tag vX.Y.Z -> build X.Y.Z and publish a GitHub Release with the
 #                      installer and the CHANGELOG-PLUS.md section as notes
-# The updater public key is never embedded, so a Plus build cannot replace
-# itself with an upstream release.
+# Updates: tag builds are signed with this fork's own updater key (secret
+# TAURI_SIGNING_PRIVATE_KEY) and publish latest.json; the matching public key
+# (src-tauri/tauri.conf.json) is compiled into every build, so the app can
+# only install releases from this repository, never an upstream one.
 on:
   workflow_dispatch:
   push:
@@ -66,6 +68,10 @@ jobs:
             echo "release=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Embed the updater public key
+        shell: bash
+        run: echo "PI_AGENT_DESKTOP_UPDATER_PUBLIC_KEY=$(node -p "require('./src-tauri/tauri.conf.json').plugins.updater.pubkey")" >> "$GITHUB_ENV"
+
       - name: Run Plus unit tests
         run: node --experimental-strip-types --test lib/plus-features.test.mjs lib/session-title.test.mjs components/ChatAppearance.test.mjs
 
@@ -74,9 +80,17 @@ jobs:
 
       - name: Build installer
         shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ steps.version.outputs.release == 'true' && secrets.TAURI_SIGNING_PRIVATE_KEY || '' }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ steps.version.outputs.release == 'true' && secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '' }}
         run: |
+          if [ "${{ steps.version.outputs.release }}" = "true" ]; then
+            updater=true
+          else
+            updater=false
+          fi
           npx tauri build --target x86_64-pc-windows-msvc --bundles nsis \
-            --config "{\"version\":\"${{ steps.version.outputs.value }}\",\"bundle\":{\"createUpdaterArtifacts\":false}}"
+            --config "{\"version\":\"${{ steps.version.outputs.value }}\",\"bundle\":{\"createUpdaterArtifacts\":$updater}}"
 
       - name: Upload installer
         uses: actions/upload-artifact@v7
@@ -100,8 +114,25 @@ jobs:
             on {print}
           ' CHANGELOG-PLUS.md > release-notes.md
           if [ ! -s release-notes.md ]; then echo "Pi Agent Plus $version" > release-notes.md; fi
-          installer="$(ls src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe | head -n 1)"
-          cp "$installer" "Pi-Agent-Plus_${version}_x64-setup.exe"
-          gh release create "v$version" "Pi-Agent-Plus_${version}_x64-setup.exe" \
-            --title "Pi Agent Plus $version" --notes-file release-notes.md --target "$GITHUB_SHA" \
-            || gh release upload "v$version" "Pi-Agent-Plus_${version}_x64-setup.exe" --clobber
+          installer="$(ls src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe | head -n 1)"
+          asset="Pi-Agent-Plus_${version}_x64-setup.exe"
+          cp "$installer" "$asset"
+          # Updater manifest: the in-app "Upgrade" button downloads the
+          # installer named here and verifies it against the embedded key.
+          if [ ! -f "$installer.sig" ]; then echo "::error::No updater signature next to $installer"; exit 1; fi
+          VERSION="$version" SIG_FILE="$installer.sig" ASSET="$asset" REPO="$GITHUB_REPOSITORY" node -e '
+            const fs = require("fs");
+            const signature = fs.readFileSync(process.env.SIG_FILE, "utf8").trim();
+            const notes = fs.readFileSync("release-notes.md", "utf8").trim();
+            const url = `https://github.com/${process.env.REPO}/releases/download/v${process.env.VERSION}/${process.env.ASSET}`;
+            const entry = { signature, url };
+            fs.writeFileSync("latest.json", JSON.stringify({
+              version: process.env.VERSION,
+              notes,
+              pub_date: new Date().toISOString(),
+              platforms: { "windows-x86_64": entry, "windows-x86_64-nsis": entry },
+            }, null, 2));
+          '
+          gh release create "v$version" "$asset" latest.json \
+            --title "Pi Agent Plus $version" --notes-file release-notes.md --target "$GITHUB_SHA" --latest \
+            || gh release upload "v$version" "$asset" latest.json --clobber

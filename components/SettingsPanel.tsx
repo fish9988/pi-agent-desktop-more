@@ -49,6 +49,7 @@ import { ConfigButton, ConfigSwitch } from "./SettingsUi";
 import { PlusAppearanceSettings } from "./PlusAppearanceSettings";
 import { ArtifactsSettingRow } from "./ArtifactsSettingRow";
 import { ChatsSettingsSection } from "./ChatsSettingsSection";
+import { PromptOptimizerSettingsSection } from "./PromptOptimizerSettingsSection";
 
 interface Props {
   cwd: string | null;
@@ -420,6 +421,7 @@ function GeneralSettings({
             </div>
           </section>
           <ChatsSettingsSection />
+            <PromptOptimizerSettingsSection />
         </div>
 
         <div className="settings-general-col">

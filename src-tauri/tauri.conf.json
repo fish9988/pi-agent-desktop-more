@@ -41,7 +41,7 @@
       "endpoints": [
         "https://github.com/fish9988/pi-agent-desktop-more/releases/latest/download/latest.json"
       ],
-      "pubkey": ""
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDVBMkIxRUNDOTdGNkI4MUIKUldRYnVQYVh6QjRyV2s1VFZ0U0g2bEsxWGpMRGtGa0xDMDY3ZFZTN0VTdGk4M0pqdWlPUXhyZGQK"
     }
   }
 }

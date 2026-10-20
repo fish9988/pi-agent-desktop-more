@@ -29,6 +29,9 @@ import { ConfigSwitch } from "./SettingsUi";
 import { FontPicker, loadSystemFonts } from "./FontPicker";
 import { CUSTOM_CSS_PREVIEW_ID, loadUserTheme, reloadCustomCssLink, THEME_PREVIEW_ATTR } from "./PlusAppearanceRuntime";
 import { PaletteThemeEditor } from "./PlusThemeEditor";
+import { PlusThemeGallery } from "./PlusThemeGallery";
+import { definitionFromVsCodeTheme } from "@/lib/plus-theme-import";
+import type { GalleryTheme } from "@/lib/plus-theme-gallery-opencode";
 
 type Translate = (key: string, params?: Record<string, string | number>) => string;
 
@@ -164,6 +167,7 @@ export function PlusAppearanceSettings() {
   const [editing, setEditing] = useState<Editing | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [galleryOpen, setGalleryOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const refreshThemes = useCallback(async () => {
@@ -201,6 +205,13 @@ export function PlusAppearanceSettings() {
     try {
       for (const file of Array.from(files)) {
         const text = await file.text();
+        if (/\.jsonc?$/i.test(file.name)) {
+          // VS Code colour theme (the JSON inside a theme extension).
+          const converted = definitionFromVsCodeTheme(text);
+          await createTheme(converted.name || file.name.replace(/\.jsonc?$/i, "").replace(/-color-theme$/i, ""), "clean", CUSTOM_THEME_CSS_HINT, !applied, converted.definition);
+          applied = true;
+          continue;
+        }
         const header = /^\/\*\s*plus-theme:\s*(\{.*?\})\s*\*\/\r?\n?/.exec(text);
         let name = file.name.replace(/\.css$/i, "");
         let base: ThemeBase = "native";
@@ -301,7 +312,23 @@ export function PlusAppearanceSettings() {
     if (loaded) setUserThemeCss(loaded.css);
   };
 
-  const builtinCards = BUILTIN_THEMES.map((theme) => {
+  const applyGalleryTheme = async (theme: GalleryTheme) => {
+    const existing = userThemes.find((item) => item.name === theme.name && item.hasPalette);
+    if (existing) {
+      update({ theme: `${USER_THEME_PREFIX}${existing.id}` });
+      return;
+    }
+    setBusy(true);
+    try {
+      await createTheme(theme.name, "clean", CUSTOM_THEME_CSS_HINT, true, theme.definition);
+    } catch (error) {
+      notifyError(error);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const builtinCards = BUILTIN_THEMES.filter((theme) => !theme.hidden || settings.theme === theme.id).map((theme) => {
     const selected = settings.theme === theme.id;
     return (
       <div key={theme.id} className={`plus-theme-card${selected ? " is-selected" : ""}`}>
@@ -356,11 +383,14 @@ export function PlusAppearanceSettings() {
       <div className="plus-appearance-heading">
         <span>{t("plus.themes")}</span>
         <span className="plus-appearance-heading-actions">
-          <input ref={fileInputRef} type="file" accept=".css,text/css" multiple hidden onChange={(event) => void importFiles(event.target.files)} />
+          <input ref={fileInputRef} type="file" accept=".css,text/css,.json,.jsonc,application/json" multiple hidden onChange={(event) => void importFiles(event.target.files)} />
           <button type="button" className="config-button config-button-small config-button-primary" disabled={busy} onClick={() => void newTheme()}>
             {t("plus.themeNew")}
           </button>
-          <button type="button" className="config-button config-button-small config-button-secondary" disabled={busy} onClick={() => fileInputRef.current?.click()}>
+          <button type="button" className={`config-button config-button-small ${galleryOpen ? "config-button-primary" : "config-button-secondary"}`} aria-pressed={galleryOpen} onClick={() => setGalleryOpen((open) => !open)}>
+            {t("plus.themeGallery")}
+          </button>
+          <button type="button" className="config-button config-button-small config-button-secondary" disabled={busy} onClick={() => fileInputRef.current?.click()} title={t("plus.themeImportHint")}>
             {t("plus.themeImport")}
           </button>
           <button type="button" className="config-button config-button-small config-button-secondary" disabled={busy} onClick={() => void importCustomCss()} title={t("plus.themeFromCustomCssHint")}>
@@ -373,6 +403,16 @@ export function PlusAppearanceSettings() {
         {userCards}
       </div>
       <p className="settings-option-hint plus-theme-hint">{t("plus.themeHint")}</p>
+
+      {galleryOpen && (
+        <PlusThemeGallery
+          t={t}
+          busy={busy}
+          installedNames={new Set(userThemes.filter((item) => item.hasPalette).map((item) => item.name))}
+          onApply={(theme) => void applyGalleryTheme(theme)}
+          onClose={() => setGalleryOpen(false)}
+        />
+      )}
 
       {editing?.kind === "theme" && editing.definition && (
         <PaletteThemeEditor

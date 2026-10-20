@@ -399,10 +399,26 @@ fn server_process_path(node_path: &Path) -> Option<std::ffi::OsString> {
 
 #[cfg(feature = "custom-protocol")]
 fn choose_port(app: &AppHandle) -> io::Result<u16> {
-    let mut candidates = Vec::with_capacity(36);
-    if let Some(last) = read_last_server_port(app) {
-        candidates.push(last);
+    // Plus: the WebView's localStorage is per origin, so a different port
+    // looks like a reset. Right after a quit, update or reinstall the
+    // previous server may still hold the usual port for a moment: wait for
+    // it briefly before falling back to another port.
+    let preferred = read_last_server_port(app).unwrap_or(DESKTOP_SERVER_PORT);
+    let deadline = Instant::now() + Duration::from_millis(4000);
+    loop {
+        if let Ok(listener) = TcpListener::bind((Ipv4Addr::LOCALHOST, preferred)) {
+            let chosen = listener.local_addr()?.port();
+            drop(listener);
+            write_last_server_port(app, chosen);
+            return Ok(chosen);
+        }
+        if Instant::now() >= deadline {
+            break;
+        }
+        thread::sleep(Duration::from_millis(200));
     }
+
+    let mut candidates = Vec::with_capacity(36);
     candidates.push(DESKTOP_SERVER_PORT);
     for offset in 1u16..=32 {
         candidates.push(DESKTOP_SERVER_PORT.saturating_add(offset));

@@ -43,3 +43,36 @@ function isTimingEntry(type: string): boolean {
     || type === "branch_summary"
     || type === "custom_message";
 }
+
+interface TimedMessage {
+  role?: string;
+  timestamp?: number;
+}
+
+/**
+ * Active time kept current while a session runs (upstream pi-web #1334): the
+ * server's total covers the snapshot that was loaded; messages that arrived
+ * since (newer than the newest loaded one) add their own gaps, by the same
+ * rules as computeSessionTotalActiveMs.
+ */
+export function liveSessionActiveMs(
+  snapshotMs: number | undefined,
+  loadedMessages: readonly TimedMessage[],
+  currentMessages: readonly TimedMessage[],
+): number | undefined {
+  if (snapshotMs === undefined) return undefined;
+  const time = (message: TimedMessage) => (typeof message.timestamp === "number" ? message.timestamp : Number.NaN);
+  let newest = Number.NEGATIVE_INFINITY;
+  for (const message of loadedMessages) {
+    const t = time(message);
+    if (t > newest) newest = t;
+  }
+  if (!Number.isFinite(newest)) return snapshotMs;
+  const fresh = currentMessages.filter((message) => time(message) > newest).sort((a, b) => time(a) - time(b));
+  if (fresh.length === 0) return snapshotMs;
+  const entries: TimingEntry[] = [
+    { type: "message", timestamp: new Date(newest).toISOString(), message: { role: "assistant" } },
+    ...fresh.map((message) => ({ type: "message", timestamp: new Date(time(message)).toISOString(), message: { role: message.role } })),
+  ];
+  return snapshotMs + computeSessionTotalActiveMs(entries);
+}
