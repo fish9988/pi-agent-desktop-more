@@ -21,6 +21,6 @@ export const APP_RELEASES_URL = `${APP_REPOSITORY_URL}/releases` as const;
 export const APP_VERSION = plusVersion.version;
 /** Upstream pi-agent-desktop version this Plus build is based on. */
 export const UPSTREAM_VERSION = desktopPackage.version;
-export const APP_VERSION_DISPLAY = APP_VERSION.endsWith(".0")
-  ? APP_VERSION.slice(0, -2)
-  : APP_VERSION;
+// Plus versions are full semver (1.4.0), shown as-is: "v1.4" read like a
+// different release than the v1.4.0 tag on GitHub.
+export const APP_VERSION_DISPLAY = APP_VERSION;
