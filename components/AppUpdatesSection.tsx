@@ -7,6 +7,7 @@ import {
   APP_RELEASES_URL,
   APP_VERSION,
   APP_VERSION_DISPLAY,
+  UPSTREAM_VERSION,
 } from "@/lib/branding";
 import { handleExternalLinkClick } from "@/lib/desktop-native";
 import { installLatestDesktopRelease, type DesktopUpgradeProgress } from "@/lib/desktop-updater";
@@ -103,7 +104,8 @@ export function AppUpdatesSection({ onBusyChange }: Props) {
         : t("appSettings.upToDate");
 
   const currentVersion = appRelease?.currentVersion ?? APP_VERSION;
-  const currentVersionText = `v${currentVersion === APP_VERSION ? APP_VERSION_DISPLAY : currentVersion}`;
+  // Plus: show the upstream release this build is based on.
+  const currentVersionText = `v${currentVersion === APP_VERSION ? APP_VERSION_DISPLAY : currentVersion} · Pi Agent ${UPSTREAM_VERSION}`;
   const releaseUrl = appRelease?.releaseUrl ?? null;
   const releaseHref = releaseUrl ?? APP_RELEASES_URL;
   const hasLatest = !loading && !loadError && Boolean(appRelease?.latestVersion)

@@ -16,6 +16,18 @@ import type { FileIndexEntry } from "@/lib/file-fuzzy";
 import { buildSearchTree, type SearchTreeNode } from "@/lib/search-tree";
 import { useI18n } from "@/hooks/useI18n";
 import { isImeComposing } from "@/lib/ime";
+import { openDomMenu } from "@/lib/dom-menu-store";
+import {
+  DeleteConfirm,
+  FileTreeOpsContext,
+  fileRowMenuEntries,
+  InlineNameInput,
+  NewEntryRow,
+  openRootMenu,
+  runFileOp,
+  useFileTreeOps,
+  type FileTreeOpsValue,
+} from "./FileTreeOps";
 type Translate = ReturnType<typeof useI18n>["t"];
 
 interface FileEntry {
@@ -270,6 +282,11 @@ export function TreeNode({
   const [allowingLink, setAllowingLink] = useState(false);
   const [allowLinkError, setAllowLinkError] = useState<string | null>(null);
   const [confirmEnclosingLink, setConfirmEnclosingLink] = useState(false);
+  // Plus: file operations.
+  const ops = useFileTreeOps();
+  const [renaming, setRenaming] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [creating, setCreating] = useState<"file" | "folder" | null>(null);
   // A link leading outside the project is refused until the operator allows
   // its target, so it asks for that instead of listing (#748).
   const pendingLinkTarget = node.outsideLinkTarget && node.outsideLinkTarget !== allowedLinkTarget
@@ -340,14 +357,35 @@ export function TreeNode({
     }
   }, [node.fullPath, node.outsideLinkEncloses, confirmEnclosingLink, pendingLinkTarget, loadChildren]);
 
+  const startCreate = (kind: "file" | "folder") => {
+    onToggleExpanded(node.fullPath, true);
+    if (!loaded && !pendingLinkTarget) void loadChildren();
+    setCreating(kind);
+  };
+  const rowActions = {
+    open: node.isDir ? undefined : () => onOpenFile(node.fullPath, node.name),
+    rename: () => setRenaming(true),
+    remove: () => setConfirmingDelete(true),
+    newFile: node.isDir ? () => startCreate("file") : undefined,
+    newFolder: node.isDir ? () => startCreate("folder") : undefined,
+  };
+
   return (
     <div>
       <div
         role="button"
         tabIndex={0}
         title={node.fullPath}
-        onClick={handleClick}
+        onClick={renaming ? undefined : handleClick}
+        onContextMenu={ops ? (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          openDomMenu(fileRowMenuEntries(t, ops, node, rowActions), { x: event.clientX, y: event.clientY });
+        } : undefined}
         onKeyDown={(event) => {
+          if (renaming) return;
+          if (ops && event.key === "F2") { event.preventDefault(); setRenaming(true); return; }
+          if (ops && event.key === "Delete") { event.preventDefault(); setConfirmingDelete(true); return; }
           if (event.key !== "Enter" && event.key !== " ") return;
           event.preventDefault();
           handleClick();
@@ -392,7 +430,18 @@ export function TreeNode({
           }}
           title={node.fullPath}
         >
-          {node.name}
+          {renaming && ops ? (
+            <InlineNameInput
+              initial={node.name}
+              selectStem={!node.isDir}
+              onCancel={() => setRenaming(false)}
+              onSubmit={async (name) => {
+                await runFileOp({ op: "rename", path: node.fullPath, name });
+                setRenaming(false);
+                ops.onChanged();
+              }}
+            />
+          ) : node.name}
         </span>
         {!hovered && pendingLinkTarget && (
           <span
@@ -504,6 +553,16 @@ export function TreeNode({
           </a>
         )}
       </div>
+      {confirmingDelete && ops && (
+        <DeleteConfirm
+          t={t}
+          path={node.fullPath}
+          isDir={node.isDir}
+          depth={depth}
+          onCancel={() => setConfirmingDelete(false)}
+          onDone={() => { setConfirmingDelete(false); ops.onChanged(); }}
+        />
+      )}
       {node.isDir && open && pendingLinkTarget && (
         <div
           style={{
@@ -567,6 +626,15 @@ export function TreeNode({
       )}
       {node.isDir && open && !pendingLinkTarget && (
         <div>
+          {creating && (
+            <NewEntryRow
+              t={t}
+              dir={node.fullPath}
+              kind={creating}
+              depth={depth + 1}
+              onClose={() => setCreating(null)}
+            />
+          )}
           {children.map((child) => (
             <TreeNode
               key={child.fullPath}
@@ -757,6 +825,14 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
   const prevCwdRef = useRef<string | null>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const refreshToken = `${refreshKey ?? 0}:${treeRefreshKey}`;
+  // Plus: file operations context for the tree rows.
+  const [rootCreating, setRootCreating] = useState<"file" | "folder" | null>(null);
+  const fileOps = useMemo<FileTreeOpsValue>(() => ({
+    cwd,
+    onChanged: () => setTreeRefreshKey((value) => value + 1),
+    onOpenFile: (filePath, fileName) => onOpenFile(filePath, fileName),
+    startRootCreate: (kind) => setRootCreating(kind),
+  }), [cwd, onOpenFile]);
   const uploadBusy = uploadPhase !== "idle";
   const hasSearchQuery = searchQuery.trim().length > 0;
 
@@ -1012,6 +1088,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
   }, [cwd, onAtMentions, uploadSummary]);
 
   return (
+    <FileTreeOpsContext.Provider value={fileOps}>
     <div style={{ minHeight: "100%" }}>
       <input ref={uploadInputRef} type="file" multiple hidden onChange={handleUploadInput} />
       {showUploadFeedback && (
@@ -1229,7 +1306,14 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
       )}
 
       {(changesCollapsed || gitFiles.length === 0) && (!fileSearchOpen || !hasSearchQuery) && (
-        <div style={{ padding: "2px 4px" }}>
+        <div
+          className="file-tree-root"
+          style={{ padding: "2px 4px", minHeight: 120 }}
+          onContextMenu={(event) => openRootMenu(event, t, fileOps)}
+        >
+          {rootCreating && (
+            <NewEntryRow t={t} dir={cwd} kind={rootCreating} depth={-1} onClose={() => setRootCreating(null)} />
+          )}
           {loading ? (
             <div className="file-tree-loading" role="status" aria-label={t("files.loading")}>
               {[0, 1, 2, 3, 4, 5].map((item) => (
@@ -1276,5 +1360,6 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
         </div>
       )}
     </div>
+    </FileTreeOpsContext.Provider>
   );
 });

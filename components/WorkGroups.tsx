@@ -102,7 +102,7 @@ export function WorkDetailsMenu({ className }: { className?: string }) {
           className="native-popover app-menu work-details-menu"
           role="menu"
           aria-label={t("work.title")}
-          style={{ position: "fixed", top: position.top, left: position.left, zIndex: 720, width: 220 }}
+          style={{ position: "fixed", top: position.top, left: position.left, zIndex: 2400, width: 220 }}
         >
           <div className="work-details-menu-heading">{t("work.title")}</div>
           {WORK_DETAILS_LEVELS.map((value) => (

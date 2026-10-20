@@ -2,7 +2,12 @@ import type { Metadata, Viewport } from "next";
 import { Noto_Sans_Mono } from "next/font/google";
 import { PwaRegistration } from "@/components/PwaRegistration";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
-import { PLUS_THEME_INIT_SCRIPT } from "@/lib/plus-theme";
+import { plusThemeInitScript } from "@/lib/plus-theme";
+import { BUILTIN_THEMES, builtinThemesCss } from "@/lib/plus-theme-catalog";
+
+// Plus: every built-in theme palette, server-rendered so the first paint is right.
+const PLUS_BUILTIN_THEMES_CSS = builtinThemesCss();
+const PLUS_THEME_INIT_SCRIPT = plusThemeInitScript(Object.fromEntries(BUILTIN_THEMES.map((theme) => [theme.id, theme.base])));
 import { PlusAppearanceRuntime } from "@/components/PlusAppearanceRuntime";
 import "katex/dist/katex.min.css";
 import "./globals.css";
@@ -88,7 +93,8 @@ export default function RootLayout({
             __html: THEME_INIT_SCRIPT,
           }}
         />
-        {/* Plus: interface style, accent, font and custom.css switch, before first paint. */}
+        {/* Plus: built-in theme palettes, then theme / accent / fonts / custom.css switch before first paint. */}
+        <style id="plus-builtin-themes" dangerouslySetInnerHTML={{ __html: PLUS_BUILTIN_THEMES_CSS }} />
         <script dangerouslySetInnerHTML={{ __html: PLUS_THEME_INIT_SCRIPT }} />
       </head>
       <body translate="no" className="notranslate" suppressHydrationWarning>

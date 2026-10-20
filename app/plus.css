@@ -233,3 +233,47 @@ html.is-resizing-chat-column * {
 .settings-work-details-label { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .settings-chat-option.settings-work-details-option { flex-direction: column; align-items: stretch; gap: 8px; }
 .settings-work-details-option .settings-choice-group { flex-wrap: wrap; justify-content: flex-start; }
+/* -- Plus: file tree operations ------------------------------------------ */
+.file-ops-input-wrap { display: inline-flex; flex-direction: column; width: 100%; min-width: 0; }
+.file-ops-input {
+  width: 100%;
+  height: 20px;
+  padding: 0 5px;
+  border: var(--hairline) solid var(--accent-border, var(--accent));
+  border-radius: 5px;
+  outline: none;
+  background: var(--surface, var(--bg));
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  box-shadow: 0 0 0 2px var(--accent-soft, transparent);
+}
+.file-ops-input.has-error { border-color: var(--danger, #ef4444); }
+.file-ops-input-error { color: var(--danger, #ef4444); font-size: 11px; line-height: 1.4; white-space: normal; padding-top: 2px; }
+.file-ops-new-row { display: flex; align-items: center; min-height: 24px; padding-right: 8px; }
+.file-ops-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 2px 4px 4px;
+  padding: 7px 8px 7px 10px;
+  border: var(--hairline) solid color-mix(in srgb, var(--danger, #ef4444) 35%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--danger, #ef4444) 6%, transparent);
+  color: var(--text);
+  font-size: 11.5px;
+  word-break: break-word;
+}
+.file-ops-confirm-actions { display: flex; gap: 6px; }
+.file-ops-confirm-actions button {
+  height: 22px;
+  padding: 0 9px;
+  border: var(--hairline) solid var(--border);
+  border-radius: 999px;
+  background: var(--surface, var(--bg));
+  color: var(--text);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.file-ops-confirm-actions button.is-danger { border-color: var(--danger, #ef4444); background: var(--danger, #ef4444); color: #fff; }
+.file-ops-confirm-actions button:disabled { opacity: 0.6; cursor: default; }

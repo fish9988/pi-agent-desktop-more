@@ -1,28 +1,26 @@
 name: Plus Windows build
 
-# Builds the unsigned Pi Agent Plus Windows installer and uploads it as a
-# workflow artifact. Nothing is published: no release, no tag, no updater
-# manifest. The updater public key is not embedded, so the build can never
-# replace itself with an upstream release.
+# Pi Agent Plus versioning (see VERSIONING-PLUS.md):
+# - push to `plus`  -> build <version>-dev.<run> and upload it as an artifact
+# - push tag vX.Y.Z -> build X.Y.Z and publish a GitHub Release with the
+#                      installer and the CHANGELOG-PLUS.md section as notes
+# The updater public key is never embedded, so a Plus build cannot replace
+# itself with an upstream release.
 on:
   workflow_dispatch:
-    inputs:
-      label:
-        description: "Version suffix, e.g. plus.1 -> 0.7.5-plus.1"
-        required: true
-        default: "plus.1"
   push:
     branches: [plus]
+    tags: ["v*"]
     paths-ignore:
       - "**/*.md"
       - "docs/**"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: plus-windows-build-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
   build:
@@ -54,10 +52,22 @@ jobs:
         id: version
         shell: bash
         run: |
-          base="$(node -p "require('./src-tauri/pi-agent-desktop-package.json').version")"
-          label="${{ inputs.label }}"
-          if [ -z "$label" ]; then label="plus.${{ github.run_number }}"; fi
-          echo "value=${base}-${label}" >> "$GITHUB_OUTPUT"
+          base="$(node -p "require('./plus-version.json').version")"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            tag="${GITHUB_REF#refs/tags/v}"
+            if [ "$tag" != "$base" ]; then
+              echo "::error::Tag v$tag does not match plus-version.json ($base)"
+              exit 1
+            fi
+            echo "value=$base" >> "$GITHUB_OUTPUT"
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${base}-dev.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run Plus unit tests
+        run: node --experimental-strip-types --test lib/plus-features.test.mjs lib/session-title.test.mjs components/ChatAppearance.test.mjs
 
       - name: Prepare packaged Next.js server
         run: npm run desktop:prepare
@@ -75,3 +85,23 @@ jobs:
           path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish GitHub Release
+        if: steps.version.outputs.release == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${{ steps.version.outputs.value }}"
+          # Notes: the CHANGELOG-PLUS.md section for this version.
+          awk -v v="$version" '
+            $0 ~ "^## \\[?v?"v"\\]?" {on=1; next}
+            on && /^## / {exit}
+            on {print}
+          ' CHANGELOG-PLUS.md > release-notes.md
+          if [ ! -s release-notes.md ]; then echo "Pi Agent Plus $version" > release-notes.md; fi
+          installer="$(ls src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe | head -n 1)"
+          cp "$installer" "Pi-Agent-Plus_${version}_x64-setup.exe"
+          gh release create "v$version" "Pi-Agent-Plus_${version}_x64-setup.exe" \
+            --title "Pi Agent Plus $version" --notes-file release-notes.md --target "$GITHUB_SHA" \
+            || gh release upload "v$version" "Pi-Agent-Plus_${version}_x64-setup.exe" --clobber

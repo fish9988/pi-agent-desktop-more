@@ -1,11 +1,20 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { usePlusTheme } from "@/hooks/usePlusTheme";
-import { applyPlusTheme } from "@/lib/plus-theme";
+import {
+  applyPlusTheme,
+  isUserTheme,
+  setUserThemeCss,
+  USER_THEME_PREFIX,
+  writeUserThemeCache,
+} from "@/lib/plus-theme";
+import type { ThemeBase } from "@/lib/plus-theme-catalog";
 
 const POLL_MS = 1000;
 export const CUSTOM_CSS_PREVIEW_ID = "plus-custom-css-preview";
+/** Set on <html> while the theme editor previews unsaved CSS. */
+export const THEME_PREVIEW_ATTR = "plusThemePreview";
 
 /** Point the custom.css <link> at a fresh copy of the file. */
 export function reloadCustomCssLink(version: string): void {
@@ -17,35 +26,94 @@ export function reloadCustomCssLink(version: string): void {
   link.media = "all";
 }
 
+/** Fetch an imported theme and make it the active stylesheet. */
+export async function loadUserTheme(id: string): Promise<{ base: ThemeBase; css: string } | null> {
+  const response = await fetch(`/api/plus-themes/${encodeURIComponent(id)}`, { cache: "no-store" });
+  if (!response.ok) return null;
+  const { theme } = (await response.json()) as { theme: { base: ThemeBase; css: string } };
+  return theme;
+}
+
 /**
- * Plus: keeps the appearance layer applied and hot-reloads custom.css.
+ * Plus: keeps the appearance layer applied and hot-reloads custom.css and the
+ * active imported theme.
  *
- * The stylesheet's fingerprint is polled once a second while the window is
- * visible (one tiny localhost request), and the <link> is re-pointed when
- * the file changes, so edits from any editor apply without Ctrl+R.
+ * Fingerprints are polled once a second while the window is visible (one tiny
+ * localhost request); a change re-points the custom.css <link> or re-fetches
+ * the theme, so edits from any editor apply without Ctrl+R.
  */
 export function PlusAppearanceRuntime() {
-  const { settings } = usePlusTheme();
+  const { settings, update } = usePlusTheme();
+  const themeRef = useRef(settings.theme);
+  themeRef.current = settings.theme;
+  // Async loads must apply the settings current when they finish, not the
+  // ones captured when they started (custom.css may have been switched off).
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
 
   useEffect(() => {
     applyPlusTheme(settings);
   }, [settings]);
 
+  // Load the imported theme whenever it becomes active.
   useEffect(() => {
-    let last: string | null = null;
+    if (!isUserTheme(settings.theme)) {
+      writeUserThemeCache(null);
+      return;
+    }
+    const id = settings.theme.slice(USER_THEME_PREFIX.length);
+    let cancelled = false;
+    void loadUserTheme(id).then((theme) => {
+      if (cancelled) return;
+      if (!theme) {
+        // Deleted elsewhere: fall back to the default theme.
+        writeUserThemeCache(null);
+        setUserThemeCss(null);
+        update({ theme: "clean" });
+        return;
+      }
+      if (document.documentElement.dataset[THEME_PREVIEW_ATTR] !== undefined) return;
+      setUserThemeCss(theme.css);
+      writeUserThemeCache({ id, base: theme.base, css: theme.css });
+      applyPlusTheme(settingsRef.current, theme.base);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.theme]);
+
+  useEffect(() => {
+    let lastCss: string | null = null;
+    let lastTheme: string | null = null;
+    let lastThemeId: string | null = null;
     let timer: number | null = null;
     let stopped = false;
     const tick = async () => {
       timer = null;
       if (stopped) return;
-      if (document.visibilityState === "visible" && !document.getElementById(CUSTOM_CSS_PREVIEW_ID)) {
+      const root = document.documentElement;
+      const previewing = Boolean(document.getElementById(CUSTOM_CSS_PREVIEW_ID)) || root.dataset[THEME_PREVIEW_ATTR] !== undefined;
+      if (document.visibilityState === "visible" && !previewing) {
+        const theme = themeRef.current;
+        const themeId = isUserTheme(theme) ? theme.slice(USER_THEME_PREFIX.length) : null;
         try {
-          const response = await fetch("/api/custom-css/version", { cache: "no-store" });
+          const response = await fetch(`/api/custom-css/version${themeId ? `?theme=${encodeURIComponent(themeId)}` : ""}`, { cache: "no-store" });
           if (response.ok) {
-            const { version } = (await response.json()) as { version?: string };
+            const { version, themeVersion } = (await response.json()) as { version?: string; themeVersion?: string };
             if (typeof version === "string") {
-              if (last !== null && version !== last) reloadCustomCssLink(version);
-              last = version;
+              if (lastCss !== null && version !== lastCss) reloadCustomCssLink(version);
+              lastCss = version;
+            }
+            if (themeId && typeof themeVersion === "string") {
+              if (lastThemeId === themeId && lastTheme !== null && themeVersion !== lastTheme && themeVersion !== "none") {
+                const loaded = await loadUserTheme(themeId);
+                if (loaded && themeRef.current === theme) {
+                  setUserThemeCss(loaded.css);
+                  writeUserThemeCache({ id: themeId, base: loaded.base, css: loaded.css });
+                  root.dataset.plusStyle = loaded.base;
+                }
+              }
+              lastTheme = themeVersion;
+              lastThemeId = themeId;
             }
           }
         } catch {

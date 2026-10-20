@@ -7,6 +7,7 @@
 export const PRODUCT_NAME = "Pi Agent Plus" as const;
 
 import desktopPackage from "../src-tauri/pi-agent-desktop-package.json";
+import plusVersion from "../plus-version.json";
 
 /** Name and version of this packaged desktop distribution. */
 // Plus fork: an independent build that must never update itself from the
@@ -15,7 +16,11 @@ export const APP_DISTRIBUTION_NAME = "pi-agent-plus" as const;
 export const APP_REPOSITORY = "fish9988/pi-agent-desktop-more" as const;
 export const APP_REPOSITORY_URL = `https://github.com/${APP_REPOSITORY}` as const;
 export const APP_RELEASES_URL = `${APP_REPOSITORY_URL}/releases` as const;
-export const APP_VERSION = desktopPackage.version;
+// Plus has its own semver (plus-version.json, tagged vX.Y.Z on GitHub) so the
+// in-app update check compares against this fork's releases.
+export const APP_VERSION = plusVersion.version;
+/** Upstream pi-agent-desktop version this Plus build is based on. */
+export const UPSTREAM_VERSION = desktopPackage.version;
 export const APP_VERSION_DISPLAY = APP_VERSION.endsWith(".0")
   ? APP_VERSION.slice(0, -2)
   : APP_VERSION;
