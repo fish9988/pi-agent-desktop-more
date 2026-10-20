@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { isApiRequestAllowed } from "@/lib/request-security";
-import { deleteUserTheme, getUserTheme, ThemeError, themesDir, updateUserTheme } from "@/lib/plus-user-themes";
+import { deleteUserTheme, getUserTheme, serializeThemeFile, ThemeError, themesDir, updateUserTheme, type ThemeInput } from "@/lib/plus-user-themes";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest, { params }: Context) {
     const { id } = await params;
     const theme = await getUserTheme(themesDir(getAgentDir()), id);
     if (request.nextUrl.searchParams.get("download") === "1") {
-      const body = `/* plus-theme: ${JSON.stringify({ name: theme.name, base: theme.base })} */\n${theme.css}`;
+      const body = serializeThemeFile(theme.name, theme.base, theme.css, theme.definition);
       return new NextResponse(body, {
         headers: {
           "Content-Type": "text/css; charset=utf-8",
@@ -35,7 +35,7 @@ export async function PUT(request: NextRequest, { params }: Context) {
   if (!isApiRequestAllowed(request)) return NextResponse.json({ error: "Not allowed" }, { status: 403 });
   try {
     const { id } = await params;
-    const body = (await request.json()) as { name?: unknown; base?: unknown; css?: unknown };
+    const body = (await request.json()) as ThemeInput;
     const theme = await updateUserTheme(themesDir(getAgentDir()), id, body);
     return NextResponse.json({ theme });
   } catch (error) {

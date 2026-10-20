@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { ThemeBase } from "./plus-theme-catalog";
+import { compileUserThemeCss, sanitizeThemeDefinition, type ThemeBase, type ThemeDefinition } from "./plus-theme-catalog";
 
 /**
  * Plus: imported themes, one CSS file each under
@@ -10,6 +10,10 @@ import type { ThemeBase } from "./plus-theme-catalog";
  * copied between machines:
  *
  *   /* plus-theme: {"name":"Claude","base":"native"} *\/
+ *
+ * Themes made with the palette editor also carry a "definition" (palette,
+ * typography, radius) in that header; the CSS body then holds only extras
+ * and the served CSS is the generated tokens followed by the body.
  */
 
 export interface UserThemeMeta {
@@ -20,10 +24,18 @@ export interface UserThemeMeta {
   size: number;
   /** Colours picked from the CSS for the card preview, when found. */
   swatch: { bg?: string; panel?: string; accent?: string; text?: string };
+  /** Dark-mode card preview, for palette themes. */
+  swatchDark?: { bg?: string; panel?: string; accent?: string; text?: string };
+  /** Edited with the palette editor. */
+  hasPalette: boolean;
 }
 
 export interface UserTheme extends UserThemeMeta {
+  /** The theme's own CSS (extras when a definition exists). */
   css: string;
+  definition?: ThemeDefinition;
+  /** What actually gets applied: generated tokens + css. */
+  compiled: string;
 }
 
 export const MAX_THEME_BYTES = 1024 * 1024;
@@ -58,14 +70,15 @@ export function normalizeBase(raw: unknown): ThemeBase {
 }
 
 /** Split a stored file into metadata and the CSS body. */
-export function parseThemeFile(text: string): { name?: string; base?: ThemeBase; css: string } {
+export function parseThemeFile(text: string): { name?: string; base?: ThemeBase; definition?: ThemeDefinition; css: string } {
   const match = HEADER_PATTERN.exec(text);
   if (!match) return { css: text };
   try {
-    const meta = JSON.parse(match[1]) as { name?: unknown; base?: unknown };
+    const meta = JSON.parse(match[1]) as { name?: unknown; base?: unknown; definition?: unknown };
     return {
       name: typeof meta.name === "string" ? meta.name : undefined,
       base: normalizeBase(meta.base),
+      definition: sanitizeThemeDefinition(meta.definition),
       css: text.slice(match[0].length),
     };
   } catch {
@@ -73,8 +86,11 @@ export function parseThemeFile(text: string): { name?: string; base?: ThemeBase;
   }
 }
 
-export function serializeThemeFile(name: string, base: ThemeBase, css: string): string {
-  return `/* plus-theme: ${JSON.stringify({ name, base })} */\n${css}`;
+export function serializeThemeFile(name: string, base: ThemeBase, css: string, definition?: ThemeDefinition): string {
+  // "*/" cannot occur in the JSON: names drop "*" and "/", colours and font
+  // lists are sanitised, but escape defensively anyway.
+  const meta = JSON.stringify(definition ? { name, base, definition } : { name, base }).replace(/\*\//g, "*\\u002f");
+  return `/* plus-theme: ${meta} */\n${css}`;
 }
 
 function firstValue(css: string, variable: string): string | undefined {
@@ -115,14 +131,20 @@ async function readTheme(dir: string, id: string): Promise<UserTheme> {
     throw new ThemeError("Theme not found", 404);
   }
   const parsed = parseThemeFile(text);
+  const def = parsed.definition;
+  const fromPalette = (p: ThemeDefinition["light"]) => (p ? { bg: p.workbench, panel: p.panel, accent: p.fill ?? p.accent, text: p.text } : undefined);
   return {
     id,
     name: parsed.name ?? id,
-    base: parsed.base ?? "native",
+    base: def ? "clean" : parsed.base ?? "native",
     css: parsed.css,
+    definition: def,
+    compiled: compileUserThemeCss(def, parsed.css),
     updatedAt: Math.round(stat.mtimeMs),
     size: stat.size,
-    swatch: themeSwatch(parsed.css),
+    swatch: fromPalette(def?.light) ?? themeSwatch(parsed.css),
+    swatchDark: fromPalette(def?.dark),
+    hasPalette: Boolean(def),
   };
 }
 
@@ -146,7 +168,7 @@ export async function listUserThemes(dir: string): Promise<UserThemeMeta[]> {
     const id = name.slice(0, -4);
     if (!isValidThemeId(id)) continue;
     try {
-      const { css: _css, ...meta } = await readTheme(dir, id);
+      const { css: _css, compiled: _compiled, definition: _definition, ...meta } = await readTheme(dir, id);
       themes.push(meta);
     } catch {
       // unreadable file: skip
@@ -159,21 +181,31 @@ export async function getUserTheme(dir: string, id: string): Promise<UserTheme> 
   return readTheme(dir, id);
 }
 
-export async function createUserTheme(dir: string, input: { name?: unknown; base?: unknown; css?: unknown }): Promise<UserTheme> {
+export interface ThemeInput {
+  name?: unknown;
+  base?: unknown;
+  css?: unknown;
+  /** Palette definition; `null` on update removes it. */
+  definition?: unknown;
+}
+
+export async function createUserTheme(dir: string, input: ThemeInput): Promise<UserTheme> {
   const name = normalizeThemeName(input.name);
-  const base = normalizeBase(input.base);
-  const css = checkCss(input.css);
+  const definition = sanitizeThemeDefinition(input.definition);
+  const base = definition ? "clean" : normalizeBase(input.base);
+  const css = checkCss(input.css ?? "");
   const id = slugifyThemeName(name);
-  await writeAtomic(path.join(dir, `${id}.css`), serializeThemeFile(name, base, css));
+  await writeAtomic(path.join(dir, `${id}.css`), serializeThemeFile(name, base, css, definition));
   return readTheme(dir, id);
 }
 
-export async function updateUserTheme(dir: string, id: string, patch: { name?: unknown; base?: unknown; css?: unknown }): Promise<UserTheme> {
+export async function updateUserTheme(dir: string, id: string, patch: ThemeInput): Promise<UserTheme> {
   const current = await readTheme(dir, id);
   const name = patch.name === undefined ? current.name : normalizeThemeName(patch.name);
-  const base = patch.base === undefined ? current.base : normalizeBase(patch.base);
+  const definition = patch.definition === undefined ? current.definition : patch.definition === null ? undefined : sanitizeThemeDefinition(patch.definition);
+  const base = definition ? "clean" : patch.base === undefined ? current.base : normalizeBase(patch.base);
   const css = patch.css === undefined ? current.css : checkCss(patch.css);
-  await writeAtomic(path.join(dir, `${id}.css`), serializeThemeFile(name, base, css));
+  await writeAtomic(path.join(dir, `${id}.css`), serializeThemeFile(name, base, css, definition));
   return readTheme(dir, id);
 }
 

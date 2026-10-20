@@ -26,12 +26,12 @@ export function reloadCustomCssLink(version: string): void {
   link.media = "all";
 }
 
-/** Fetch an imported theme and make it the active stylesheet. */
+/** Fetch a custom theme; `css` is the compiled stylesheet to apply. */
 export async function loadUserTheme(id: string): Promise<{ base: ThemeBase; css: string } | null> {
   const response = await fetch(`/api/plus-themes/${encodeURIComponent(id)}`, { cache: "no-store" });
   if (!response.ok) return null;
-  const { theme } = (await response.json()) as { theme: { base: ThemeBase; css: string } };
-  return theme;
+  const { theme } = (await response.json()) as { theme: { base: ThemeBase; css: string; compiled?: string } };
+  return { base: theme.base, css: theme.compiled ?? theme.css };
 }
 
 /**

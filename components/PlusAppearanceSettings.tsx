@@ -11,12 +11,23 @@ import {
   USER_THEME_PREFIX,
   writeUserThemeCache,
 } from "@/lib/plus-theme";
-import { BUILTIN_THEMES, themeTemplateCss, type BuiltinTheme, type ThemeBase } from "@/lib/plus-theme-catalog";
+import {
+  BUILTIN_THEMES,
+  builtinDefinition,
+  CUSTOM_THEME_CSS_HINT,
+  DEFAULT_THEME_ID,
+  definitionFromCss,
+  findBuiltinTheme,
+  type BuiltinTheme,
+  type ThemeBase,
+  type ThemeDefinition,
+} from "@/lib/plus-theme-catalog";
 import type { UserThemeMeta } from "@/lib/plus-user-themes";
 import { appNotify } from "@/lib/notification-store";
 import { ConfigSwitch } from "./SettingsUi";
 import { FontPicker, loadSystemFonts } from "./FontPicker";
 import { CUSTOM_CSS_PREVIEW_ID, loadUserTheme, reloadCustomCssLink, THEME_PREVIEW_ATTR } from "./PlusAppearanceRuntime";
+import { PaletteThemeEditor } from "./PlusThemeEditor";
 
 type Translate = (key: string, params?: Record<string, string | number>) => string;
 
@@ -142,7 +153,7 @@ function CssEditor({
 
 type Editing =
   | { kind: "custom-css"; css: string }
-  | { kind: "theme"; id: string; name: string; base: ThemeBase; css: string };
+  | { kind: "theme"; id: string; name: string; base: ThemeBase; css: string; definition?: ThemeDefinition };
 
 /** Plus: theme manager, accent, fonts and custom.css. */
 export function PlusAppearanceSettings() {
@@ -169,11 +180,11 @@ export function PlusAppearanceSettings() {
 
   const notifyError = (error: unknown) => appNotify.error({ message: error instanceof Error ? error.message : String(error) });
 
-  const createTheme = async (name: string, base: ThemeBase, css: string, apply = true) => {
+  const createTheme = async (name: string, base: ThemeBase, css: string, apply = true, definition?: ThemeDefinition) => {
     const response = await fetch("/api/plus-themes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, base, css }),
+      body: JSON.stringify({ name, base, css, definition }),
     });
     if (!response.ok) throw new Error(await readError(response));
     const { theme } = (await response.json()) as { theme: UserThemeMeta };
@@ -223,7 +234,7 @@ export function PlusAppearanceSettings() {
       if (!css.trim()) throw new Error(t("plus.customCssEmpty"));
       await createTheme(t("plus.customCssThemeName"), "native", css);
       // The theme now carries these styles; keep them from applying twice.
-      update({ customCss: false });
+      update({ customCssOverlay: false });
       appNotify.success({ message: t("plus.customCssImported") });
     } catch (error) {
       notifyError(error);
@@ -232,10 +243,18 @@ export function PlusAppearanceSettings() {
     }
   };
 
-  const duplicateBuiltin = async (theme: BuiltinTheme) => {
+  const duplicateBuiltin = (theme: BuiltinTheme) => duplicateBuiltinAs(theme, `${themeName(theme, locale)} ${t("plus.themeCopySuffix")}`);
+
+  /** New palette theme, starting from the active built-in theme. */
+  const newTheme = async () => {
+    const start = findBuiltinTheme(settings.theme);
+    await duplicateBuiltinAs(start?.light ? start : findBuiltinTheme(DEFAULT_THEME_ID)!, t("plus.newThemeName"));
+  };
+
+  const duplicateBuiltinAs = async (theme: BuiltinTheme, name: string) => {
     setBusy(true);
     try {
-      const created = await createTheme(`${themeName(theme, locale)} ${t("plus.themeCopySuffix")}`, theme.base, themeTemplateCss(theme));
+      const created = await createTheme(name, "clean", CUSTOM_THEME_CSS_HINT, true, builtinDefinition(theme));
       await openThemeEditor(created.id);
     } catch (error) {
       notifyError(error);
@@ -248,9 +267,9 @@ export function PlusAppearanceSettings() {
     try {
       const response = await fetch(`/api/plus-themes/${encodeURIComponent(id)}`, { cache: "no-store" });
       if (!response.ok) throw new Error(await readError(response));
-      const { theme } = (await response.json()) as { theme: { id: string; name: string; base: ThemeBase; css: string } };
+      const { theme } = (await response.json()) as { theme: { id: string; name: string; base: ThemeBase; css: string; definition?: ThemeDefinition } };
       update({ theme: `${USER_THEME_PREFIX}${theme.id}` });
-      setEditing({ kind: "theme", id: theme.id, name: theme.name, base: theme.base, css: theme.css });
+      setEditing({ kind: "theme", id: theme.id, name: theme.name, base: theme.base, css: theme.css, definition: theme.definition });
     } catch (error) {
       notifyError(error);
     }
@@ -285,7 +304,7 @@ export function PlusAppearanceSettings() {
     const selected = settings.theme === theme.id;
     return (
       <div key={theme.id} className={`plus-theme-card${selected ? " is-selected" : ""}`}>
-        <button type="button" role="radio" aria-checked={selected} className="plus-theme-card-main" onClick={() => update({ theme: theme.id })}>
+        <button type="button" role="radio" aria-checked={selected} className="plus-theme-card-main" title={theme.description ? (locale.startsWith("zh") ? theme.description.zh : theme.description.en) : undefined} onClick={() => update({ theme: theme.id })}>
           <Swatch
             light={theme.light ? { bg: theme.light.workbench, panel: theme.light.panel, accent: theme.light.accent, text: theme.light.text } : { bg: "#ffffff", panel: "#f2f2f4", accent: "#1d1d1f", text: "#1d1d1f" }}
             dark={theme.dark ? { bg: theme.dark.workbench, panel: theme.dark.panel, accent: theme.dark.accent } : { bg: "#1c1c1e", panel: "#242426", accent: "#f5f5f7" }}
@@ -305,9 +324,9 @@ export function PlusAppearanceSettings() {
     return (
       <div key={theme.id} className={`plus-theme-card is-user${selected ? " is-selected" : ""}`}>
         <button type="button" role="radio" aria-checked={selected} className="plus-theme-card-main" onClick={() => update({ theme: value })} title={theme.name}>
-          <Swatch light={theme.swatch} />
+          <Swatch light={theme.swatch} dark={theme.swatchDark} />
           <span className="plus-theme-card-name">{theme.name}</span>
-          <span className="plus-theme-card-badge">{t(theme.base === "clean" ? "plus.style.clean" : "plus.style.native")}</span>
+          <span className="plus-theme-card-badge">{t(theme.hasPalette ? "plus.themeBadgePalette" : theme.base === "clean" ? "plus.themeBadgeCssClean" : "plus.themeBadgeCss")}</span>
         </button>
         {confirmDelete === theme.id ? (
           <span className="plus-theme-card-confirm">
@@ -337,6 +356,9 @@ export function PlusAppearanceSettings() {
         <span>{t("plus.themes")}</span>
         <span className="plus-appearance-heading-actions">
           <input ref={fileInputRef} type="file" accept=".css,text/css" multiple hidden onChange={(event) => void importFiles(event.target.files)} />
+          <button type="button" className="config-button config-button-small config-button-primary" disabled={busy} onClick={() => void newTheme()}>
+            {t("plus.themeNew")}
+          </button>
           <button type="button" className="config-button config-button-small config-button-secondary" disabled={busy} onClick={() => fileInputRef.current?.click()}>
             {t("plus.themeImport")}
           </button>
@@ -351,7 +373,32 @@ export function PlusAppearanceSettings() {
       </div>
       <p className="settings-option-hint plus-theme-hint">{t("plus.themeHint")}</p>
 
-      {editing?.kind === "theme" && (
+      {editing?.kind === "theme" && editing.definition && (
+        <PaletteThemeEditor
+          key={`palette-${editing.id}`}
+          t={t}
+          id={editing.id}
+          name={editing.name}
+          definition={editing.definition}
+          css={editing.css}
+          onSave={async ({ name, definition, css, compiled }) => {
+            const response = await fetch(`/api/plus-themes/${encodeURIComponent(editing.id)}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ name, definition, css }),
+            });
+            if (!response.ok) throw new Error(await readError(response));
+            writeUserThemeCache({ id: editing.id, base: "clean", css: compiled });
+            await refreshThemes();
+          }}
+          onClose={() => {
+            void restoreActiveTheme();
+            setEditing(null);
+          }}
+        />
+      )}
+
+      {editing?.kind === "theme" && !editing.definition && (
         <CssEditor
           key={`theme-${editing.id}`}
           t={t}
@@ -359,6 +406,37 @@ export function PlusAppearanceSettings() {
           title={t("plus.themeEditing", { name: editing.name })}
           extra={(
             <div className="plus-theme-meta">
+              <button
+                type="button"
+                className="config-button config-button-small config-button-secondary"
+                title={t("plus.convertToPaletteHint")}
+                onClick={async () => {
+                  const fromTemplate = editing.css.trimStart().startsWith("/* Based on the built-in");
+                  const definition = definitionFromCss(editing.css);
+                  const css = fromTemplate ? CUSTOM_THEME_CSS_HINT : editing.css;
+                  try {
+                    const response = await fetch(`/api/plus-themes/${encodeURIComponent(editing.id)}`, {
+                      method: "PUT",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ definition, css }),
+                    });
+                    if (!response.ok) throw new Error(await readError(response));
+                    const loaded = await loadUserTheme(editing.id);
+                    if (loaded) {
+                      writeUserThemeCache({ id: editing.id, base: "clean", css: loaded.css });
+                      setUserThemeCss(loaded.css);
+                    }
+                    delete document.documentElement.dataset[THEME_PREVIEW_ATTR];
+                    document.documentElement.dataset.plusStyle = "clean";
+                    await refreshThemes();
+                    setEditing({ ...editing, base: "clean", definition, css });
+                  } catch (error) {
+                    notifyError(error);
+                  }
+                }}
+              >
+                {t("plus.convertToPalette")}
+              </button>
               <input
                 className="plus-theme-name-input"
                 value={editing.name}
@@ -471,7 +549,7 @@ export function PlusAppearanceSettings() {
           <span>{t("plus.customCss")}</span>
           <span className="settings-option-hint">{t("plus.customCssHint")}</span>
         </span>
-        <ConfigSwitch checked={settings.customCss} label={t("plus.customCss")} onChange={(enabled) => update({ customCss: enabled })} />
+        <ConfigSwitch checked={settings.customCssOverlay} label={t("plus.customCss")} onChange={(enabled) => update({ customCssOverlay: enabled })} />
       </div>
 
       {editing?.kind === "custom-css" ? (
@@ -485,7 +563,7 @@ export function PlusAppearanceSettings() {
             const link = document.querySelector<HTMLLinkElement>("link[data-custom-css]");
             if (css === null) {
               style?.remove();
-              if (link) link.disabled = !settings.customCss;
+              if (link) link.disabled = !settings.customCssOverlay;
               return;
             }
             if (!style) {

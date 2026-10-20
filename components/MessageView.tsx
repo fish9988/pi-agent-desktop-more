@@ -1053,7 +1053,7 @@ export function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex 
   }, [expanded, block.deferred, content, sessionId, entryId, blockIndex]);
 
   return (
-    <div style={{
+    <div className="plus-thinking" style={{
       display: "flex", alignItems: "flex-start", gap: 6, minWidth: 0,
       border: "var(--hairline) solid var(--border)",
       borderRadius: 7,
@@ -1095,6 +1095,7 @@ export function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex 
       </button>
       {expanded && (
         <div
+          className="plus-thinking-body"
           style={{
             padding: "8px 10px",
             color: error ? "var(--danger)" : "var(--text-muted)",
@@ -1164,6 +1165,7 @@ function ToolCallBlock({ block, result, duration, aborted, defaultExpanded, onOp
 
   return (
     <div
+      className={`plus-tool-card${isError ? " is-error" : aborted ? " is-aborted" : ""}`}
       style={{
         borderRadius: 7,
         overflow: "hidden",
@@ -1200,6 +1202,7 @@ function ToolCallBlock({ block, result, duration, aborted, defaultExpanded, onOp
           }}
         >
           <span
+            className="plus-tool-name"
             title={mcpLabel ? block.toolName : undefined}
             style={{ color: isError ? "var(--danger)" : aborted ? "var(--text-dim)" : "var(--success)", fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: 11, flexShrink: 0 }}
           >
@@ -1248,6 +1251,7 @@ function ToolCallBlock({ block, result, duration, aborted, defaultExpanded, onOp
       {/* ── Expanded: input args (only when no richer view exists); a codemode script in place of its JSON ── */}
       {expanded && (isStreamingInput || !isEditTool) && !patchFiles && (
         <pre
+          className="plus-tool-io"
           style={{
             margin: 0,
             padding: "8px 10px",
@@ -1738,12 +1742,14 @@ function PairedResult({ text, isEmpty, isError }: {
   const { t } = useI18n();
   return (
     <div
+      className="plus-tool-result"
       style={{
         borderTop: `1px solid ${isError ? "rgba(248,113,113,0.3)" : "rgba(34,197,94,0.15)"}`,
         background: isError ? "rgba(248,113,113,0.04)" : "var(--bg-subtle)",
       }}
     >
       <pre
+        className="plus-tool-io"
         style={{
           margin: 0,
           padding: "8px 10px",

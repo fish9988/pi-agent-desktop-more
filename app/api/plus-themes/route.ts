@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { isApiRequestAllowed } from "@/lib/request-security";
-import { createUserTheme, listUserThemes, MAX_THEME_BYTES, ThemeError, themesDir } from "@/lib/plus-user-themes";
+import { createUserTheme, listUserThemes, MAX_THEME_BYTES, ThemeError, themesDir, type ThemeInput } from "@/lib/plus-user-themes";
 
 /** Plus: list and import custom themes. */
 export async function GET() {
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "A theme is limited to 1 MB" }, { status: 413 });
   }
   try {
-    const body = (await request.json()) as { name?: unknown; base?: unknown; css?: unknown };
+    const body = (await request.json()) as ThemeInput;
     const theme = await createUserTheme(themesDir(getAgentDir()), body);
     return NextResponse.json({ theme });
   } catch (error) {
