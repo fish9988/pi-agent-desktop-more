@@ -8,6 +8,7 @@ import "./settings.css";
 // Fork-local restyle layer — must come after the upstream stylesheets so its
 // equal-specificity rules win the cascade. See app/native-theme.css.
 import "./native-theme.css";
+import "./plus.css";
 import { PRODUCT_NAME } from "@/lib/branding";
 
 const CUSTOM_CSS_ACTIVATE_SCRIPT = `(function(){var l=document.querySelector("link[data-custom-css]");if(!l)return;var a=function(){l.media="all"};l.addEventListener("load",a);l.addEventListener("error",a);if(l.sheet)a()})();`;

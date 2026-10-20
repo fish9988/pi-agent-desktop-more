@@ -22,6 +22,8 @@ import {
   CHAT_CONTENT_FONT_SIZE_MIN,
   useChatAppearance,
 } from "@/hooks/useChatAppearance";
+import { useWorkDetails } from "@/hooks/useWorkDetails";
+import { WORK_DETAILS_LEVELS } from "@/lib/work-details";
 import { useEnterSendMode, setEnterSendMode } from "@/hooks/useEnterSendMode";
 import { sendAgentCommand } from "@/lib/agent-client";
 import type { ProjectTrustStatus, ToolSettingsResponse } from "@/lib/api-types";
@@ -114,6 +116,7 @@ function GeneralSettings({
     fontSize,
     setFontSize,
   } = useChatAppearance();
+  const workDetails = useWorkDetails();
   const chatWidthIsPercent = chatContentWidthUnit === "percent";
   const chatWidthIsDefault = chatWidthIsPercent
     ? chatContentWidthPercent === CHAT_CONTENT_WIDTH_PERCENT_DEFAULT
@@ -231,6 +234,43 @@ function GeneralSettings({
                     setThinkingExpanded(enabled);
                   }}
                 />
+              </div>
+              <div className="settings-chat-option settings-chat-choice-option settings-work-details-option">
+                <span className="settings-work-details-label">
+                  <span>{t("work.title")}</span>
+                  <span className="settings-option-hint">{t(`work.levelHint.${workDetails.level}`)}</span>
+                </span>
+                <div className="settings-choice-group" role="radiogroup" aria-label={t("work.title")}>
+                  {WORK_DETAILS_LEVELS.map((level) => (
+                    <button
+                      key={level}
+                      type="button"
+                      role="radio"
+                      aria-checked={workDetails.level === level}
+                      className={`config-button config-button-small ${workDetails.level === level ? "config-button-primary" : "config-button-secondary"}`}
+                      onClick={() => workDetails.setLevel(level)}
+                    >
+                      {t(`work.level.${level}`)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="settings-chat-option settings-chat-choice-option">
+                <span>{t("work.collapseTiming")}</span>
+                <div className="settings-choice-group" role="radiogroup" aria-label={t("work.collapseTiming")}>
+                  {(["completion", "next-input"] as const).map((timing) => (
+                    <button
+                      key={timing}
+                      type="button"
+                      role="radio"
+                      aria-checked={workDetails.collapseTiming === timing}
+                      className={`config-button config-button-small ${workDetails.collapseTiming === timing ? "config-button-primary" : "config-button-secondary"}`}
+                      onClick={() => workDetails.setCollapseTiming(timing)}
+                    >
+                      {t(timing === "completion" ? "work.collapse.completion" : "work.collapse.nextInput")}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div className="settings-chat-option settings-chat-range-option">
                 <div className="settings-chat-range-header">

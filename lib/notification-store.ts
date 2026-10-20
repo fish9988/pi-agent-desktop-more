@@ -154,8 +154,13 @@ export const appNotify = {
   error: (input: Omit<AppNoticeInput, "type">): string => addNotice({ ...input, type: "error" }),
 };
 
+// A stable server snapshot: returning a fresh [] each call makes React warn
+// "The result of getServerSnapshot should be cached" on every hydration.
+const EMPTY_NOTICES: readonly AppNotice[] = [];
+const getServerSnapshot = (): readonly AppNotice[] => EMPTY_NOTICES;
+
 export function useAppNotices(): readonly AppNotice[] {
-  return useSyncExternalStore(subscribe, getSnapshot, () => []);
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }
 
 /** Test hook; also useful if a future route needs to clear transient toasts. */

@@ -15,6 +15,10 @@ import { MarkdownBody } from "./MarkdownBody";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
 import { ConversationNavigator, type ConversationTurnLocation } from "./ConversationNavigator";
 import { ChatColumnResizeHandles } from "./ChatColumnResizeHandles";
+import { FinishedWorkGroup, LiveWorkGroup } from "./WorkGroups";
+import { ChatFindBar, useChatFind } from "./ChatFindBar";
+import { useWorkDetails } from "@/hooks/useWorkDetails";
+import { currentWorkActivity, messageTime, summarizeWorkActivities } from "@/lib/work-details";
 import { ExtensionWidgets } from "./ExtensionWidgets";
 import { ExtensionStatusLine, formatExtensionStatusLine } from "./ExtensionStatusLine";
 import { AnsiText } from "./AnsiText";
@@ -152,7 +156,7 @@ function withAssistantBlocks(
 interface FinalSplitEntry {
   processBlocks: AssistantContentBlock[];
   answerBlocks: AssistantContentBlock[];
-  /** The final assistant entry's process prefix, as rendered inside ProcessDetailsGroup. */
+  /** The final assistant entry's process prefix, as rendered inside the finished work group. */
   processMessage: AssistantMessage;
   /** The final answer bubble; also kept for error/truncation notices without answer text. */
   answerMessage: AssistantMessage | null;
@@ -214,52 +218,8 @@ export function getTurnWrittenFiles(finalAssistant: AssistantMessage, turnMessag
   return files;
 }
 
-function ProcessDetailsGroup({ messageCount, toolCallCount, defaultExpanded = false, reveal = false, children, t }: { messageCount: number; toolCallCount: number; defaultExpanded?: boolean; reveal?: boolean; children: ReactNode; t: (key: string, params?: Record<string, string | number>) => string }) {
-  const [expanded, setExpanded] = useState(defaultExpanded);
-  useLayoutEffect(() => {
-    if (reveal) setExpanded(true);
-  }, [reveal]);
-  const parts = [t("chat.processDetails"), `${messageCount} ${t(messageCount === 1 ? "chat.message" : "chat.messages")}`];
-  if (toolCallCount > 0) parts.push(`${toolCallCount} ${t(toolCallCount === 1 ? "chat.toolCall" : "chat.toolCalls")}`);
-
-  return (
-    <div className="process-details" style={{ marginBottom: 14 }}>
-      <button
-        className="process-details-trigger"
-        type="button"
-        aria-expanded={expanded || reveal}
-        onClick={() => setExpanded((v) => !v)}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          width: "auto",
-          minHeight: 24,
-          padding: "2px 0",
-          border: "none",
-          background: "transparent",
-          color: "var(--text-muted)",
-          cursor: "pointer",
-          fontSize: 12,
-          textAlign: "left",
-        }}
-        title={expanded ? t("chat.collapseProcess") : t("chat.expandProcess")}
-      >
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}>
-          <polyline points="4 2.5 7.5 6 4 9.5" />
-        </svg>
-        <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {parts.join(" · ")}
-        </span>
-      </button>
-      {(expanded || reveal) && (
-        <div style={{ marginTop: 8 }}>
-          {children}
-        </div>
-      )}
-    </div>
-  );
-}
+// Plus: the finished/live work rows live in ./WorkGroups (FinishedWorkGroup,
+// LiveWorkGroup) and follow the work details level.
 
 export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTargetHandled, initialScrollPosition, onScrollPositionChange, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd, onAttentionNeeded, onSessionCreated, onSessionForked, modelsRefreshKey, workspaceUnavailable, onRecheckWorkspace, chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemToolsChange, onSystemInfoLoaderChange, onSessionStatsChange, onSessionStatsPanelOpen, onOpenSettings, onOpenModelsConfig, onContextUsageChange, onOpenFile, onOpenSession, onAskInNewChat, onSelectProject, projectOptions, onProjectChange, onProjectFilesImported, quoteSelectionEnabled = true, initialPrompt, onInitialPromptConsumed, soundEnabled = true, playDoneSound = () => {}, unlockAudio }: Props) {
   const { t } = useI18n();
@@ -327,6 +287,8 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
     onScrollPositionChange,
   });
   const sessionBusy = agentRunning || bashRunning;
+  // Plus: work details level (compact/standard/detailed/verbose).
+  const { policy: workPolicy, collapseTiming: workCollapseTiming } = useWorkDetails();
   // The desktop window stays hidden until the conversation it opens on is
   // loaded (or its load failed and the error is what the user will see).
   useReportDesktopReady(!loading, "chat");
@@ -981,6 +943,25 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
   }, [isEmptyNew, scrollContainerRef]);
 
   const hasStreamingContent = Boolean(streamState.streamingMessage?.content.length);
+  // Plus: while live work is grouped, the streaming entry's reasoning and tool
+  // calls go into the live group; only its trailing answer text stays outside.
+  const { process: liveStreamProcess, answer: liveStreamAnswer } = useMemo(() => {
+    const streaming = streamState.isStreaming ? streamState.streamingMessage : null;
+    if (!workPolicy.groupLiveWork || !streaming || streaming.role !== "assistant") return { process: null, answer: null };
+    const message = streaming as AssistantMessage;
+    const { processBlocks, answerBlocks } = splitFinalAssistantBlocks(message, { isStreaming: true });
+    if (processBlocks.length === 0) return { process: null, answer: null };
+    return {
+      process: withAssistantBlocks(message, processBlocks),
+      answer: answerBlocks.length > 0 ? withAssistantBlocks(message, answerBlocks) : null,
+    };
+  }, [streamState.isStreaming, streamState.streamingMessage, workPolicy.groupLiveWork]);
+  // Plus: in-conversation find (Ctrl/Cmd+F), including folded work.
+  const chatFind = useChatFind({ messages, entryIds, toolResults: toolResultsMap, scrollContainerRef });
+  const findReveal = chatFind.revealEntryId;
+  // Set while rendering the message list; the live row then carries the phase
+  // label, so the separate "Waiting for model…" line is not repeated below it.
+  let liveGroupRendered = false;
   const messageCwd = chatOnly ? undefined : session?.cwd ?? newSessionCwd ?? undefined;
   // Keys that do not change when a sent or streamed message gets its entry id
   // on the post-run reload; keying by the id remounted the sent bubble.
@@ -1363,7 +1344,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
                 if (idx === lastUserIdx) { (lastUserMsgRef as { current: HTMLDivElement | null }).current = el; }
               };
 
-              const renderMessage = (idx: number, options: { attachRef?: boolean; keyPrefix?: string; messageOverride?: AgentMessage; showTimestamp?: boolean; writtenFiles?: WrittenFile[]; recoverTruncation?: boolean } = {}): ReactNode => {
+              const renderMessage = (idx: number, options: { attachRef?: boolean; keyPrefix?: string; messageOverride?: AgentMessage; showTimestamp?: boolean; writtenFiles?: WrittenFile[]; recoverTruncation?: boolean; compactStep?: boolean } = {}): ReactNode => {
                 const msg = options.messageOverride ?? messages[idx];
                 const isVisible = isMessageGroupAnchor(msg) || msg.role === "assistant";
                 const currentRefIdx = visibleRefIndexByMessage.get(idx);
@@ -1407,6 +1388,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
                     onCompact={options.recoverTruncation ? handleCompact : undefined}
                     isCompacting={options.recoverTruncation ? isCompacting : undefined}
                     compactError={options.recoverTruncation ? compactError : undefined}
+                    compactStep={options.compactStep}
                   />
                 );
                 if (!isVisible || currentRefIdx === undefined) return view;
@@ -1440,6 +1422,53 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
                 while (endIdx < messages.length && !isMessageGroupAnchor(messages[endIdx])) endIdx += 1;
 
                 const finalAssistantIdx = findFinalAssistantIndex(messages, userIdx, endIdx);
+
+                // Plus: group the running turn's work behind one live row.
+                const isLiveSegment = (sessionBusy || streamState.isStreaming) && endIdx === messages.length && userIdx === lastAnchorIdx;
+                if (isLiveSegment && workPolicy.groupLiveWork && (endIdx > groupStartIdx + 1 || liveStreamProcess)) {
+                  if (hasAnchor) rendered.push(renderMessage(userIdx));
+                  // A trailing provider error stays outside the fold.
+                  let liveEnd = endIdx;
+                  const tail = messages[endIdx - 1];
+                  if (tail?.role === "assistant" && (tail as AssistantMessage).stopReason === "error" && endIdx - 1 > userIdx) liveEnd = endIdx - 1;
+                  const stepViews: ReactNode[] = [];
+                  let stepToolCount = 0;
+                  let stepCount = 0;
+                  for (let stepIdx = groupStartIdx + (hasAnchor ? 1 : 0); stepIdx < liveEnd; stepIdx++) {
+                    const stepMessage = messages[stepIdx];
+                    if (stepMessage.role === "assistant") {
+                      stepCount += 1;
+                      stepToolCount += countToolCallBlocks((stepMessage as AssistantMessage).content ?? []);
+                    }
+                    stepViews.push(renderMessage(stepIdx, { keyPrefix: "live", showTimestamp: false, compactStep: workPolicy.compactSteps }));
+                  }
+                  if (liveStreamProcess) {
+                    stepCount += 1;
+                    stepToolCount += countToolCallBlocks(liveStreamProcess.content);
+                    stepViews.push(
+                      <MessageView key="live-stream-process" message={liveStreamProcess as AgentMessage} toolResults={toolResultsMap} isStreaming modelNames={modelNames} cwd={messageCwd} onOpenFile={openFile} onOpenSession={onOpenSession} compactStep={workPolicy.compactSteps} />,
+                    );
+                  }
+                  const turnMessages = messages.slice(groupStartIdx, liveEnd);
+                  rendered.push(
+                    <LiveWorkGroup
+                      key={`live-work-${messageKeys[groupStartIdx] ?? groupStartIdx}`}
+                      activity={currentWorkActivity(turnMessages, liveStreamProcess, toolResultsMap)}
+                      idleLabel={agentPhase || isCompacting ? phaseLabel(agentPhase, t, isCompacting) : null}
+                      showDetail={workPolicy.liveDetail}
+                      stepCount={stepCount}
+                      toolCallCount={stepToolCount}
+                      startedAt={hasAnchor ? messageTime(messages[userIdx]) : null}
+                      reveal={Boolean(findReveal && turnMessages.some((_, offset) => entryIds[groupStartIdx + offset] === findReveal))}
+                    >
+                      {stepViews}
+                    </LiveWorkGroup>,
+                  );
+                  for (let renderIdx = liveEnd; renderIdx < endIdx; renderIdx++) rendered.push(renderMessage(renderIdx));
+                  liveGroupRendered = true;
+                  idx = endIdx;
+                  continue;
+                }
 
                 if (finalAssistantIdx === -1) {
                   for (let renderIdx = groupStartIdx; renderIdx < endIdx; renderIdx++) {
@@ -1487,6 +1516,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
                     keyPrefix: "process",
                     messageOverride: message,
                     showTimestamp: false,
+                    compactStep: workPolicy.foldCompletedTurns && workPolicy.compactSteps,
                   }));
                 }
 
@@ -1501,9 +1531,24 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
                           would otherwise stay open once its answer shows up, e.g. when
                           switching between an answered and an unanswered leaf of the same
                           turn. Manual toggles survive every other re-render. */}
-                      <ProcessDetailsGroup key={finalAnswerMessage ? "answered" : "unanswered"} messageCount={processViews.length} toolCallCount={processToolCount} defaultExpanded={!finalAnswerMessage} reveal={revealProcess} t={t}>
-                        {processViews}
-                      </ProcessDetailsGroup>
+                      {workPolicy.foldCompletedTurns ? (
+                        <FinishedWorkGroup
+                          key={finalAnswerMessage ? "answered" : "unanswered"}
+                          messageCount={processViews.length}
+                          toolCallCount={processToolCount}
+                          durationMs={(() => {
+                            const start = hasAnchor ? messageTime(messages[userIdx]) : null;
+                            const end = messageTime(finalAssistant);
+                            return start != null && end != null ? end - start : null;
+                          })()}
+                          activities={summarizeWorkActivities(messages.slice(userIdx + 1, finalAssistantIdx + 1))}
+                          answered={Boolean(finalAnswerMessage)}
+                          defaultExpanded={!finalAnswerMessage || (workCollapseTiming === "next-input" && endIdx === messages.length)}
+                          reveal={revealProcess || Boolean(findReveal && messages.slice(userIdx + 1, finalAssistantIdx + 1).some((_, offset) => entryIds[userIdx + 1 + offset] === findReveal))}
+                        >
+                          {processViews}
+                        </FinishedWorkGroup>
+                      ) : processViews}
                     </div>,
                   );
                 }
@@ -1538,11 +1583,11 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
                 </>
               );
             })()}
-            {streamState.isStreaming && hasStreamingContent && streamState.streamingMessage && (
-              <MessageView message={streamState.streamingMessage as AgentMessage} toolResults={toolResultsMap} isStreaming modelNames={modelNames} cwd={messageCwd} onOpenFile={openFile} onOpenSession={onOpenSession} />
+            {streamState.isStreaming && hasStreamingContent && streamState.streamingMessage && (!liveStreamProcess || liveStreamAnswer) && (
+              <MessageView message={(liveStreamProcess ? liveStreamAnswer : streamState.streamingMessage) as AgentMessage} toolResults={toolResultsMap} isStreaming modelNames={modelNames} cwd={messageCwd} onOpenFile={openFile} onOpenSession={onOpenSession} />
             )}
 
-            {agentRunning && !hasStreamingContent && (agentPhase || isCompacting) && (
+            {agentRunning && !hasStreamingContent && (agentPhase || isCompacting) && !liveGroupRendered && (
               <div className="break-words py-2 text-[13px] text-text-muted">
                 <span className="animate-[pulse_1.5s_infinite]">{phaseLabel(agentPhase, t, isCompacting)}</span>
               </div>
@@ -1577,6 +1622,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
             scrollContainerRef={scrollContainerRef}
             onSelect={selectConversationTurn}
           />
+          <ChatFindBar find={chatFind} />
         </>
         }
       </div>

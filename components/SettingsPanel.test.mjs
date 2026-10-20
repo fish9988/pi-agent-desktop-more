@@ -183,7 +183,8 @@ test("groups chat display controls together without row backgrounds", () => {
   // The fork's diffViewMode choice rides in the same group after the merged
   // send-mode radio (thinking, width, font, quote, completion sound, send
   // mode, diff view). The sound switch moved here from the composer row.
-  assert.equal((chatSection.match(/className="settings-chat-option(?: |")/g) ?? []).length, 7);
+  // Plus adds two rows: work details level and when to fold finished work.
+  assert.equal((chatSection.match(/className="settings-chat-option(?: |")/g) ?? []).length, 9);
   assert.equal((chatSection.match(/<ConfigSwitch/g) ?? []).length, 3);
   for (const key of ["thinkingExpandedDefault", "chatContentWidth", "chatContentFontSize", "quoteSelection", "completionSound", "enterSendMode", "enterSendModeEnter", "enterSendModeCtrlEnter"]) {
     assert.match(chatSection, new RegExp(`t\\("settings\\.${key}"\\)`));

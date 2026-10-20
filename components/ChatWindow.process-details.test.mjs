@@ -14,11 +14,13 @@ test("groups the leading segment when the history page starts mid-turn", () => {
   assert.match(source, /if \(hasAnchor\) rendered\.push\(renderMessage\(userIdx\)\)/);
 });
 
+const workGroups = await readFile(new URL("./WorkGroups.tsx", import.meta.url), "utf8");
+
 test("expands process details when a completed turn has no final answer", () => {
-  assert.match(source, /const \[expanded, setExpanded\] = useState\(defaultExpanded\)/);
+  assert.match(workGroups, /const \[expanded, setExpanded\] = useState\(defaultExpanded\)/);
   assert.match(
     source,
-    /<ProcessDetailsGroup[\s\S]*?defaultExpanded=\{!finalAnswerMessage\}/,
+    /<FinishedWorkGroup[\s\S]*?defaultExpanded=\{!finalAnswerMessage \|\|/,
   );
 });
 
@@ -27,6 +29,16 @@ test("resets process details when the turn gains or loses its final answer", () 
   // makes an answered turn start collapsed even if it first rendered unanswered.
   assert.match(
     source,
-    /<ProcessDetailsGroup key=\{finalAnswerMessage \? "answered" : "unanswered"\}[\s\S]*?defaultExpanded=\{!finalAnswerMessage\}/,
+    /<FinishedWorkGroup\s+key=\{finalAnswerMessage \? "answered" : "unanswered"\}/,
   );
+});
+
+test("Plus: the running turn's work is grouped behind a live row when the level asks for it", () => {
+  assert.match(source, /workPolicy\.groupLiveWork/);
+  assert.match(source, /<LiveWorkGroup/);
+  assert.match(source, /liveStreamAnswer/);
+});
+
+test("Plus: verbose shows finished work without a fold", () => {
+  assert.match(source, /workPolicy\.foldCompletedTurns \? \(/);
 });
