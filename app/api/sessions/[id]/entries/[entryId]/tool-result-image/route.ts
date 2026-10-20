@@ -76,7 +76,9 @@ export async function GET(
       headers: {
         "Content-Type": image.mime,
         "Content-Length": String(bytes.byteLength),
-        "Cache-Control": "private, no-cache",
+        // pi-web #1181: an entry id and block index name these bytes for good
+        // (pi only appends), so a re-view need not download multi-MB images again.
+        "Cache-Control": "private, max-age=31536000, immutable",
         "X-Content-Type-Options": "nosniff",
       },
     });

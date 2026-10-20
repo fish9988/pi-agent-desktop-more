@@ -117,6 +117,7 @@ export function FontPicker({ role, value, onChange, label }: { role: FontRole; v
         ref={buttonRef}
         type="button"
         className="plus-font-picker-trigger"
+        data-role={role}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={label}
@@ -130,6 +131,7 @@ export function FontPicker({ role, value, onChange, label }: { role: FontRole; v
         <div
           ref={popRef}
           className="native-popover app-menu plus-font-picker"
+          data-role={role}
           role="listbox"
           aria-label={label}
           style={{ position: "fixed", top: position.top, left: position.left, width: position.width, maxHeight: position.maxHeight, zIndex: 2400 }}

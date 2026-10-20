@@ -3,6 +3,8 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const panelSource = (await readFile(new URL("./SettingsPanel.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
+// Plus: theme mode, chat width and size live in Settings › Appearance.
+const appearanceSource = (await readFile(new URL("./AppearanceSettingsPage.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const cssSource = (await readFile(new URL("../app/settings.css", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const globalCssSource = (await readFile(new URL("../app/globals.css", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const shellSource = (await readFile(new URL("./AppShell.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
@@ -156,9 +158,10 @@ test("offers light, dark and system theme selection with native radios", () => {
   for (const removed of ["mist", "rose", "pine"]) {
     assert.doesNotMatch(themeOptionsSource, new RegExp(`id: "${removed}"`));
   }
-  assert.match(panelSource, /THEME_OPTIONS\.map/);
-  assert.match(panelSource, /type="radio"/);
-  assert.match(panelSource, /setThemePreference\(option\.id\)/);
+  assert.match(appearanceSource, /THEME_OPTIONS\.map/);
+  assert.match(appearanceSource, /type="radio"/);
+  assert.match(appearanceSource, /setThemePreference\(option\.id\)/);
+  assert.match(panelSource, /sectionHost\("appearance", <AppearanceSettingsPage \/>\)/);
   assert.match(themeSource, /const setThemePreference = useCallback/);
 });
 
@@ -183,10 +186,14 @@ test("groups chat display controls together without row backgrounds", () => {
   // The fork's diffViewMode choice rides in the same group after the merged
   // send-mode radio (thinking, width, font, quote, completion sound, send
   // mode, diff view). The sound switch moved here from the composer row.
-  // Plus adds two rows: work details level and when to fold finished work.
-  assert.equal((chatSection.match(/className="settings-chat-option(?: |")/g) ?? []).length, 9);
+  // Plus adds two rows (work details level, when to fold finished work) and
+  // moves width and font size to Settings › Appearance.
+  assert.equal((chatSection.match(/className="settings-chat-option(?: |")/g) ?? []).length, 7);
   assert.equal((chatSection.match(/<ConfigSwitch/g) ?? []).length, 3);
-  for (const key of ["thinkingExpandedDefault", "chatContentWidth", "chatContentFontSize", "quoteSelection", "completionSound", "enterSendMode", "enterSendModeEnter", "enterSendModeCtrlEnter"]) {
+  for (const key of ["chatContentWidth", "chatContentFontSize"]) {
+    assert.match(appearanceSource, new RegExp(`t\\("settings\\.${key}"\\)`));
+  }
+  for (const key of ["thinkingExpandedDefault", "quoteSelection", "completionSound", "enterSendMode", "enterSendModeEnter", "enterSendModeCtrlEnter"]) {
     assert.match(chatSection, new RegExp(`t\\("settings\\.${key}"\\)`));
   }
   assert.doesNotMatch(panelSource, /ThinkingIcon|settings-thinking-/);

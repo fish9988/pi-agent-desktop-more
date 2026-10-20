@@ -4,24 +4,8 @@ import { AppSelect } from "./AppSelect";
 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useI18n } from "@/hooks/useI18n";
-import { useTheme } from "@/hooks/useTheme";
 import { useDiffViewMode } from "@/hooks/useDiffViewMode";
 import { PRODUCT_NAME } from "@/lib/branding";
-import { openPathNative, isTauriDesktop } from "@/lib/desktop-native";
-import { THEME_OPTIONS } from "@/lib/theme";
-import { ThemeIcon } from "./ThemeIcon";
-import {
-  CHAT_CONTENT_WIDTH_DEFAULT,
-  CHAT_CONTENT_WIDTH_MAX,
-  CHAT_CONTENT_WIDTH_MIN,
-  CHAT_CONTENT_WIDTH_PERCENT_DEFAULT,
-  CHAT_CONTENT_WIDTH_PERCENT_MAX,
-  CHAT_CONTENT_WIDTH_PERCENT_MIN,
-  CHAT_CONTENT_FONT_SIZE_DEFAULT,
-  CHAT_CONTENT_FONT_SIZE_MAX,
-  CHAT_CONTENT_FONT_SIZE_MIN,
-  useChatAppearance,
-} from "@/hooks/useChatAppearance";
 import { useWorkDetails } from "@/hooks/useWorkDetails";
 import { WORK_DETAILS_LEVELS } from "@/lib/work-details";
 import { useEnterSendMode, setEnterSendMode } from "@/hooks/useEnterSendMode";
@@ -46,7 +30,7 @@ import { AppUpdatesSection } from "./AppUpdatesSection";
 import { DesktopAppSection } from "./desktop";
 import { McpConfig } from "./McpConfig";
 import { ConfigButton, ConfigSwitch } from "./SettingsUi";
-import { PlusAppearanceSettings } from "./PlusAppearanceSettings";
+import { AppearanceSettingsPage } from "./AppearanceSettingsPage";
 import { ArtifactsSettingRow } from "./ArtifactsSettingRow";
 import { ChatsSettingsSection } from "./ChatsSettingsSection";
 import { PromptOptimizerSettingsSection } from "./PromptOptimizerSettingsSection";
@@ -85,6 +69,7 @@ export function SettingsSectionIcon({ section, size = 16, strokeWidth = 1.8 }: {
   };
 
   if (section === "general") return <svg {...common}><path d="M20 7h-9M14 17H5" /><circle cx="7" cy="7" r="3" /><circle cx="17" cy="17" r="3" /></svg>;
+  if (section === "appearance") return <svg {...common}><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.8-.8 1.8-1.8 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-1 .8-1.8 1.8-1.8H17a4 4 0 0 0 4-4c0-4.4-4-8-9-8Z" /><circle cx="7.5" cy="11.5" r="1" /><circle cx="10.5" cy="7.5" r="1" /><circle cx="15.5" cy="8.5" r="1" /></svg>;
   if (section === "models") return <svg {...common}><rect x="4" y="4" width="16" height="16" rx="2" /><rect x="9" y="9" width="6" height="6" /><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 15h3M1 9h3M1 15h3" /></svg>;
   if (section === "skills") return <svg {...common}><path d="m12 2-10 5 10 5 10-5-10-5Z" /><path d="m2 12 10 5 10-5M2 17l10 5 10-5" /></svg>;
   if (section === "agents") return <svg {...common} className="settings-section-icon is-agent"><rect x="5" y="7" width="14" height="11" rx="2" /><path d="M9 11h.01M15 11h.01M9 15h6M12 7V4M10 4h4" /></svg>;
@@ -105,25 +90,8 @@ function GeneralSettings({
   onBusyChange: (busy: boolean) => void;
 }) {
   const { locale, setLocale, supportedLocales, t } = useI18n();
-  const { preference, setThemePreference } = useTheme();
   const { mode: diffViewMode, setMode: setDiffViewMode } = useDiffViewMode();
-  const {
-    width: chatContentWidth,
-    setWidth: setChatContentWidth,
-    widthPercent: chatContentWidthPercent,
-    setWidthPercent: setChatContentWidthPercent,
-    widthUnit: chatContentWidthUnit,
-    setWidthUnit: setChatContentWidthUnit,
-    resetWidth: resetChatContentWidth,
-    fontSize,
-    setFontSize,
-  } = useChatAppearance();
   const workDetails = useWorkDetails();
-  const chatWidthIsPercent = chatContentWidthUnit === "percent";
-  const chatWidthIsDefault = chatWidthIsPercent
-    ? chatContentWidthPercent === CHAT_CONTENT_WIDTH_PERCENT_DEFAULT
-    : chatContentWidth === CHAT_CONTENT_WIDTH_DEFAULT;
-  const desktop = isTauriDesktop();
   const enterSendMode = useEnterSendMode();
   const [shellSettings, setShellSettings] = useState<ToolSettingsResponse | null>(null);
   const [shellSaving, setShellSaving] = useState(false);
@@ -132,8 +100,6 @@ function GeneralSettings({
   const [webAuthEnabled, setWebAuthEnabled] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState("");
-  const [customCssBusy, setCustomCssBusy] = useState(false);
-  const [customCssError, setCustomCssError] = useState<string | null>(null);
 
   useEffect(() => {
     setThinkingExpanded(isThinkingExpandedByDefault());
@@ -191,23 +157,6 @@ function GeneralSettings({
       setShellError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setShellSaving(false);
-    }
-  };
-
-  const openCustomCss = async () => {
-    setCustomCssBusy(true);
-    setCustomCssError(null);
-    try {
-      const response = await fetch("/api/custom-css", { method: "POST" });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = (await response.json()) as { path?: string };
-      if (!data.path) throw new Error("Missing path in response");
-      await openPathNative(data.path);
-    } catch (error) {
-      console.error("Failed to open custom.css:", error);
-      setCustomCssError(t("appSettings.customCssOpenError"));
-    } finally {
-      setCustomCssBusy(false);
     }
   };
 
@@ -273,83 +222,6 @@ function GeneralSettings({
                     </button>
                   ))}
                 </div>
-              </div>
-              <div className="settings-chat-option settings-chat-range-option">
-                <div className="settings-chat-range-header">
-                  <label htmlFor="settings-chat-content-width">{t("settings.chatContentWidth")}</label>
-                  <div className="settings-choice-group settings-chat-width-unit" role="radiogroup" aria-label={t("settings.chatContentWidthUnit")}>
-                    {(["px", "percent"] as const).map((unit) => (
-                      <button
-                        key={unit}
-                        type="button"
-                        role="radio"
-                        aria-checked={chatContentWidthUnit === unit}
-                        className={`config-button config-button-small ${chatContentWidthUnit === unit ? "config-button-primary" : "config-button-secondary"}`}
-                        onClick={() => setChatContentWidthUnit(unit)}
-                      >
-                        {unit === "px" ? "px" : "%"}
-                      </button>
-                    ))}
-                  </div>
-                  <output htmlFor="settings-chat-content-width">
-                    {chatWidthIsPercent ? `${chatContentWidthPercent}%` : `${chatContentWidth}px`}
-                  </output>
-                  <ConfigButton
-                    variant="ghost"
-                    size="small"
-                    className="settings-chat-reset"
-                    title={t("settings.resetChatContentWidth")}
-                    aria-label={t("settings.resetChatContentWidth")}
-                    disabled={chatWidthIsDefault}
-                    onClick={resetChatContentWidth}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5" />
-                    </svg>
-                  </ConfigButton>
-                </div>
-                <input
-                  id="settings-chat-content-width"
-                  type="range"
-                  min={chatWidthIsPercent ? CHAT_CONTENT_WIDTH_PERCENT_MIN : CHAT_CONTENT_WIDTH_MIN}
-                  max={chatWidthIsPercent ? CHAT_CONTENT_WIDTH_PERCENT_MAX : CHAT_CONTENT_WIDTH_MAX}
-                  step={chatWidthIsPercent ? 1 : 10}
-                  value={chatWidthIsPercent ? chatContentWidthPercent : chatContentWidth}
-                  onChange={(event) => {
-                    const value = Number(event.target.value);
-                    if (chatWidthIsPercent) setChatContentWidthPercent(value);
-                    else setChatContentWidth(value);
-                  }}
-                />
-                <p className="settings-option-hint">{t("settings.chatContentWidthDragHint")}</p>
-              </div>
-              <div className="settings-chat-option settings-chat-range-option">
-                <div className="settings-chat-range-header">
-                  <label htmlFor="settings-chat-content-font-size">{t("settings.chatContentFontSize")}</label>
-                  <output htmlFor="settings-chat-content-font-size">{fontSize}px</output>
-                  <ConfigButton
-                    variant="ghost"
-                    size="small"
-                    className="settings-chat-reset"
-                    title={t("settings.resetChatContentFontSize")}
-                    aria-label={t("settings.resetChatContentFontSize")}
-                    disabled={fontSize === CHAT_CONTENT_FONT_SIZE_DEFAULT}
-                    onClick={() => setFontSize(CHAT_CONTENT_FONT_SIZE_DEFAULT)}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5" />
-                    </svg>
-                  </ConfigButton>
-                </div>
-                <input
-                  id="settings-chat-content-font-size"
-                  type="range"
-                  min={CHAT_CONTENT_FONT_SIZE_MIN}
-                  max={CHAT_CONTENT_FONT_SIZE_MAX}
-                  step={1}
-                  value={fontSize}
-                  onChange={(event) => setFontSize(Number(event.target.value))}
-                />
               </div>
               <div className="settings-chat-option settings-chat-switch-option">
                 <span>{t("settings.quoteSelection")}</span>
@@ -450,53 +322,6 @@ function GeneralSettings({
             </div>
           </section>
 
-          <section className="settings-general-section">
-            <h3 className="settings-general-heading">{t("settings.appearance")}</h3>
-            <div role="radiogroup" aria-label={t("settings.appearance")} className="settings-theme-options">
-              {THEME_OPTIONS.map((option) => {
-                const selected = preference === option.id;
-                return (
-                  <label
-                    key={option.id}
-                    className="settings-theme-option"
-                  >
-                    <input
-                      type="radio"
-                      name="theme"
-                      value={option.id}
-                      checked={selected}
-                      onChange={() => setThemePreference(option.id)}
-                      className="sr-only"
-                    />
-                    <ThemeIcon preference={option.id} />
-                    <span className="settings-theme-option-label">{t(option.label)}</span>
-                  </label>
-                );
-              })}
-            </div>
-            <PlusAppearanceSettings />
-            <div className="settings-option-list">
-              <div className="settings-option">
-                <span className="settings-option-text">
-                  <span className="settings-option-title">{t("appSettings.customCss")}</span>
-                  <span className="settings-option-hint">{t("appSettings.customCssHint")}</span>
-                </span>
-                {desktop && (
-                  <ConfigButton
-                    variant="secondary"
-                    size="small"
-                    className="settings-option-action"
-                    disabled={customCssBusy}
-                    onClick={() => void openCustomCss()}
-                  >
-                    {customCssBusy ? t("appSettings.customCssOpening") : t("appSettings.customCssOpen")}
-                  </ConfigButton>
-                )}
-              </div>
-            </div>
-            {customCssError && <p role="alert" className="settings-general-error">{customCssError}</p>}
-          </section>
-
           <DesktopAppSection />
 
           {shellSettings?.isWindows && (
@@ -535,6 +360,7 @@ function GeneralSettings({
 
 export const SETTINGS_SECTION_ITEMS: { id: SettingsSection; labelKey: string; requiresProject: boolean }[] = [
   { id: "general", labelKey: "settings.general", requiresProject: false },
+  { id: "appearance", labelKey: "settings.appearance", requiresProject: false },
   { id: "models", labelKey: "common.models", requiresProject: false },
   { id: "skills", labelKey: "common.skills", requiresProject: true },
   { id: "agents", labelKey: "common.agents", requiresProject: true },
@@ -660,6 +486,7 @@ export function SettingsPanel({
 
         <main className="settings-dialog-main">
           {sectionHost("general", <GeneralSettings sessionId={sessionId} onSessionReloaded={onSessionReloaded} quoteSelectionEnabled={quoteSelectionEnabled} onQuoteSelectionChange={onQuoteSelectionChange} soundEnabled={soundEnabled} onSoundToggle={onSoundToggle} onBusyChange={setBusy} />)}
+          {sectionHost("appearance", <AppearanceSettingsPage />)}
           {sectionHost("models", <ModelsConfig embedded cwd={cwd} onClose={onClose} onOpenMcp={() => activateSection("mcp")} />)}
           {/* Visited sections stay mounted, so the ones whose answer depends on trust take the page's
               status and load again in place when trusting from Settings › MCP changes it. */}

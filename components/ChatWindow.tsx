@@ -15,12 +15,16 @@ import { MarkdownBody } from "./MarkdownBody";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
 import { ConversationNavigator, type ConversationTurnLocation } from "./ConversationNavigator";
 import { ChatColumnResizeHandles } from "./ChatColumnResizeHandles";
-import { FinishedWorkGroup, LiveWorkGroup } from "./WorkGroups";
+import { FinishedWorkGroup } from "./WorkGroups";
+import { WorkTimeline, type WorkTimelineItem } from "./WorkTimeline";
+import { liveStreamShape, parseLiveStreamShape, StreamingArtifactPublisher, StreamingLiveWorkGroup, StreamingProcess, StreamingReply } from "./LiveStream";
+import { selectHasStreamingContent, selectIsStreaming, useStreamingSelector } from "@/hooks/useStreamingSelector";
+import type { StreamingState } from "@/lib/streaming-message";
 import { ChatFindBar, useChatFind } from "./ChatFindBar";
 import { useWorkDetails } from "@/hooks/useWorkDetails";
-import { currentWorkActivity, messageTime, summarizeWorkActivities } from "@/lib/work-details";
+import { messageTime, summarizeWorkActivities } from "@/lib/work-details";
 import { ExtensionWidgets } from "./ExtensionWidgets";
-import { ExtensionStatusLine, formatExtensionStatusLine } from "./ExtensionStatusLine";
+import { ComposerExtensionsChip } from "./ComposerExtensionsChip";
 import { AnsiText } from "./AnsiText";
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -28,7 +32,6 @@ import { phaseLabel } from "@/lib/chat-phase-label";
 import { useAgentSession, type NoticeItem } from "@/hooks/useAgentSession";
 import { useDragDrop } from "@/hooks/useDragDrop";
 import { useScrollbarVisibility } from "@/hooks/useScrollbarVisibility";
-import { useArtifactPublisher } from "@/hooks/useArtifactPublisher";
 import type { SessionStatsInfo } from "@/lib/pi-types";
 import { importDroppedProjectFiles, partitionChatDroppedFiles } from "@/lib/chat-file-drop";
 import { formatAttachmentSize } from "@/lib/chat-attachments";
@@ -252,7 +255,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
   const [restoreAnchorReady, setRestoreAnchorReady] = useState(false);
 
   const {
-    loading, error, messages, activeToolResults, entryIds, historyCursor, hasEarlierMessages, streamState,
+    loading, error, messages, activeToolResults, entryIds, historyCursor, hasEarlierMessages, streamingStore,
     agentRunning, bashRunning, pendingBash, modelNames, modelList, modelError, modelScopeWarnings, modelThinkingLevels, modelThinkingLevelMaps, toolPreset, thinkingLevel,
     retryInfo, contextUsage, forkingEntryId, summarizationRetry, automation, handleSetAutomation,
     isCompacting, compactError, compactNotice, compactResult, displayModel: displayModelValue, modelSwitching, sessionStats,
@@ -289,6 +292,14 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
   const sessionBusy = agentRunning || bashRunning;
   // Plus: work details level (compact/standard/detailed/verbose).
   const { policy: workPolicy, collapseTiming: workCollapseTiming } = useWorkDetails();
+  // pi-web #1191: the chat reads only whether a reply streams and the stream's
+  // shape; the chunks re-render the streaming components alone (./LiveStream).
+  const isStreaming = useStreamingSelector(streamingStore, selectIsStreaming);
+  const hasStreamingContent = useStreamingSelector(streamingStore, selectHasStreamingContent);
+  const groupLiveWork = workPolicy.groupLiveWork;
+  const liveShapeSelector = useCallback((state: StreamingState) => liveStreamShape(state, groupLiveWork), [groupLiveWork]);
+  const liveShapeKey = useStreamingSelector(streamingStore, liveShapeSelector);
+  const liveShape = parseLiveStreamShape(liveShapeKey);
   // The desktop window stays hidden until the conversation it opens on is
   // loaded (or its load failed and the error is what the user will see).
   useReportDesktopReady(!loading, "chat");
@@ -873,7 +884,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
     return history.reverse();
   }, [messages]);
 
-  const isEmptyNew = isNew && !loading && !error && messages.length === 0 && !streamState.isStreaming && !sessionBusy;
+  const isEmptyNew = isNew && !loading && !error && messages.length === 0 && !isStreaming && !sessionBusy;
   useScrollbarVisibility(scrollContainerRef, Boolean(session?.id) || !isEmptyNew);
 
   // The message scrollport always shows its (usually invisible) scrollbar track,
@@ -942,20 +953,9 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
     };
   }, [isEmptyNew, scrollContainerRef]);
 
-  const hasStreamingContent = Boolean(streamState.streamingMessage?.content.length);
   // Plus: while live work is grouped, the streaming entry's reasoning and tool
-  // calls go into the live group; only its trailing answer text stays outside.
-  const { process: liveStreamProcess, answer: liveStreamAnswer } = useMemo(() => {
-    const streaming = streamState.isStreaming ? streamState.streamingMessage : null;
-    if (!workPolicy.groupLiveWork || !streaming || streaming.role !== "assistant") return { process: null, answer: null };
-    const message = streaming as AssistantMessage;
-    const { processBlocks, answerBlocks } = splitFinalAssistantBlocks(message, { isStreaming: true });
-    if (processBlocks.length === 0) return { process: null, answer: null };
-    return {
-      process: withAssistantBlocks(message, processBlocks),
-      answer: answerBlocks.length > 0 ? withAssistantBlocks(message, answerBlocks) : null,
-    };
-  }, [streamState.isStreaming, streamState.streamingMessage, workPolicy.groupLiveWork]);
+  // calls go into the live group; only its trailing answer text stays outside
+  // (see ./LiveStream for the split).
   // Plus: in-conversation find (Ctrl/Cmd+F), including folded work.
   const chatFind = useChatFind({ messages, entryIds, toolResults: toolResultsMap, scrollContainerRef });
   const findReveal = chatFind.revealEntryId;
@@ -1073,21 +1073,12 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
     scrollUserMsgToTop,
   ]);
 
-  useLayoutEffect(() => {
+  // Each streamed chunk the streaming components commit, and the stream's shape changing.
+  const updatePromptAnchor = useCallback(() => {
     promptAnchorUpdateRef.current?.();
-  }, [streamState.streamingMessage]);
+  }, []);
+  useLayoutEffect(updatePromptAnchor, [isStreaming, hasStreamingContent, liveShapeKey, updatePromptAnchor]);
 
-  useArtifactPublisher(
-    session?.id ?? sessionIdRef.current,
-    messages,
-    streamState.isStreaming ? streamState.streamingMessage : null,
-    // While an earlier message is being edited, sending would replace that
-    // branch, so the request waits in the composer instead.
-    (text) => {
-      if (editEntryId) chatInputRef?.current?.insertText(text);
-      else void handleSend(text);
-    },
-  );
 
 
   const availableThinkingLevels = displayModelValue
@@ -1120,9 +1111,16 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
     }));
   }, [messages.length, scrollContainerRef]);
 
+  const belowEditorWidgets = useMemo(() => extensionWidgets.filter((widget) => widget.placement === "belowEditor"), [extensionWidgets]);
+  // Memoized so the composer's props hold still between extension updates.
+  const extensionsChip = useMemo(
+    () => <ComposerExtensionsChip widgets={belowEditorWidgets} statuses={extensionStatuses} />,
+    [belowEditorWidgets, extensionStatuses],
+  );
   const chatInputElement = (
     <ChatInput
       ref={chatInputRef}
+      controlsAddon={extensionsChip}
       onSend={handleSend}
       onAttachFiles={onAttachFiles}
       onAbort={handleAbort}
@@ -1208,8 +1206,6 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
   }
 
   const aboveEditorWidgets = extensionWidgets.filter((widget) => widget.placement !== "belowEditor");
-  const belowEditorWidgets = extensionWidgets.filter((widget) => widget.placement === "belowEditor");
-  const hasExtensionStatus = formatExtensionStatusLine(extensionStatuses).length > 0;
 
   return (
     <div
@@ -1221,6 +1217,18 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
+      {/* Artifacts from the transcript and the reply still streaming (subscribes to the stream itself). */}
+      <StreamingArtifactPublisher
+        store={streamingStore}
+        sessionId={session?.id ?? sessionIdRef.current}
+        messages={messages}
+        // While an earlier message is being edited, sending would replace that
+        // branch, so the request waits in the composer instead.
+        send={(text) => {
+          if (editEntryId) chatInputRef?.current?.insertText(text);
+          else void handleSend(text);
+        }}
+      />
       {/* Zero-content twin of the message scrollport: same scrollbar styling and
           a forced track, so it reports the exact width the real scrollbar takes
           before any content renders one. */}
@@ -1366,7 +1374,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
                     if (r === "assistant") { showTimestamp = false; break; }
                   }
                   // Hide on the currently-streaming tail (the streaming bubble owns the live timestamp)
-                  if (showTimestamp && streamState.isStreaming && idx === messages.length - 1) {
+                  if (showTimestamp && isStreaming && idx === messages.length - 1) {
                     showTimestamp = false;
                   }
                 }
@@ -1431,14 +1439,17 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
                 const finalAssistantIdx = findFinalAssistantIndex(messages, userIdx, endIdx);
 
                 // Plus: group the running turn's work behind one live row.
-                const isLiveSegment = (sessionBusy || streamState.isStreaming) && endIdx === messages.length && userIdx === lastAnchorIdx;
-                if (isLiveSegment && workPolicy.groupLiveWork && (endIdx > groupStartIdx + 1 || liveStreamProcess)) {
+                const isLiveSegment = (sessionBusy || isStreaming) && endIdx === messages.length && userIdx === lastAnchorIdx;
+                if (isLiveSegment && workPolicy.groupLiveWork && (endIdx > groupStartIdx + 1 || liveShape.hasProcess)) {
                   if (hasAnchor) rendered.push(renderMessage(userIdx));
                   // A trailing provider error stays outside the fold.
                   let liveEnd = endIdx;
                   const tail = messages[endIdx - 1];
                   if (tail?.role === "assistant" && (tail as AssistantMessage).stopReason === "error" && endIdx - 1 > userIdx) liveEnd = endIdx - 1;
                   const stepViews: ReactNode[] = [];
+                  // Plus: compact/standard levels show the work as a timeline.
+                  const useTimeline = workPolicy.compactSteps;
+                  const timelineItems: WorkTimelineItem[] = [];
                   let stepToolCount = 0;
                   let stepCount = 0;
                   for (let stepIdx = groupStartIdx + (hasAnchor ? 1 : 0); stepIdx < liveEnd; stepIdx++) {
@@ -1447,20 +1458,37 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
                       stepCount += 1;
                       stepToolCount += countToolCallBlocks((stepMessage as AssistantMessage).content ?? []);
                     }
+                    if (useTimeline) {
+                      if (stepMessage.role === "assistant") {
+                        timelineItems.push({ type: "step", step: {
+                          key: `live-${messageKeys[stepIdx] ?? stepIdx}`,
+                          entryId: entryIds[stepIdx],
+                          message: stepMessage as AssistantMessage,
+                          prevTimestamp: messageTime(messages[stepIdx - 1]) ?? undefined,
+                        } });
+                      } else if (stepMessage.role !== "toolResult") {
+                        timelineItems.push({ type: "node", key: `live-node-${messageKeys[stepIdx] ?? stepIdx}`, node: renderMessage(stepIdx, { keyPrefix: "live", showTimestamp: false }) });
+                      }
+                      continue;
+                    }
                     stepViews.push(renderMessage(stepIdx, { keyPrefix: "live", showTimestamp: false, compactStep: workPolicy.compactSteps }));
                   }
-                  if (liveStreamProcess) {
+                  if (liveShape.hasProcess) {
                     stepCount += 1;
-                    stepToolCount += countToolCallBlocks(liveStreamProcess.content);
-                    stepViews.push(
-                      <MessageView key="live-stream-process" message={liveStreamProcess as AgentMessage} toolResults={toolResultsMap} isStreaming modelNames={modelNames} cwd={messageCwd} onOpenFile={openFile} onOpenSession={onOpenSession} compactStep={workPolicy.compactSteps} />,
-                    );
+                    stepToolCount += liveShape.processToolCalls;
+                    if (!useTimeline) {
+                      stepViews.push(
+                        <StreamingProcess key="live-stream-process" store={streamingStore} onCommit={updatePromptAnchor} toolResults={toolResultsMap} modelNames={modelNames} cwd={messageCwd} onOpenFile={openFile} onOpenSession={onOpenSession} compactStep={workPolicy.compactSteps} />,
+                      );
+                    }
                   }
                   const turnMessages = messages.slice(groupStartIdx, liveEnd);
                   rendered.push(
-                    <LiveWorkGroup
+                    <StreamingLiveWorkGroup
                       key={`live-work-${messageKeys[groupStartIdx] ?? groupStartIdx}`}
-                      activity={currentWorkActivity(turnMessages, liveStreamProcess, toolResultsMap)}
+                      store={streamingStore}
+                      turnMessages={turnMessages}
+                      toolResults={toolResultsMap}
                       idleLabel={agentPhase || isCompacting ? phaseLabel(agentPhase, t, isCompacting) : null}
                       showDetail={workPolicy.liveDetail}
                       stepCount={stepCount}
@@ -1468,8 +1496,20 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
                       startedAt={hasAnchor ? messageTime(messages[userIdx]) : null}
                       reveal={Boolean(findReveal && turnMessages.some((_, offset) => entryIds[groupStartIdx + offset] === findReveal))}
                     >
-                      {stepViews}
-                    </LiveWorkGroup>,
+                      {useTimeline ? (
+                        <WorkTimeline
+                          items={timelineItems}
+                          live
+                          streamingStore={liveShape.hasProcess ? streamingStore : undefined}
+                          onStreamCommit={updatePromptAnchor}
+                          toolResults={toolResultsMap}
+                          cwd={messageCwd}
+                          sessionId={session?.id ?? sessionIdRef.current ?? undefined}
+                          onOpenFile={openFile}
+                          onOpenSession={onOpenSession}
+                        />
+                      ) : stepViews}
+                    </StreamingLiveWorkGroup>,
                   );
                   for (let renderIdx = liveEnd; renderIdx < endIdx; renderIdx++) rendered.push(renderMessage(renderIdx));
                   liveGroupRendered = true;
@@ -1485,7 +1525,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
                   continue;
                 }
 
-                const isLiveTail = (sessionBusy || streamState.isStreaming) && endIdx === messages.length && userIdx === lastAnchorIdx;
+                const isLiveTail = (sessionBusy || isStreaming) && endIdx === messages.length && userIdx === lastAnchorIdx;
                 if (isLiveTail) {
                   for (let renderIdx = groupStartIdx; renderIdx < endIdx; renderIdx++) {
                     rendered.push(renderMessage(renderIdx));
@@ -1500,6 +1540,8 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
                 const { answerMessage: finalAnswerMessage, processMessage: finalProcessMessage } = getFinalSplit(finalAssistant);
 
                 const processViews: ReactNode[] = [];
+                const processTimeline: WorkTimelineItem[] = [];
+                const processUsesTimeline = workPolicy.foldCompletedTurns && workPolicy.compactSteps;
                 let processToolCount = 0;
                 let processRefIdx: number | undefined;
                 let revealProcess = false;
@@ -1508,7 +1550,9 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
                   const processMessage = messages[processIdx];
                   if (processMessage.role === "custom") {
                     revealProcess ||= Boolean(pendingSearchScroll && pendingSearchScroll.entryId === entryIds[processIdx]);
-                    processViews.push(renderMessage(processIdx, { attachRef: false, keyPrefix: "process" }));
+                    const node = renderMessage(processIdx, { attachRef: false, keyPrefix: "process" });
+                    processViews.push(node);
+                    processTimeline.push({ type: "node", key: `process-node-${messageKeys[processIdx] ?? processIdx}`, node });
                     continue;
                   }
                   if (processMessage.role !== "assistant") continue;
@@ -1518,6 +1562,17 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
                   processRefIdx ??= visibleRefIndexByMessage.get(processIdx);
                   processToolCount += countToolCallBlocks(blocks);
                   revealProcess ||= Boolean(pendingSearchScroll && entryIds[processIdx] === pendingSearchScroll.entryId && (!searchBlock || blocks.includes(searchBlock)));
+                  if (processUsesTimeline) {
+                    processViews.push(null);
+                    processTimeline.push({ type: "step", step: {
+                      key: `process-${messageKeys[processIdx] ?? processIdx}`,
+                      entryId: entryIds[processIdx],
+                      message: message as AssistantMessage,
+                      prevTimestamp: messageTime(messages[processIdx - 1]) ?? undefined,
+                      searchBlock: entryIds[processIdx] === pendingSearchScroll?.entryId ? searchBlock : undefined,
+                    } });
+                    continue;
+                  }
                   processViews.push(renderMessage(processIdx, {
                     attachRef: false,
                     keyPrefix: "process",
@@ -1553,7 +1608,17 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
                           defaultExpanded={!finalAnswerMessage || (workCollapseTiming === "next-input" && endIdx === messages.length)}
                           reveal={revealProcess || Boolean(findReveal && messages.slice(userIdx + 1, finalAssistantIdx + 1).some((_, offset) => entryIds[userIdx + 1 + offset] === findReveal))}
                         >
-                          {processViews}
+                          {processUsesTimeline ? (
+                            <WorkTimeline
+                              items={processTimeline}
+                              live={false}
+                              toolResults={toolResultsMap}
+                              cwd={messageCwd}
+                              sessionId={session?.id ?? sessionIdRef.current ?? undefined}
+                              onOpenFile={openFile}
+                              onOpenSession={onOpenSession}
+                            />
+                          ) : processViews}
                         </FinishedWorkGroup>
                       ) : processViews}
                     </div>,
@@ -1569,7 +1634,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
                   rendered.push(renderMessage(finalAssistantIdx, {
                     messageOverride: finalAnswerMessage,
                     writtenFiles,
-                    recoverTruncation: endIdx === messages.length && !streamState.isStreaming && !hasAssistantAnswer(finalAnswerMessage),
+                    recoverTruncation: endIdx === messages.length && !isStreaming && !hasAssistantAnswer(finalAnswerMessage),
                   }));
                 }
                 for (let renderIdx = finalAssistantIdx + 1; renderIdx < endIdx; renderIdx++) {
@@ -1590,8 +1655,8 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
                 </>
               );
             })()}
-            {streamState.isStreaming && hasStreamingContent && streamState.streamingMessage && (!liveStreamProcess || liveStreamAnswer) && (
-              <MessageView message={(liveStreamProcess ? liveStreamAnswer : streamState.streamingMessage) as AgentMessage} toolResults={toolResultsMap} isStreaming modelNames={modelNames} cwd={messageCwd} onOpenFile={openFile} onOpenSession={onOpenSession} />
+            {isStreaming && hasStreamingContent && (!liveShape.hasProcess || liveShape.hasAnswer) && (
+              <StreamingReply store={streamingStore} groupLiveWork={groupLiveWork} onCommit={updatePromptAnchor} toolResults={toolResultsMap} modelNames={modelNames} cwd={messageCwd} onOpenFile={openFile} onOpenSession={onOpenSession} />
             )}
 
             {agentRunning && !hasStreamingContent && (agentPhase || isCompacting) && !liveGroupRendered && (
@@ -1761,13 +1826,9 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
             </div>
           </div>
         )}
+        {/* Plus: extension status and below-editor widgets live in a chip in
+            the composer's control row (ComposerExtensionsChip), not a second strip. */}
         {chatInputElement}
-        {(belowEditorWidgets.length > 0 || hasExtensionStatus) && (
-          <div className={`extension-status-shelf${belowEditorWidgets.length > 0 ? " has-widgets" : ""}${hasExtensionStatus ? " has-status" : ""}`}>
-            {belowEditorWidgets.length > 0 && <ExtensionWidgets widgets={belowEditorWidgets} />}
-            {hasExtensionStatus && <ExtensionStatusLine statuses={extensionStatuses} />}
-          </div>
-        )}
       </div>
       {isEmptyNew && <div className="min-h-0 flex-1" />}
     </div>

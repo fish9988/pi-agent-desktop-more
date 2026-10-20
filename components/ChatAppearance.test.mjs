@@ -5,7 +5,8 @@ import { createJiti } from "jiti";
 
 const chatWindow = await readFile(new URL("./ChatWindow.tsx", import.meta.url), "utf8");
 const chatInput = await readFile(new URL("./ChatInput.tsx", import.meta.url), "utf8");
-const settingsPanel = await readFile(new URL("./SettingsPanel.tsx", import.meta.url), "utf8");
+// Plus: chat width and size moved to Settings › Appearance.
+const settingsPanel = await readFile(new URL("./AppearanceSettingsPage.tsx", import.meta.url), "utf8");
 const globals = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
 const chatAppearanceHook = await readFile(new URL("../hooks/useChatAppearance.ts", import.meta.url), "utf8");
 const jiti = createJiti(import.meta.url);
@@ -21,7 +22,7 @@ test("chat content keeps the existing 820px default behind one shared variable",
   assert.doesNotMatch(chatInput, /maxWidth: 820/);
 });
 
-test("General chat settings own the chat width preference", () => {
+test("Appearance settings own the chat width preference", () => {
   assert.match(chatInput, /useChatAppearance\(\)/);
   assert.match(settingsPanel, /useChatAppearance\(\)/);
   assert.match(settingsPanel, /type="range"/);

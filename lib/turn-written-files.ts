@@ -66,6 +66,11 @@ function statsFromRows(file: SplitDiffFile): LineStats {
  * diff (`+12 text` / `-12 text`) or a unified patch from `details`, and falls
  * back to the old/new text in its input.
  */
+/** Plus: the same counts for one call, for the work timeline. */
+export function toolCallLineStats(toolName: string, input: Record<string, unknown> | undefined, result: ToolResultMessage): LineStats | null {
+  return readWriteEditStats(toolName, input, result);
+}
+
 function readWriteEditStats(toolName: string, input: Record<string, unknown> | undefined, result: ToolResultMessage): LineStats | null {
   if (isWriteToolName(toolName)) {
     const content = input?.content;

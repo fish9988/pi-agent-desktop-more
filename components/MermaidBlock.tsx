@@ -5,6 +5,7 @@ import { SyntaxHighlighter, vs, vscDarkPlus } from "@/lib/syntax-highlighting";
 import { useTheme } from "@/hooks/useTheme";
 import { useI18n } from "@/hooks/useI18n";
 import { copyText } from "@/lib/clipboard";
+import { takeHighlightBudget, waitForHighlight } from "@/lib/highlight-queue";
 import { isImeComposing } from "@/lib/ime";
 
 interface MermaidBlockProps {
@@ -351,6 +352,14 @@ export const CodeBlock = memo(function CodeBlock({ code, lang, headerAction, isS
   const { isDark } = useTheme();
   const { t } = useI18n();
   const [copied, setCopied] = useState(false);
+  // pi-web #1181: past this task's highlight budget a block renders as plain
+  // text (same lines, numbers and box) and takes its colours in an idle slice.
+  const [highlighted, setHighlighted] = useState(() => !isStreaming && takeHighlightBudget(code.length));
+
+  useEffect(() => {
+    if (isStreaming || highlighted) return;
+    return waitForHighlight(() => setHighlighted(true));
+  }, [isStreaming, highlighted]);
 
   const copy = () => {
     copyText(code).then(() => {
@@ -388,7 +397,7 @@ export const CodeBlock = memo(function CodeBlock({ code, lang, headerAction, isS
         </pre>
       ) : (
         <SyntaxHighlighter
-          language={lang || "text"}
+          language={highlighted ? lang || "text" : "text"}
           style={isDark ? codeBlockDarkTheme : vs}
           showLineNumbers
           lineNumberStyle={{ color: "var(--text-dim)", fontStyle: "normal" }}

@@ -43,7 +43,8 @@ test("ctx.ui.setStatus reaches the shelf under the composer", () => {
   // was once removed and the state left dangling, so statuses were silently dropped.
   assert.match(hookSource, /case "setStatus":\s*setExtensionStatuses\(/);
   assert.match(hookSource, /\.extensionStatuses !== undefined\) setExtensionStatuses\(/);
-  assert.match(chatWindowSource, /\{hasExtensionStatus && <ExtensionStatusLine statuses=\{extensionStatuses\} \/>\}/);
+  // Plus: statuses sit in a chip in the composer's control row.
+  assert.match(chatWindowSource, /<ComposerExtensionsChip widgets=\{belowEditorWidgets\} statuses=\{extensionStatuses\} \/>/);
 });
 
 test("follows a session an extension command moved to", async () => {

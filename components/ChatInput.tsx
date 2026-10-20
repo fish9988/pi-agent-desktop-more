@@ -167,6 +167,8 @@ interface Props {
   draftKey?: string;
   /** Plus: the conversation this composer sends to, for prompt optimisation context. */
   sessionId?: string;
+  /** Plus: extra chips in the control row under the input (extension status). */
+  controlsAddon?: React.ReactNode;
   /** Session working directory — enables the @ file autocomplete menu */
   cwd?: string | null;
   /** The hidden model-only chat workspace: images only, no file/shell mentions. */
@@ -828,6 +830,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   onPromptWithStreamingBehavior,
   draftKey,
   sessionId,
+  controlsAddon,
   cwd,
   chatOnly = false,
   projectPath,
@@ -2913,6 +2916,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               </span>
             )}
             <ContextUsageRing contextUsage={contextUsage} sessionStats={sessionStats} onOpenStats={onSessionStatsPanelOpen} />
+            {controlsAddon}
           </div>
 
           {/* spacer */}

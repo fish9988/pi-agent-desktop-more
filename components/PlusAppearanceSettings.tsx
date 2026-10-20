@@ -574,6 +574,7 @@ export function PlusAppearanceSettings() {
       {([
         ["ui", "uiFont", "plus.fontUi", "plus.fontUiHint"],
         ["chat", "chatFont", "plus.fontChat", "plus.fontChatHint"],
+        ["chatBold", "chatBoldFont", "plus.fontChatBold", "plus.fontChatBoldHint"],
         ["code", "codeFont", "plus.fontCode", "plus.fontCodeHint"],
       ] as const).map(([role, key, label, hint]) => (
         <div key={role} className="plus-appearance-row">

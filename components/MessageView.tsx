@@ -109,7 +109,7 @@ function formatMessageBytes(n: number): string {
  * MarkdownBody with an oversized-content guard: huge messages render as a
  * click-to-reveal plain-text <pre> instead of running the markdown pipeline.
  */
-function SafeMarkdownBody({ children, className, ...props }: React.ComponentProps<typeof MarkdownBody>) {
+export function SafeMarkdownBody({ children, className, ...props }: React.ComponentProps<typeof MarkdownBody>) {
   const { t } = useI18n();
   const [showRaw, setShowRaw] = useState(false);
 
@@ -803,7 +803,7 @@ function AssistantMessageView({
 
   return (
     <div
-      className={`message-assistant${compactStep ? " is-work-step" : ""}`}
+      className={`message-assistant${compactStep ? " is-work-step" : ""}${isStreaming ? " is-streaming" : ""}`}
       data-message-role="assistant"
       data-entry-id={entryId}
       style={{ marginBottom: compactStep ? 6 : 16 }}
@@ -930,8 +930,10 @@ function AssistantMessageView({
         display: "flex", alignItems: "center", gap: 8, marginTop: 4,
       }}>
         {message.usage && !isStreaming && (
-          <div className="message-meta" style={{ fontSize: 11, color: "var(--text-dim)" }}>
-            {formatUsage(message.usage)}
+          // Plus: the cost alone by default; hovering the footer shows the full line.
+          <div className="message-meta message-usage" style={{ fontSize: 11, color: "var(--text-dim)" }} title={formatUsage(message.usage)}>
+            <span className="message-usage-compact">{formatUsageCompact(message.usage)}</span>
+            <span className="message-usage-full">{formatUsage(message.usage)}</span>
           </div>
         )}
         {textContent && !isStreaming && (
@@ -998,15 +1000,19 @@ function TextBlock({ block, isStreaming, cwd, onOpenFile }: { block: TextContent
   return <SafeMarkdownBody isStreaming={isStreaming} cwd={cwd} onOpenFile={onOpenFile} artifacts>{block.text}</SafeMarkdownBody>;
 }
 
-export function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex }: {
+export function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex, initialExpanded, onCollapse }: {
   block: ThinkingContent;
   duration?: number;
   sessionId?: string;
   entryId?: string;
   blockIndex: number;
+  /** Plus (work timeline): open on mount regardless of the preference. */
+  initialExpanded?: boolean;
+  /** Plus (work timeline): the block was closed; the timeline shows its line again. */
+  onCollapse?: () => void;
 }) {
   const { t } = useI18n();
-  const [expanded, setExpanded] = useState(isThinkingExpandedByDefault);
+  const [expanded, setExpanded] = useState(() => initialExpanded ?? isThinkingExpandedByDefault());
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1068,7 +1074,11 @@ export function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex 
         aria-expanded={expanded}
         aria-label={`${t("i18n.thinking")}${preview ? `: ${preview}` : ""}`}
         title={t("i18n.thinking")}
-        onClick={() => setExpanded((v) => !v)}
+        onClick={() => {
+          const next = !expanded;
+          setExpanded(next);
+          if (!next) onCollapse?.();
+        }}
         style={{
           display: "inline-flex",
           alignItems: "center",
@@ -1115,17 +1125,20 @@ export function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex 
   );
 }
 
-function isSubagentToolDetails(value: unknown): value is SubagentToolDetails {
+export function isSubagentToolDetails(value: unknown): value is SubagentToolDetails {
   if (!value || typeof value !== "object") return false;
   const details = value as Partial<SubagentToolDetails>;
   return details.kind === "pi-web-subagent" && typeof details.sessionId === "string";
 }
 
-function ToolCallBlock({ block, result, duration, aborted, defaultExpanded, onOpenSession }: { block: ToolCallContent; result?: ToolResultMessage; duration?: number; aborted?: boolean; defaultExpanded?: boolean; onOpenSession?: (sessionId: string) => void }) {
+export function ToolCallBlock({ block, result, duration, aborted, defaultExpanded, onOpenSession, bare = false }: { block: ToolCallContent; result?: ToolResultMessage; duration?: number; aborted?: boolean; defaultExpanded?: boolean; onOpenSession?: (sessionId: string) => void; bare?: boolean }) {
   const { t } = useI18n();
-  const [expanded, setExpanded] = useState(() => defaultExpanded ?? isToolCallExpanded(block.toolCallId));
+  const [expandedState, setExpanded] = useState(() => defaultExpanded ?? isToolCallExpanded(block.toolCallId));
+  // Plus (work timeline): the timeline line is the header, so a bare block
+  // shows only its details, always open.
+  const expanded = bare || expandedState;
   const toggleExpanded = () => {
-    const next = !expanded;
+    const next = !expandedState;
     setToolCallExpanded(block.toolCallId, next);
     setExpanded(next);
   };
@@ -1165,7 +1178,7 @@ function ToolCallBlock({ block, result, duration, aborted, defaultExpanded, onOp
 
   return (
     <div
-      className={`plus-tool-card${isError ? " is-error" : aborted ? " is-aborted" : ""}`}
+      className={`plus-tool-card${isError ? " is-error" : aborted ? " is-aborted" : ""}${bare ? " is-bare" : ""}`}
       style={{
         borderRadius: 7,
         overflow: "hidden",
@@ -1183,7 +1196,7 @@ function ToolCallBlock({ block, result, duration, aborted, defaultExpanded, onOp
       }}
     >
       {/* ── Tool call header ── */}
-      <div style={{ display: "flex", alignItems: "stretch", minWidth: 0 }}>
+      {!bare && <div style={{ display: "flex", alignItems: "stretch", minWidth: 0 }}>
         <button
           onClick={toggleExpanded}
           style={{
@@ -1246,7 +1259,7 @@ function ToolCallBlock({ block, result, duration, aborted, defaultExpanded, onOp
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 3h6v6" /><path d="M10 14 21 3" /><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /></svg>
           </button>
         )}
-      </div>
+      </div>}
 
       {/* ── Expanded: input args (only when no richer view exists); a codemode script in place of its JSON ── */}
       {expanded && (isStreamingInput || !isEditTool) && !patchFiles && (
@@ -2128,6 +2141,17 @@ function getToolPreview(block: ToolCallContent): string {
 
   const first = input[keys[0]];
   return String(first).slice(0, 120);
+}
+
+/** "$0.23", or the output tokens when the model reports no cost. */
+export function formatUsageCompact(usage: { output: number; cost?: { total: number } }): string {
+  const cost = usage.cost?.total ?? 0;
+  if (cost > 0) {
+    const digits = cost >= 0.1 ? 2 : cost >= 0.01 ? 3 : 4;
+    return `${cost.toFixed(digits)}`;
+  }
+  const out = usage.output ?? 0;
+  return out >= 1000 ? `${(out / 1000).toFixed(out >= 10_000 ? 0 : 1)}k out` : `${out} out`;
 }
 
 function formatUsage(usage: {

@@ -4,7 +4,12 @@
  * Keep this separate from the upstream package/repository names so syncing a
  * newer agegr/pi-web release cannot silently change the user-facing brand.
  */
-export const PRODUCT_NAME = "Pi Agent Plus" as const;
+/**
+ * Plus build flavor: "test" builds (CI `flavor: test`) install beside the
+ * main app with their own name, identifier, port and prefs file.
+ */
+export const PLUS_TEST_FLAVOR = process.env.NEXT_PUBLIC_PLUS_FLAVOR === "test";
+export const PRODUCT_NAME: "Pi Agent Plus" | "Pi Agent Plus Test" = PLUS_TEST_FLAVOR ? "Pi Agent Plus Test" : "Pi Agent Plus";
 
 import desktopPackage from "../src-tauri/pi-agent-desktop-package.json";
 import plusVersion from "../plus-version.json";

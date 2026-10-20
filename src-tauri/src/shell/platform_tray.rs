@@ -133,8 +133,9 @@ pub fn build_linux_tray(app: &tauri::App) -> Result<(), std::io::Error> {
 // hidden on close.
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
 pub fn build_platform_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
-    let show_item = MenuItem::with_id(app, "show", "Show Pi Agent Plus", true, None::<&str>)?;
-    let quit_item = MenuItem::with_id(app, "quit", "Quit Pi Agent Plus", true, None::<&str>)?;
+    let product = app.package_info().name.clone();
+    let show_item = MenuItem::with_id(app, "show", format!("Show {product}"), true, None::<&str>)?;
+    let quit_item = MenuItem::with_id(app, "quit", format!("Quit {product}"), true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
     let icon = app
         .default_window_icon()
@@ -144,7 +145,7 @@ pub fn build_platform_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::E
     let _tray = TrayIconBuilder::new()
         .icon(icon)
         .menu(&menu)
-        .tooltip("Pi Agent Plus")
+        .tooltip(product.as_str())
         .on_menu_event(|app, event| match event.id.as_ref() {
             "show" => show_main_window(app),
             "quit" => quit_application(app),

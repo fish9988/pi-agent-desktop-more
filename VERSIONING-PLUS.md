@@ -42,6 +42,18 @@ Plus 使用自己的语义化版本，写在 `plus-version.json`：
 
 平时推送到 `plus` 也会构建，版本为 `X.Y.Z-dev.<运行编号>`，安装包在 Actions 的 Artifacts 里，不会发布 Release。
 
+## 测试版（与正式版并存）
+
+正式版正在使用时（比如 Agent 本身就跑在 Plus 里），不能覆盖安装去验证新版本。这时打一个测试版：
+
+```bash
+gh workflow run plus-windows-build.yml -R fish9988/pi-agent-desktop-more --ref plus -f flavor=test
+```
+
+测试版叫「Pi Agent Plus Test」，标识 `com.fish9988.pi-agent-plus-test`、程序 `pi-agent-plus-test.exe`、端口 38591、
+设置文件 `plus-prefs.test.json`，没有自动升级。安装包在 Actions 的 Artifacts 里，装到 `D:\Pi Agent Plus Test` 即可，
+和正式版互不覆盖。会话、模型、主题文件仍与正式版共用 `~/.pi`，不要在两个程序里同时运行同一个会话。
+
 ## 应用内一键升级
 
 从 1.4.0 起，设置 › 版本与更新里的“升级”按钮会直接下载并安装新版，然后自动重启。

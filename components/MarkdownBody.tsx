@@ -7,6 +7,7 @@ import { inlineCodeFilePath } from "@/lib/file-context-menu";
 import { parsePdfPageFragment, resolveLocalFileHref, shouldOpenLocalFileInApp } from "@/lib/file-links";
 import { encodeFilePathForApi } from "@/lib/file-paths";
 import { markdownRehypePlugins, markdownRemarkPlugins, markdownUrlTransform, markdownUserRemarkPlugins, normalizeDisplayMath } from "@/lib/markdown";
+import { splitMarkdownBlocks } from "@/lib/markdown-blocks";
 import { ImagePreview } from "./ImagePreview";
 import { MermaidBlock, CodeBlock } from "./MermaidBlock";
 import { HtmlPreviewBlock } from "./HtmlPreviewBlock";
@@ -233,6 +234,27 @@ function useStreamingThrottle(value: string, active: boolean): string {
   return active ? shown : value;
 }
 
+interface MarkdownBlockProps {
+  markdown: string;
+  remarkPlugins: typeof markdownRemarkPlugins;
+  urlTransform: typeof markdownUrlTransform | undefined;
+  components: Components;
+}
+
+/** One block's parse; skipped while its text and renderers stay the same (pi-web #1176). */
+const MarkdownBlock = memo(function MarkdownBlock({ markdown, remarkPlugins, urlTransform, components }: MarkdownBlockProps) {
+  return (
+    <ReactMarkdown
+      remarkPlugins={remarkPlugins}
+      rehypePlugins={markdownRehypePlugins}
+      urlTransform={urlTransform}
+      components={components}
+    >
+      {markdown}
+    </ReactMarkdown>
+  );
+});
+
 // Memoized: markdown parsing + highlighting is the most expensive render work
 // in the app, so parent re-renders with identical props must be free.
 export const MarkdownBody = memo(function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile, keepLineBreaks, artifacts }: MarkdownBodyProps) {
@@ -245,18 +267,19 @@ export const MarkdownBody = memo(function MarkdownBody({ children, className, is
     () => buildComponents(isStreaming, cwd, onOpenFile),
     [isStreaming, cwd, onOpenFile],
   );
-  // ReactMarkdown is not memoized itself; reusing the element lets the
-  // throttled re-renders (text unchanged) skip parsing entirely.
-  const body = useMemo(() => (
-    <ReactMarkdown
-      remarkPlugins={keepLineBreaks ? markdownUserRemarkPlugins : markdownRemarkPlugins}
-      rehypePlugins={markdownRehypePlugins}
-      urlTransform={onOpenFile ? markdownUrlTransform : undefined}
-      components={components}
-    >
-      {normalizedMarkdown}
-    </ReactMarkdown>
-  ), [normalizedMarkdown, components, onOpenFile, keepLineBreaks]);
+  // A streaming reply grows by a few characters per chunk; parsing all of it
+  // each time made a long reply quadratic. Its finished blocks keep their
+  // parse and only the last one is parsed again (pi-web #1176). A finished
+  // message is one block.
+  const blocks = useMemo(
+    () => (isStreaming ? splitMarkdownBlocks(normalizedMarkdown) : [normalizedMarkdown]),
+    [isStreaming, normalizedMarkdown],
+  );
+  const remarkPlugins = keepLineBreaks ? markdownUserRemarkPlugins : markdownRemarkPlugins;
+  const urlTransform = onOpenFile ? markdownUrlTransform : undefined;
+  const body = blocks.map((block, index) => (
+    <MarkdownBlock key={index} markdown={block} remarkPlugins={remarkPlugins} urlTransform={urlTransform} components={components} />
+  ));
 
   return (
     <div className={["markdown-body", className].filter(Boolean).join(" ")}>

@@ -33,7 +33,9 @@ export function plusAgentDir(): string {
 }
 
 export function prefsFile(agentDir: string = plusAgentDir()): string {
-  return path.join(agentDir, "desktop", "plus-prefs.json");
+  // A test build keeps its own copy, so trying things there leaves the main app alone.
+  const name = process.env.NEXT_PUBLIC_PLUS_FLAVOR === "test" ? "plus-prefs.test.json" : "plus-prefs.json";
+  return path.join(agentDir, "desktop", name);
 }
 
 export function isSyncedPrefKey(key: string): boolean {

@@ -48,7 +48,15 @@ const DEV_SERVER_URL: &str = "http://127.0.0.1:30141";
 /// Preferred localhost port for the packaged Next server. Keeping this stable
 /// matters because the webview's localStorage is origin-scoped (`host:port`).
 #[cfg(feature = "custom-protocol")]
-const DESKTOP_SERVER_PORT: u16 = 38571;
+const DEFAULT_DESKTOP_SERVER_PORT: u16 = 38571;
+
+/// Plus: the "test" build flavor (CI `flavor: test`) runs beside the main
+/// install, so it is compiled with its own port.
+fn desktop_server_port() -> u16 {
+    option_env!("PI_PLUS_SERVER_PORT")
+        .and_then(|value| value.trim().parse().ok())
+        .unwrap_or(DEFAULT_DESKTOP_SERVER_PORT)
+}
 #[cfg(feature = "custom-protocol")]
 const SERVER_START_TIMEOUT: Duration = Duration::from_secs(30);
 /// How often startup checks whether the server answers. The probe is a local
@@ -403,7 +411,8 @@ fn choose_port(app: &AppHandle) -> io::Result<u16> {
     // looks like a reset. Right after a quit, update or reinstall the
     // previous server may still hold the usual port for a moment: wait for
     // it briefly before falling back to another port.
-    let preferred = read_last_server_port(app).unwrap_or(DESKTOP_SERVER_PORT);
+    let base_port = desktop_server_port();
+    let preferred = read_last_server_port(app).unwrap_or(base_port);
     let deadline = Instant::now() + Duration::from_millis(4000);
     loop {
         if let Ok(listener) = TcpListener::bind((Ipv4Addr::LOCALHOST, preferred)) {
@@ -419,9 +428,9 @@ fn choose_port(app: &AppHandle) -> io::Result<u16> {
     }
 
     let mut candidates = Vec::with_capacity(36);
-    candidates.push(DESKTOP_SERVER_PORT);
+    candidates.push(base_port);
     for offset in 1u16..=32 {
-        candidates.push(DESKTOP_SERVER_PORT.saturating_add(offset));
+        candidates.push(base_port.saturating_add(offset));
     }
 
     for port in candidates {

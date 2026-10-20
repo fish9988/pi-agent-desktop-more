@@ -54,5 +54,7 @@ test("the transcript loop reads the caches instead of re-deriving per render", (
 
 test("streaming markdown is throttled and the parsed element memoized", () => {
   assert.match(markdownSource, /const markdown = useStreamingThrottle\(children, Boolean\(isStreaming\)\);/);
-  assert.match(markdownSource, /const body = useMemo\(\(\) => \(\s*<ReactMarkdown/);
+  // pi-web #1176: while streaming, finished blocks keep their parse.
+  assert.match(markdownSource, /const MarkdownBlock = memo\(function MarkdownBlock/);
+  assert.match(markdownSource, /isStreaming \? splitMarkdownBlocks\(normalizedMarkdown\) : \[normalizedMarkdown\]/);
 });

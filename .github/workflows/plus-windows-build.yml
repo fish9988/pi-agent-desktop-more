@@ -8,8 +8,18 @@ name: Plus Windows build
 # TAURI_SIGNING_PRIVATE_KEY) and publish latest.json; the matching public key
 # (src-tauri/tauri.conf.json) is compiled into every build, so the app can
 # only install releases from this repository, never an upstream one.
+# - manual run with flavor "test" -> "Pi Agent Plus Test": its own name,
+#   identifier, port (38591) and prefs file, no updater, so it installs and
+#   runs beside the main app (e.g. into D:\Pi Agent Plus Test) for checking
+#   a build without touching the install in daily use.
 on:
   workflow_dispatch:
+    inputs:
+      flavor:
+        description: "main = normal build; test = Pi Agent Plus Test (installs beside the main app)"
+        type: choice
+        options: [main, test]
+        default: main
   push:
     branches: [plus]
     tags: ["v*"]
@@ -21,7 +31,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: plus-windows-build-${{ github.ref }}
+  group: plus-windows-build-${{ github.ref }}-${{ inputs.flavor || 'main' }}
   cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
@@ -55,7 +65,15 @@ jobs:
         shell: bash
         run: |
           base="$(node -p "require('./plus-version.json').version")"
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+          if [ "${{ inputs.flavor }}" = "test" ]; then
+            echo "value=${base}-test.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "test=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "NEXT_PUBLIC_PLUS_FLAVOR=test"
+              echo "PI_PLUS_SERVER_PORT=38591"
+            } >> "$GITHUB_ENV"
+          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             tag="${GITHUB_REF#refs/tags/v}"
             if [ "$tag" != "$base" ]; then
               echo "::error::Tag v$tag does not match plus-version.json ($base)"
@@ -69,6 +87,7 @@ jobs:
           fi
 
       - name: Embed the updater public key
+        if: steps.version.outputs.test != 'true'
         shell: bash
         run: echo "PI_AGENT_DESKTOP_UPDATER_PUBLIC_KEY=$(node -p "require('./src-tauri/tauri.conf.json').plugins.updater.pubkey")" >> "$GITHUB_ENV"
 
@@ -89,13 +108,18 @@ jobs:
           else
             updater=false
           fi
+          if [ "${{ steps.version.outputs.test }}" = "true" ]; then
+            flavor=',"productName":"Pi Agent Plus Test","mainBinaryName":"pi-agent-plus-test","identifier":"com.fish9988.pi-agent-plus-test"'
+          else
+            flavor=''
+          fi
           npx tauri build --target x86_64-pc-windows-msvc --bundles nsis \
-            --config "{\"version\":\"${{ steps.version.outputs.value }}\",\"bundle\":{\"createUpdaterArtifacts\":$updater}}"
+            --config "{\"version\":\"${{ steps.version.outputs.value }}\",\"bundle\":{\"createUpdaterArtifacts\":$updater}$flavor}"
 
       - name: Upload installer
         uses: actions/upload-artifact@v7
         with:
-          name: pi-agent-plus-${{ steps.version.outputs.value }}-windows-x64
+          name: pi-agent-plus${{ steps.version.outputs.test == 'true' && '-test' || '' }}-${{ steps.version.outputs.value }}-windows-x64
           path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
           if-no-files-found: error
           retention-days: 30

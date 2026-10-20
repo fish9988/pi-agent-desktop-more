@@ -35,8 +35,9 @@ test("resets process details when the turn gains or loses its final answer", () 
 
 test("Plus: the running turn's work is grouped behind a live row when the level asks for it", () => {
   assert.match(source, /workPolicy\.groupLiveWork/);
-  assert.match(source, /<LiveWorkGroup/);
-  assert.match(source, /liveStreamAnswer/);
+  // Plus: the live row and the streaming answer subscribe to the stream (./LiveStream).
+  assert.match(source, /<StreamingLiveWorkGroup/);
+  assert.match(source, /liveShape\.hasAnswer/);
 });
 
 test("Plus: verbose shows finished work without a fold", () => {
