@@ -183,7 +183,11 @@ async function assembleServer() {
 async function findOverlongPaths() {
   // Mirrors the checkout location on a windows-latest runner. Measured even on
   // macOS so a long path fails the build here instead of inside makensis.
-  const windowsPrefix = "D:\\a\\pi-agent-desktop\\pi-agent-desktop\\src-tauri\\resources\\server";
+  // Forks check out under a different repository name, so prefer the real
+  // workspace path when running on a runner.
+  const windowsPrefix = process.env.GITHUB_WORKSPACE && process.platform === "win32"
+    ? `${process.env.GITHUB_WORKSPACE}\\src-tauri\\resources\\server`
+    : "D:\\a\\pi-agent-desktop\\pi-agent-desktop\\src-tauri\\resources\\server";
   const overlong = [];
 
   async function walk(dir, relative) {

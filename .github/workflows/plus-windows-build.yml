@@ -1,0 +1,77 @@
+name: Plus Windows build
+
+# Builds the unsigned Pi Agent Plus Windows installer and uploads it as a
+# workflow artifact. Nothing is published: no release, no tag, no updater
+# manifest. The updater public key is not embedded, so the build can never
+# replace itself with an upstream release.
+on:
+  workflow_dispatch:
+    inputs:
+      label:
+        description: "Version suffix, e.g. plus.1 -> 0.7.5-plus.1"
+        required: true
+        default: "plus.1"
+  push:
+    branches: [plus]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: plus-windows-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Compute the build version
+        id: version
+        shell: bash
+        run: |
+          base="$(node -p "require('./src-tauri/pi-agent-desktop-package.json').version")"
+          label="${{ inputs.label }}"
+          if [ -z "$label" ]; then label="plus.${{ github.run_number }}"; fi
+          echo "value=${base}-${label}" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare packaged Next.js server
+        run: npm run desktop:prepare
+
+      - name: Build installer
+        shell: bash
+        run: |
+          npx tauri build --target x86_64-pc-windows-msvc --bundles nsis \
+            --config "{\"version\":\"${{ steps.version.outputs.value }}\",\"bundle\":{\"createUpdaterArtifacts\":false}}"
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: pi-agent-plus-${{ steps.version.outputs.value }}-windows-x64
+          path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
+          if-no-files-found: error
+          retention-days: 30

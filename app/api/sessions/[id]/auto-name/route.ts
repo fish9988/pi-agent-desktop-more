@@ -35,7 +35,12 @@ export async function POST(
 
     session.inner.setSessionName(result.title);
     invalidateSessionListCache();
-    return NextResponse.json({ title: result.title, usage: result.usage ?? null });
+    return NextResponse.json({
+      title: result.title,
+      usage: result.usage ?? null,
+      model: result.model ?? null,
+      fallback: result.fallback ?? null,
+    });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : String(error) },

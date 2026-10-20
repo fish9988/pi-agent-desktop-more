@@ -13,7 +13,20 @@ import type { AgentSession } from "@earendil-works/pi-coding-agent";
 
 const TITLE_TIMEOUT_MS = 90_000;
 const TITLE_MAX_TOKENS = 256;
+// Models whose thinking cannot be switched off (thinkingLevelMap.off === null,
+// e.g. DeepSeek V4.x, many gateway models) spend part of the output ceiling on
+// reasoning. With only 256 tokens the reasoning phase regularly consumed the
+// whole budget and the reply carried no text, which is why "Generate title"
+// worked for some sessions and failed for others. Anthropic budget thinking
+// also needs budget_tokens >= 1024, which a 256-token ceiling cannot satisfy.
+const TITLE_REASONING_MAX_TOKENS = 4096;
+// Second attempt after an empty/truncated reply: plenty of room, same model.
+const TITLE_RETRY_MAX_TOKENS = 16_384;
 const MAX_TITLE_LENGTH = 80;
+// Local fallback when every model attempt fails, so the action always
+// produces a title. CJK text is counted in characters, other text in words.
+const FALLBACK_CJK_CHARS = 24;
+const FALLBACK_WORDS = 10;
 
 // Per-message caps. A title needs what the user asked for (every user turn,
 // including mid-session pivots) and what came out of it (the last reply); the
@@ -49,6 +62,10 @@ Requirements:
 
 export interface GeneratedSessionTitle {
   title: string;
+  /** Model that produced the title (the session's current model). */
+  model?: string;
+  /** Set when the model failed and the title was derived from the transcript. */
+  fallback?: { reason: string };
   usage?: {
     input: number;
     output: number;
@@ -85,9 +102,11 @@ export function resolveTitleThinkingLevel(model: Model<Api>): ThinkingLevel {
  * session id, and cacheRetention "none". The request is too small and too
  * unique to reuse the live session's prefix or write a cache nobody will read.
  */
-export function buildTitleRequest(source: Agent, transcript: string): TitleRequest {
+export function buildTitleRequest(source: Agent, transcript: string, maxTokensOverride?: number): TitleRequest {
   const model = source.state.model;
   const thinkingLevel = resolveTitleThinkingLevel(model);
+  const maxTokens = maxTokensOverride
+    ?? (thinkingLevel === "off" ? TITLE_MAX_TOKENS : TITLE_REASONING_MAX_TOKENS);
   return {
     model,
     context: {
@@ -99,7 +118,7 @@ export function buildTitleRequest(source: Agent, transcript: string): TitleReque
       }],
     },
     options: {
-      maxTokens: TITLE_MAX_TOKENS,
+      maxTokens: model.maxTokens > 0 ? Math.min(maxTokens, model.maxTokens) : maxTokens,
       cacheRetention: "none",
       sessionId: randomUUID(),
       transport: source.transport,
@@ -263,7 +282,11 @@ function titleFromAssistant(message: AssistantMessage): GeneratedSessionTitle {
     .map((block) => block.text)
     .join("\n")
     .trim();
-  if (!text) throw new Error("The model did not return a session title");
+  if (!text) {
+    throw new TitleRetryableError(message.stopReason === "length"
+      ? "The model used its whole output budget before writing a title"
+      : "The model did not return a session title");
+  }
   return {
     title: parseGeneratedSessionTitle(text),
     ...(message.usage ? {
@@ -278,17 +301,47 @@ function titleFromAssistant(message: AssistantMessage): GeneratedSessionTitle {
   };
 }
 
-export async function generateSessionTitle(source: AgentSession): Promise<GeneratedSessionTitle> {
-  const sourceAgent = source.agent;
-  // Snapshot whatever the session holds right now. The transcript is plain
-  // text the model reads once, so a turn still in flight only means the
-  // newest reply is missing from it; there is nothing to wait for.
-  const transcript = buildTitleTranscript([...sourceAgent.state.messages]);
-  if (!transcript.trim()) {
-    throw new Error("The session has no usable text to name");
-  }
+/** An empty or truncated reply: worth one more try with a larger budget. */
+class TitleRetryableError extends Error {}
 
-  const { model, context, options } = buildTitleRequest(sourceAgent, transcript);
+const CJK_PATTERN = /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af\uf900-\ufaff]/u;
+
+/**
+ * Title derived from the transcript without a model call: the first user
+ * request, trimmed to a title-sized phrase. Used only after every model
+ * attempt failed, so naming never leaves the user with nothing.
+ */
+export function fallbackTitleFromMessages(messages: AgentMessage[]): string | null {
+  for (const message of messages) {
+    if (message.role !== "user") continue;
+    const text = textOf(message.content)
+      .replace(/```[\s\S]*?```/g, " ")
+      .replace(/\[image\][^\n]*/g, " ")
+      .replace(/[#>*_`~|]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!/[\p{L}\p{N}]/u.test(text)) continue;
+    // Prefer the first sentence when it is long enough to carry the goal.
+    const sentence = text.split(/(?<=[。！？!?；;\n])\s*/u)[0]?.trim() ?? text;
+    const base = Array.from(sentence).length >= 6 ? sentence : text;
+    let title: string;
+    if (CJK_PATTERN.test(base)) {
+      const characters = Array.from(base.replace(/[。！？!?；;，,、：:]+$/u, ""));
+      title = characters.length > FALLBACK_CJK_CHARS
+        ? `${characters.slice(0, FALLBACK_CJK_CHARS).join("")}…`
+        : characters.join("");
+    } else {
+      const words = base.replace(/[.!?;:,]+$/u, "").split(" ");
+      title = words.length > FALLBACK_WORDS ? `${words.slice(0, FALLBACK_WORDS).join(" ")}…` : words.join(" ");
+    }
+    title = title.trim();
+    if (title) return title;
+  }
+  return null;
+}
+
+async function requestTitle(sourceAgent: Agent, transcript: string, maxTokens?: number): Promise<GeneratedSessionTitle> {
+  const { model, context, options } = buildTitleRequest(sourceAgent, transcript, maxTokens);
   const apiKey = await sourceAgent.getApiKey?.(model.provider);
   const controller = new AbortController();
   const requestOptions: SimpleStreamOptions = {
@@ -302,7 +355,7 @@ export async function generateSessionTitle(source: AgentSession): Promise<Genera
   try {
     // Providers read the prompt from the transcript's leading system message.
     const stream = await sourceAgent.streamFunction(model, normalizeContext(context), requestOptions);
-    return titleFromAssistant(await stream.result());
+    return { ...titleFromAssistant(await stream.result()), model: `${model.provider}/${model.id}` };
   } catch (error) {
     if (controller.signal.aborted) {
       throw new Error("Session title generation timed out");
@@ -311,4 +364,41 @@ export async function generateSessionTitle(source: AgentSession): Promise<Genera
   } finally {
     if (timeout) clearTimeout(timeout);
   }
+}
+
+/**
+ * Name the session with the session's own current model.
+ *
+ * Attempt 1 uses a small budget (larger when thinking cannot be disabled).
+ * An empty or truncated reply is retried once with a much larger budget, and
+ * any other failure is retried once as well (transient gateway errors are the
+ * common case). If the model still fails, the title falls back to the first
+ * user request so the action always succeeds; `fallback.reason` carries the
+ * model error for the UI.
+ */
+export async function generateSessionTitle(source: AgentSession): Promise<GeneratedSessionTitle> {
+  const sourceAgent = source.agent;
+  // Snapshot whatever the session holds right now. The transcript is plain
+  // text the model reads once, so a turn still in flight only means the
+  // newest reply is missing from it; there is nothing to wait for.
+  const messages = [...sourceAgent.state.messages];
+  const transcript = buildTitleTranscript(messages);
+  if (!transcript.trim()) {
+    throw new Error("The session has no usable text to name");
+  }
+
+  let lastError: unknown;
+  for (const maxTokens of [undefined, TITLE_RETRY_MAX_TOKENS]) {
+    try {
+      return await requestTitle(sourceAgent, transcript, maxTokens);
+    } catch (error) {
+      lastError = error;
+      if (error instanceof Error && error.message === "Session title generation timed out") break;
+    }
+  }
+
+  const reason = lastError instanceof Error ? lastError.message : String(lastError);
+  const fallback = fallbackTitleFromMessages(messages);
+  if (!fallback) throw lastError instanceof Error ? lastError : new Error(reason);
+  return { title: fallback, fallback: { reason } };
 }

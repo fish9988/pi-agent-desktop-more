@@ -14,6 +14,7 @@ import { useReportDesktopReady } from "./desktop";
 import { MarkdownBody } from "./MarkdownBody";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
 import { ConversationNavigator, type ConversationTurnLocation } from "./ConversationNavigator";
+import { ChatColumnResizeHandles } from "./ChatColumnResizeHandles";
 import { ExtensionWidgets } from "./ExtensionWidgets";
 import { ExtensionStatusLine, formatExtensionStatusLine } from "./ExtensionStatusLine";
 import { AnsiText } from "./AnsiText";
@@ -1324,7 +1325,8 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
           }}
         >
           <div style={{ minWidth: 0, padding: `0 ${CHAT_COLUMN_PADDING}px` }}>
-            <div ref={messageContentRef} onPointerUp={captureQuotedSelection} style={{ width: "100%", minWidth: 0, maxWidth: "var(--chat-content-max-width, 820px)", margin: "0 auto" }}>
+            <div ref={messageContentRef} onPointerUp={captureQuotedSelection} style={{ position: "relative", width: "100%", minWidth: 0, maxWidth: "var(--chat-content-max-width, 820px)", margin: "0 auto" }}>
+            {!loading && <ChatColumnResizeHandles columnRef={messageContentRef} />}
             {loading ? (
               <div className="chat-loading-hint">{t("chat.loadingSession")}</div>
             ) : (() => {

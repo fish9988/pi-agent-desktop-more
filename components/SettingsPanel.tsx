@@ -14,6 +14,9 @@ import {
   CHAT_CONTENT_WIDTH_DEFAULT,
   CHAT_CONTENT_WIDTH_MAX,
   CHAT_CONTENT_WIDTH_MIN,
+  CHAT_CONTENT_WIDTH_PERCENT_DEFAULT,
+  CHAT_CONTENT_WIDTH_PERCENT_MAX,
+  CHAT_CONTENT_WIDTH_PERCENT_MIN,
   CHAT_CONTENT_FONT_SIZE_DEFAULT,
   CHAT_CONTENT_FONT_SIZE_MAX,
   CHAT_CONTENT_FONT_SIZE_MIN,
@@ -100,7 +103,21 @@ function GeneralSettings({
   const { locale, setLocale, supportedLocales, t } = useI18n();
   const { preference, setThemePreference } = useTheme();
   const { mode: diffViewMode, setMode: setDiffViewMode } = useDiffViewMode();
-  const { width: chatContentWidth, setWidth: setChatContentWidth, fontSize, setFontSize } = useChatAppearance();
+  const {
+    width: chatContentWidth,
+    setWidth: setChatContentWidth,
+    widthPercent: chatContentWidthPercent,
+    setWidthPercent: setChatContentWidthPercent,
+    widthUnit: chatContentWidthUnit,
+    setWidthUnit: setChatContentWidthUnit,
+    resetWidth: resetChatContentWidth,
+    fontSize,
+    setFontSize,
+  } = useChatAppearance();
+  const chatWidthIsPercent = chatContentWidthUnit === "percent";
+  const chatWidthIsDefault = chatWidthIsPercent
+    ? chatContentWidthPercent === CHAT_CONTENT_WIDTH_PERCENT_DEFAULT
+    : chatContentWidth === CHAT_CONTENT_WIDTH_DEFAULT;
   const desktop = isTauriDesktop();
   const enterSendMode = useEnterSendMode();
   const [shellSettings, setShellSettings] = useState<ToolSettingsResponse | null>(null);
@@ -218,15 +235,31 @@ function GeneralSettings({
               <div className="settings-chat-option settings-chat-range-option">
                 <div className="settings-chat-range-header">
                   <label htmlFor="settings-chat-content-width">{t("settings.chatContentWidth")}</label>
-                  <output htmlFor="settings-chat-content-width">{chatContentWidth}px</output>
+                  <div className="settings-choice-group settings-chat-width-unit" role="radiogroup" aria-label={t("settings.chatContentWidthUnit")}>
+                    {(["px", "percent"] as const).map((unit) => (
+                      <button
+                        key={unit}
+                        type="button"
+                        role="radio"
+                        aria-checked={chatContentWidthUnit === unit}
+                        className={`config-button config-button-small ${chatContentWidthUnit === unit ? "config-button-primary" : "config-button-secondary"}`}
+                        onClick={() => setChatContentWidthUnit(unit)}
+                      >
+                        {unit === "px" ? "px" : "%"}
+                      </button>
+                    ))}
+                  </div>
+                  <output htmlFor="settings-chat-content-width">
+                    {chatWidthIsPercent ? `${chatContentWidthPercent}%` : `${chatContentWidth}px`}
+                  </output>
                   <ConfigButton
                     variant="ghost"
                     size="small"
                     className="settings-chat-reset"
                     title={t("settings.resetChatContentWidth")}
                     aria-label={t("settings.resetChatContentWidth")}
-                    disabled={chatContentWidth === CHAT_CONTENT_WIDTH_DEFAULT}
-                    onClick={() => setChatContentWidth(CHAT_CONTENT_WIDTH_DEFAULT)}
+                    disabled={chatWidthIsDefault}
+                    onClick={resetChatContentWidth}
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5" />
@@ -236,12 +269,17 @@ function GeneralSettings({
                 <input
                   id="settings-chat-content-width"
                   type="range"
-                  min={CHAT_CONTENT_WIDTH_MIN}
-                  max={CHAT_CONTENT_WIDTH_MAX}
-                  step={10}
-                  value={chatContentWidth}
-                  onChange={(event) => setChatContentWidth(Number(event.target.value))}
+                  min={chatWidthIsPercent ? CHAT_CONTENT_WIDTH_PERCENT_MIN : CHAT_CONTENT_WIDTH_MIN}
+                  max={chatWidthIsPercent ? CHAT_CONTENT_WIDTH_PERCENT_MAX : CHAT_CONTENT_WIDTH_MAX}
+                  step={chatWidthIsPercent ? 1 : 10}
+                  value={chatWidthIsPercent ? chatContentWidthPercent : chatContentWidth}
+                  onChange={(event) => {
+                    const value = Number(event.target.value);
+                    if (chatWidthIsPercent) setChatContentWidthPercent(value);
+                    else setChatContentWidth(value);
+                  }}
                 />
+                <p className="settings-option-hint">{t("settings.chatContentWidthDragHint")}</p>
               </div>
               <div className="settings-chat-option settings-chat-range-option">
                 <div className="settings-chat-range-header">

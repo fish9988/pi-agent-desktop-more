@@ -48,7 +48,7 @@ const DEV_SERVER_URL: &str = "http://127.0.0.1:30141";
 /// Preferred localhost port for the packaged Next server. Keeping this stable
 /// matters because the webview's localStorage is origin-scoped (`host:port`).
 #[cfg(feature = "custom-protocol")]
-const DESKTOP_SERVER_PORT: u16 = 38471;
+const DESKTOP_SERVER_PORT: u16 = 38571;
 #[cfg(feature = "custom-protocol")]
 const SERVER_START_TIMEOUT: Duration = Duration::from_secs(30);
 /// How often startup checks whether the server answers. The probe is a local

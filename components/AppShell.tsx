@@ -101,6 +101,7 @@ import type { SessionStatsInfo } from "@/lib/pi-types";
 import type { FileViewerState } from "@/lib/file-viewer-state";
 import type { ToolEntry } from "@/lib/tool-presets";
 import { getSessionFamily } from "@/lib/session-family";
+import { appNotify } from "@/lib/notification-store";
 import { getLastSettingsSection, type SettingsSection } from "@/lib/settings-navigation";
 
 type SessionCopyField = "file" | "id" | "projectDir" | "gitBranch" | "gitWorktree";
@@ -1432,12 +1433,25 @@ export function AppShell() {
       const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/auto-name`, {
         method: "POST",
       });
-      const body = (await response.json().catch(() => ({}))) as { title?: string; error?: string };
+      const body = (await response.json().catch(() => ({}))) as {
+        title?: string;
+        error?: string;
+        model?: string | null;
+        fallback?: { reason: string } | null;
+      };
       if (!response.ok || !body.title) {
         throw new Error(body.error || `HTTP ${response.status}`);
       }
 
       const title = body.title.trim();
+      // The native More menu shows one line per item and no captions, so the
+      // outcome is also reported as a notice: a silent failure is what made
+      // naming look like it only worked some of the time.
+      if (body.fallback) {
+        appNotify.warning({ message: translate("title.fallbackNotice", { reason: body.fallback.reason }) });
+      } else if (body.model) {
+        appNotify.success({ message: translate("title.updatedWith", { model: body.model }) });
+      }
       setRefreshKey((key) => key + 1);
       if (activeSessionIdRef.current !== sessionId) return;
       setSelectedSession((current) => current?.id === sessionId ? { ...current, name: title } : current);
@@ -1447,10 +1461,11 @@ export function AppShell() {
     } catch (error) {
       if (activeSessionIdRef.current !== sessionId) return;
       const message = error instanceof Error ? error.message : String(error);
+      appNotify.error({ message: translate("title.failedNotice", { reason: message }) });
       setAutoNameStatus({ kind: "error", message });
       autoNameTimerRef.current = setTimeout(() => setAutoNameStatus({ kind: "idle" }), 5000);
     }
-  }, [autoNameStatus.kind, selectedSession?.id]);
+  }, [autoNameStatus.kind, selectedSession?.id, translate]);
 
   useEffect(() => {
     if (autoNameTimerRef.current) clearTimeout(autoNameTimerRef.current);

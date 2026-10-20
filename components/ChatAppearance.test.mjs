@@ -9,7 +9,7 @@ const settingsPanel = await readFile(new URL("./SettingsPanel.tsx", import.meta.
 const globals = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
 const chatAppearanceHook = await readFile(new URL("../hooks/useChatAppearance.ts", import.meta.url), "utf8");
 const jiti = createJiti(import.meta.url);
-const { clampChatContentWidth, clampChatContentFontSize } = await jiti.import("../hooks/useChatAppearance.ts");
+const { clampChatContentWidth, clampChatContentWidthPercent, chatContentMaxWidthValue, clampChatContentFontSize } = await jiti.import("../hooks/useChatAppearance.ts");
 
 const widthVariable = /var\(--chat-content-max-width, 820px\)/g;
 
@@ -25,9 +25,9 @@ test("General chat settings own the chat width preference", () => {
   assert.match(chatInput, /useChatAppearance\(\)/);
   assert.match(settingsPanel, /useChatAppearance\(\)/);
   assert.match(settingsPanel, /type="range"/);
-  assert.match(settingsPanel, /min=\{CHAT_CONTENT_WIDTH_MIN\}/);
-  assert.match(settingsPanel, /max=\{CHAT_CONTENT_WIDTH_MAX\}/);
-  assert.match(settingsPanel, /step=\{10\}/);
+  assert.match(settingsPanel, /CHAT_CONTENT_WIDTH_PERCENT_MIN : CHAT_CONTENT_WIDTH_MIN/);
+  assert.match(settingsPanel, /CHAT_CONTENT_WIDTH_PERCENT_MAX : CHAT_CONTENT_WIDTH_MAX/);
+  assert.match(settingsPanel, /step=\{chatWidthIsPercent \? 1 : 10\}/);
   assert.match(chatAppearanceHook, /pi-chat-content-width/);
   assert.match(chatAppearanceHook, /localStorage\.setItem/);
 });
@@ -35,9 +35,20 @@ test("General chat settings own the chat width preference", () => {
 test("chat width validation preserves the default and supported range", () => {
   assert.equal(clampChatContentWidth(undefined), 820);
   assert.equal(clampChatContentWidth("invalid"), 820);
-  assert.equal(clampChatContentWidth(700), 820);
+  assert.equal(clampChatContentWidth(null), 820);
+  assert.equal(clampChatContentWidth(300), 480);
+  assert.equal(clampChatContentWidth(700), 700);
   assert.equal(clampChatContentWidth(1104), 1104);
-  assert.equal(clampChatContentWidth(2400), 2000);
+  assert.equal(clampChatContentWidth(3000), 2400);
+});
+
+test("Plus: chat width can be a percentage of the chat column", () => {
+  assert.equal(clampChatContentWidthPercent(undefined), 80);
+  assert.equal(clampChatContentWidthPercent(10), 30);
+  assert.equal(clampChatContentWidthPercent(64.4), 64);
+  assert.equal(clampChatContentWidthPercent(140), 100);
+  assert.equal(chatContentMaxWidthValue({ width: 900, widthPercent: 70, widthUnit: "percent" }), "70%");
+  assert.equal(chatContentMaxWidthValue({ width: 900, widthPercent: 70, widthUnit: "px" }), "900px");
 });
 
 test("chat font size preserves the default and bounds stored or supplied values", () => {
