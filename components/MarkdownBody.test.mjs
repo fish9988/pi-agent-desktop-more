@@ -363,7 +363,10 @@ test("keeps typed line breaks in tight list items and headings", () => {
   assert.match(ordered, /<li>下一题<\/li>/);
   // The newline before a nested list separates blocks, so it must not become a <br>.
   assert.match(nested, /<li>outer<br\/>more\n<ul>\n<li>inner<\/li>/);
-  assert.match(heading, /<h1>Heading one<br\/>heading two<\/h1>/);
+  // Plus: ported pi-web 2cefb72f — headings now carry their GitHub slug as a
+  // (sanitizer-prefixed) id, so `[go](#heading)` can land on them. The <br>
+  // that keepLineBreaks inserts carries no text, as on GitHub.
+  assert.match(heading, /<h1 id="user-content-heading-oneheading-two">Heading one<br\/>heading two<\/h1>/);
   assert.doesNotMatch(renderMarkdown("- alpha\n\n- beta", { keepLineBreaks: true }), /<br/);
 });
 

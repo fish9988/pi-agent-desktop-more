@@ -6,7 +6,7 @@ import { useFileContextMenu } from "@/hooks/useFileContextMenu";
 import { inlineCodeFilePath } from "@/lib/file-context-menu";
 import { parsePdfPageFragment, resolveLocalFileHref, shouldOpenLocalFileInApp } from "@/lib/file-links";
 import { encodeFilePathForApi } from "@/lib/file-paths";
-import { markdownRehypePlugins, markdownRemarkPlugins, markdownUrlTransform, markdownUserRemarkPlugins, normalizeDisplayMath } from "@/lib/markdown";
+import { jumpToMarkdownFragment, markdownRehypePlugins, markdownRemarkPlugins, markdownUrlTransform, markdownUserRemarkPlugins, normalizeDisplayMath } from "@/lib/markdown";
 import { splitMarkdownBlocks } from "@/lib/markdown-blocks";
 import { ImagePreview } from "./ImagePreview";
 import { MermaidBlock, CodeBlock } from "./MermaidBlock";
@@ -166,6 +166,18 @@ function buildComponents(
       delete props.node;
       const filePath = onOpenFile ? resolveLocalFileHref(href, cwd) : null;
       const openFile = onOpenFile;
+      // A `#fragment` link names something in this same rendered text (a raw
+      // `<a id>`, a footnote, a `## heading`), never a file or another page: it
+      // must scroll here, not open a second window. Plus: ported pi-web 2cefb72f.
+      if (href?.startsWith("#")) {
+        return (
+          <MarkdownLinkContext.Provider value={true}>
+            <a href={href} {...props} onClick={jumpToMarkdownFragment}>
+              {children}
+            </a>
+          </MarkdownLinkContext.Provider>
+        );
+      }
       if (!filePath || !openFile) {
         return (
           <MarkdownLinkContext.Provider value={true}>

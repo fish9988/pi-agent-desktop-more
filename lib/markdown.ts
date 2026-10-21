@@ -1,3 +1,4 @@
+import type { Element as HastElement, Root as HastRoot, RootContent as HastContent } from "hast";
 import type { Content, Link, Parent, Root } from "mdast";
 import { defaultUrlTransform, type Options as ReactMarkdownOptions } from "react-markdown";
 import rehypeKatex from "rehype-katex";
@@ -9,8 +10,15 @@ import remarkMath from "remark-math";
 import type { Plugin } from "unified";
 import type { Extension } from "micromark-util-types";
 
+// The anti-clobber prefix the sanitizer puts in front of every `id` in
+// rendered content, so untrusted Markdown cannot shadow the page's own
+// elements. The fragment-link fix below must use the identical value, so the
+// schema that produces the prefixed ids pins the same constant.
+const markdownClobberPrefix = defaultSchema.clobberPrefix ?? "user-content-";
+
 const markdownSanitizeSchema = {
   ...defaultSchema,
+  clobberPrefix: markdownClobberPrefix,
   attributes: {
     ...defaultSchema.attributes,
     code: [["className", /^language-./, "math-inline", "math-display"]],
@@ -24,6 +32,45 @@ const markdownSanitizeSchema = {
 
 export function markdownUrlTransform(value: string): string {
   return /^file:/i.test(value) ? value : defaultUrlTransform(value);
+}
+
+interface MarkdownFragmentClick {
+  defaultPrevented: boolean;
+  button: number;
+  metaKey: boolean;
+  ctrlKey: boolean;
+  shiftKey: boolean;
+  altKey: boolean;
+  currentTarget: Pick<Element, "getAttribute" | "closest">;
+  preventDefault(): void;
+}
+
+/**
+ * A click on a `#fragment` link in rendered Markdown: brings the element it
+ * names into view within the same rendered document (the closest
+ * `.markdown-body`), as the Skills reader does with its headings. The browser's
+ * own jump searches the whole page, where every chat message with a footnote
+ * has its own `user-content-user-content-fn-1` and the file preview sits beside
+ * the chat, so it could land in another message; it would also put the
+ * fragment in the app's URL as a history entry. Modified clicks stay the
+ * browser's.
+ */
+export function jumpToMarkdownFragment(event: MarkdownFragmentClick): void {
+  if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  const href = event.currentTarget.getAttribute("href");
+  if (!href?.startsWith("#")) return;
+  event.preventDefault();
+  let id = href.slice(1);
+  if (!id) return;
+  try {
+    id = decodeURIComponent(id);
+  } catch {
+    // A malformed escape is matched as written.
+  }
+  const name = CSS.escape(id);
+  event.currentTarget.closest(".markdown-body")
+    ?.querySelector(`[id="${name}"], a[name="${name}"]`)
+    ?.scrollIntoView({ block: "start" });
 }
 
 /**
@@ -577,14 +624,103 @@ export const markdownPreviewRemarkPlugins: ReactMarkdownOptions["remarkPlugins"]
   remarkCurrencySafeMath,
 ];
 
+interface SanitizedNode {
+  type?: string;
+  properties?: Record<string, unknown>;
+  children?: SanitizedNode[];
+}
+
+/**
+ * GitHub rewrites both sides of a content anchor. cmark-gfm prefixes rendered
+ * `id`s with `user-content-` (anti-clobber) and rewrites same-document fragment
+ * links to match, so a hand-written pair like `<a id="toc"></a>` with
+ * `[ToC](#toc)` still lands after rendering. `rehype-sanitize` copies only the
+ * `id` half of that — `defaultSchema`'s `clobber` + `clobberPrefix` — which on
+ * its own breaks every in-document anchor pair: the element gains the prefix
+ * and the link pointing at it does not.
+ *
+ * This plugin runs after sanitizing and prefixes fragment links exactly as
+ * unconditionally as sanitizing prefixes ids, so an id and an href that matched
+ * before sanitizing still match afterwards. Footnote references need it for the
+ * same reason: `mdast-util-to-hast` generates both their sides already prefixed
+ * and sanitizing prefixes the id once more, so an unprefixed href would strand
+ * the footnote link behind the doubled prefix.
+ *
+ * Links to page elements keep being unreachable from Markdown — that is the
+ * clobber protection doing its job, not this plugin. A bare `#` has no fragment
+ * to pair and stays as written.
+ */
+function rehypeMatchClobberedIds(): (tree: unknown) => void {
+  return (tree: unknown): void => {
+    const visit = (node: SanitizedNode): void => {
+      if (!node || typeof node !== "object") return;
+      const href = node.properties?.href;
+      if (node.type === "element" && typeof href === "string" && href.startsWith("#") && href.length > 1) {
+        node.properties!.href = `#${markdownClobberPrefix}${href.slice(1)}`;
+      }
+      for (const child of node.children ?? []) visit(child);
+    };
+    visit(tree as SanitizedNode);
+  };
+}
+
+function hastText(node: HastContent): string {
+  return node.type === "text" ? node.value : node.type === "element" ? node.children.map(hastText).join("") : "";
+}
+
+/**
+ * Heading anchors so `[go](#heading-two)` can land on `## Heading two`.
+ *
+ * The slug is written as a plain `id` before sanitizing, so the anti-clobber
+ * prefix reaches it exactly as it reaches a hand-written `<a id>`: the heading
+ * keeps `id="user-content-heading-two"` while `rehypeMatchClobberedIds` turns
+ * its link into `#user-content-heading-two`, and the two still pair.
+ * `jumpToMarkdownFragment` then scrolls inside the message's own
+ * `.markdown-body`, so two messages with the same heading never fight over it.
+ *
+ * Slugs follow GitHub's (`# Setup **guide**!` → `setup-guide`), repeating
+ * headings get `-1`, `-1-1` as github-slugger numbers them, and the slugs must
+ * be computed before KaTeX writes each formula's text twice.
+ */
+function markdownHeadingAnchors() {
+  return (tree: HastRoot) => {
+    const seen = new Map<string, number>();
+    const visit = (node: HastRoot | HastElement) => node.children.forEach((child) => {
+      if (child.type !== "element") return;
+      if (/^h[1-6]$/.test(child.tagName)) {
+        const base = hastText(child).toLowerCase().replace(/[^\p{L}\p{M}\p{N}_\- ]/gu, "").replace(/ /g, "-");
+        // As github-slugger numbers repeats: "a", "a", "a-1" become a, a-1, a-1-1.
+        let slug = base;
+        while (seen.has(slug)) {
+          seen.set(base, seen.get(base)! + 1);
+          slug = `${base}-${seen.get(base)}`;
+        }
+        seen.set(slug, 0);
+        // A hand-written id on a raw-HTML heading wins; the sanitizer prefixes it.
+        if (typeof child.properties.id !== "string") child.properties.id = slug;
+      }
+      visit(child);
+    });
+    visit(tree);
+  };
+}
+
+// Chat and file previews read the same rule: heading anchors first (so
+// `[go](#heading-two)` names a slug), then sanitizing, then the matching prefix
+// on both sides of every fragment pair. KaTeX runs last, after the anchors read
+// each heading's own text.
 export const markdownRehypePlugins: ReactMarkdownOptions["rehypePlugins"] = [
   rehypeRaw,
+  markdownHeadingAnchors,
   [rehypeSanitize, markdownSanitizeSchema],
+  rehypeMatchClobberedIds,
   [rehypeKatex, { throwOnError: false, strict: false }],
 ];
 
 export const markdownPreviewRehypePlugins: ReactMarkdownOptions["rehypePlugins"] = [
   rehypeRaw,
+  markdownHeadingAnchors,
   [rehypeSanitize, markdownSanitizeSchema],
+  rehypeMatchClobberedIds,
   [rehypeKatex, { throwOnError: false, strict: false }],
 ];

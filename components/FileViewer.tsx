@@ -19,7 +19,7 @@ import {
 import { encodeFilePathForApi, getFileDirectory, getFileName, getRelativeFilePath } from "@/lib/file-paths";
 import { parsePdfPageFragment, resolveLocalFileHref, shouldOpenLocalFileInApp } from "@/lib/file-links";
 import { parseFrontmatter } from "@/lib/frontmatter";
-import { markdownPreviewRehypePlugins, markdownPreviewRemarkPlugins, markdownUrlTransform, normalizeDisplayMath } from "@/lib/markdown";
+import { jumpToMarkdownFragment, markdownPreviewRehypePlugins, markdownPreviewRemarkPlugins, markdownUrlTransform, normalizeDisplayMath } from "@/lib/markdown";
 import { CodeBlock, MermaidBlock } from "./MermaidBlock";
 import { FrontmatterCard } from "./FrontmatterCard";
 import { parseUnifiedPatch } from "@/lib/patch";
@@ -1709,6 +1709,12 @@ function TextFileViewer({
                 },
                 a({ href, children, ...props }) {
                   delete props.node;
+                  // An in-page link names something in this same preview. Plus:
+                  // ported pi-web 2cefb72f — before the file-link branch, and
+                  // with no target, so it scrolls here instead of a new window.
+                  if (href?.startsWith("#")) {
+                    return <a href={href} {...props} onClick={jumpToMarkdownFragment}>{children}</a>;
+                  }
                   const linkedFile = onOpenFile
                     ? resolveLocalFileHref(href, markdownDirectory, cwd ?? markdownDirectory)
                     : null;
