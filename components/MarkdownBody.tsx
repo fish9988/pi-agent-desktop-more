@@ -6,6 +6,7 @@ import { useFileContextMenu } from "@/hooks/useFileContextMenu";
 import { inlineCodeFilePath } from "@/lib/file-context-menu";
 import { parsePdfPageFragment, resolveLocalFileHref, shouldOpenLocalFileInApp } from "@/lib/file-links";
 import { encodeFilePathForApi } from "@/lib/file-paths";
+import { isAudioPath, isVideoPath } from "@/lib/file-types";
 import { jumpToMarkdownFragment, markdownRehypePlugins, markdownRemarkPlugins, markdownUrlTransform, markdownUserRemarkPlugins, normalizeDisplayMath } from "@/lib/markdown";
 import { splitMarkdownBlocks } from "@/lib/markdown-blocks";
 import { ImagePreview } from "./ImagePreview";
@@ -43,6 +44,18 @@ function MarkdownImage({
   const imageSrc = filePath
     ? `/api/files/${encodeFilePathForApi(filePath)}?type=read`
     : href;
+  // `![](take.wav)` is how a model shows a sound or clip it made, and an <img>
+  // cannot play it. The file API already streams both with range requests.
+  // Plus: ported pi-web 51b11598 — media skips ImagePreview (and its context
+  // menu) entirely, so a player is never wrapped in a zoom-in button.
+  const mediaPath = filePath ?? href?.split(/[?#]/, 1)[0] ?? "";
+  const label = alt?.trim() ? alt : undefined;
+  if (isAudioPath(mediaPath)) {
+    return <audio controls preload="metadata" src={imageSrc} aria-label={label} />;
+  }
+  if (isVideoPath(mediaPath)) {
+    return <video controls playsInline preload="metadata" src={imageSrc} aria-label={label} />;
+  }
   // Dynamic local paths are served directly by the file API.
   // eslint-disable-next-line @next/next/no-img-element
   const image = <img src={imageSrc} alt={alt ?? ""} loading="lazy" {...props} />;

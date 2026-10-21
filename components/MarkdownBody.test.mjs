@@ -294,6 +294,34 @@ test("uses a generic preview label when a markdown image has no alt text", () =>
   assert.doesNotMatch(html, /Preview image:/);
 });
 
+// Plus: ported pi-web 51b11598 — a markdown image of a sound or clip becomes a
+// player; raw <audio>/<video> HTML is stripped by the sanitizer, so this is the
+// only way a model can show media it made. The file API streams both with
+// range requests already.
+test("plays a markdown audio or video file inline instead of showing a broken image", () => {
+  const audioHtml = renderMarkdown("![take 2](out/take2.wav)");
+  assert.match(
+    audioHtml,
+    /<audio (?=[^>]*controls="")(?=[^>]*preload="metadata")(?=[^>]*src="\/api\/files\/home\/me\/project\/out\/take2\.wav\?type=read")(?=[^>]*aria-label="take 2")[^>]*>/,
+  );
+  // No broken <img>, and no image preview (or its context menu) around it.
+  assert.doesNotMatch(audioHtml, /<img|<button|\snode=/);
+
+  const videoHtml = renderMarkdown("![](https://example.com/clip.mp4?v=2)");
+  assert.match(
+    videoHtml,
+    /<video (?=[^>]*controls="")(?=[^>]*playsInline="")(?=[^>]*preload="metadata")(?=[^>]*src="https:\/\/example\.com\/clip\.mp4\?v=2")[^>]*>/,
+  );
+  assert.doesNotMatch(videoHtml, /aria-label|<img|<button/);
+
+  // A linked clip stays a plain player inside its link, as a linked image does.
+  const linkedHtml = renderMarkdown("[![demo](out/demo.webm)](https://example.com/demo)");
+  assert.match(linkedHtml, /<a [^>]*href="https:\/\/example\.com\/demo"[^>]*><video [^>]*src="\/api\/files\/home\/me\/project\/out\/demo\.webm\?type=read"[^>]*><\/video><\/a>/);
+
+  // Images keep their preview.
+  assert.match(renderMarkdown("![chart](out/chart.png)"), /<button[^>]+aria-label="Preview image: chart"/);
+});
+
 test("a streaming body renders its text on the first paint", () => {
   const html = renderMarkdown("**Live** answer", { isStreaming: true });
   assert.match(html, /<strong>Live<\/strong> answer/);
