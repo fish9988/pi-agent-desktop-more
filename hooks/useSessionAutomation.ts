@@ -5,7 +5,7 @@
 // hooks/useAgentSession.ts (upstream-owned) so upstream merges stay clean.
 
 import { useCallback, useState, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
-import { sendAgentCommand } from "@/lib/agent-client";
+import { agentStatusUrl, sendAgentCommand } from "@/lib/agent-client";
 
 export interface SessionAutomation {
   autoCompactionEnabled: boolean | null;
@@ -102,7 +102,7 @@ export function useSessionAutomationActions<State>({
       addNotice({ type: "error", message: e instanceof Error ? e.message : String(e) });
       // Re-sync from the server's actual state.
       try {
-        const res = await fetch(`/api/agent/${encodeURIComponent(sid)}`);
+        const res = await fetch(agentStatusUrl(sid));
         const d = await res.json() as { state?: State };
         resync(d.state);
       } catch { /* leave optimistic value; next reconcile fixes it */ }

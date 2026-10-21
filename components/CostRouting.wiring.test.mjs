@@ -23,5 +23,6 @@ test("the session panel lists cost by model and cache warming, refreshed when it
   assert.match(appShell, /shouldShowUsageBreakdown\(sessionStats\.costBreakdown, sessionStats\.selectedModelKey\)/);
   assert.match(appShell, /section\(translate\("session\.costByModel"\), costBreakdownRows\)/);
   assert.match(appShell, /section\(translate\("session\.cacheWarming"\), cacheWarmingSectionRows\)/);
-  assert.match(appShell, /fetch\(`\/api\/agent\/\$\{encodeURIComponent\(sessionPanelSessionId\)\}`\)/);
+  // Plus: ported pi-web 4eed9e97 — the panel's state read is a status read (#1302).
+  assert.match(appShell, /fetch\(agentStatusUrl\(sessionPanelSessionId\)\)/);
 });

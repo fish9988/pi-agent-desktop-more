@@ -61,7 +61,7 @@ import { ArtifactPanel } from "./ArtifactPanel";
 import { setArtifactOpener, useArtifactTitles } from "@/lib/artifact-store";
 import { useAudio } from "@/hooks/useAudio";
 import { copyText } from "@/lib/clipboard";
-import { sendAgentCommand } from "@/lib/agent-client";
+import { agentStatusUrl, sendAgentCommand } from "@/lib/agent-client";
 import {
   claimExtensionAttentionNotification,
   shouldShowBrowserNotification,
@@ -547,7 +547,8 @@ export function AppShell() {
     setPanelCacheWarming(null);
     if (!sessionPanelSessionId) return;
     let cancelled = false;
-    fetch(`/api/agent/${encodeURIComponent(sessionPanelSessionId)}`)
+    // Status read: the panel only shows cache warming, not the system prompt (#1302).
+    fetch(agentStatusUrl(sessionPanelSessionId))
       .then((res) => res.json() as Promise<{ running?: boolean; state?: { cacheWarming?: CacheWarmingInfo } }>)
       .then((data) => {
         if (!cancelled && data.state?.cacheWarming) setPanelCacheWarming(data.state.cacheWarming);

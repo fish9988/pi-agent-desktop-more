@@ -3,6 +3,10 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { Script } from "node:vm";
 import ts from "typescript";
+import { createJiti } from "jiti";
+
+// Plus: ported pi-web 4eed9e97 — status reads go through agentStatusUrl() (#1302).
+const { agentStatusUrl } = await createJiti(import.meta.url, { interopDefault: true }).import("../lib/agent-client.ts");
 
 const source = ts.createSourceFile(
   "useAgentSession.ts",
@@ -30,7 +34,7 @@ const oldUsage = { tokens: 50_000, contextWindow: 1_000_000, percent: 5 };
 const newUsage = { tokens: 120_000, contextWindow: 1_000_000, percent: 12 };
 
 function harness({ response, stats, pending } = {}) {
-  const state = { contextUsage: oldUsage, stats: null, finished: 0, panelsOpened: 0 };
+  const state = { contextUsage: oldUsage, stats: null, finished: 0, panelsOpened: 0, prompt: undefined, requests: [] };
   const refs = {
     sessionIdRef: { current: "session-a" },
     sessionGenerationRef: { current: 1 },
@@ -38,10 +42,20 @@ function harness({ response, stats, pending } = {}) {
     agentRunningRef: { current: true },
     sdkAgentActiveRef: { current: false },
     rpcPromptPendingRef: { current: false },
+    sessionHookMountedRef: { current: true },
   };
   const globals = {
     ...refs,
-    fetch: async () => ({ ok: true, json: async () => pending ? await pending : response }),
+    fetch: async (url) => {
+      state.requests.push(String(url));
+      const body = pending ? await pending : response;
+      // The route drops the prompt for a status read (?systemPrompt=0).
+      if (body?.state && String(url).includes("systemPrompt=0")) {
+        const { systemPrompt: _omitted, ...rest } = body.state;
+        return { ok: true, json: async () => ({ ...body, state: rest }) };
+      }
+      return { ok: true, json: async () => body };
+    },
     sendAgentCommand: async () => pending ? await pending : stats,
     encodeURIComponent,
     syncLiveModel() {},
@@ -51,7 +65,8 @@ function harness({ response, stats, pending } = {}) {
     setQueuedMessages() {},
     normalizeQueuedMessages: (value) => value,
     seedStreamingSnapshot() {},
-    setSystemPrompt() {},
+    setSystemPrompt(value) { state.prompt = value; },
+    agentStatusUrl,
     setExtensionStatuses() {},
     setExtensionWidgets() {},
     finishPromptWithoutStream: async () => { state.finished += 1; },
@@ -91,10 +106,24 @@ test("a null usage value clears the ring and an omitted field preserves it", asy
 });
 
 test("settled runs still refresh usage and finish the prompt", async () => {
-  const h = harness({ response: { running: true, state: { isStreaming: false, contextUsage: newUsage } } });
+  const h = harness({ response: { running: true, state: { isStreaming: false, contextUsage: newUsage, systemPrompt: "prompt" } } });
   await h.reconcile("session-a");
   assert.equal(h.state.contextUsage, newUsage);
   assert.equal(h.state.finished, 1);
+  // Plus: ported pi-web 4eed9e97 — the poll is a status read without the prompt (#1302).
+  assert.equal(h.state.requests[0], "/api/agent/session-a?systemPrompt=0");
+  // Finishing a run whose agent_end was missed reads the prompt once, separately.
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(h.state.requests.slice(1), ["/api/agent/session-a"]);
+  assert.equal(h.state.prompt, "prompt");
+});
+
+test("a busy reconciliation poll never fetches the system prompt", async () => {
+  const h = harness({ response: { running: true, state: { isStreaming: true, contextUsage: newUsage } } });
+  await h.reconcile("session-a");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(h.state.requests, ["/api/agent/session-a?systemPrompt=0"]);
+  assert.equal(h.state.prompt, undefined);
 });
 
 function deferred() {
