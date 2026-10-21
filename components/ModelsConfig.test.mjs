@@ -17,6 +17,7 @@ const {
   savedModelIds,
   serializeHeaderRows,
   setCompatBool,
+  setCompatFlag,
   trackAddedModels,
   updateHeaderRow,
 } = await jiti.import("./models-config-helpers.ts");
@@ -72,6 +73,37 @@ test("disabling the developer role writes an explicit false override", () => {
     setCompatBool({ compat: { supportsStore: true } }, "supportsDeveloperRole", false),
     { compat: { supportsStore: true, supportsDeveloperRole: false } },
   );
+});
+
+// Plus: ported pi-web f0b3117e (#1331).
+test("switching adaptive thinking off removes the override instead of writing false", () => {
+  const on = setCompatFlag({ id: "claude-opus-5-5" }, "forceAdaptiveThinking", true);
+  assert.deepEqual(on, { id: "claude-opus-5-5", compat: { forceAdaptiveThinking: true } });
+  assert.deepEqual(setCompatFlag(on, "forceAdaptiveThinking", false), { id: "claude-opus-5-5", compat: undefined });
+  assert.deepEqual(
+    setCompatFlag({ compat: { supportsStore: true, forceAdaptiveThinking: true } }, "forceAdaptiveThinking", false),
+    { compat: { supportsStore: true } },
+  );
+});
+
+test("a model switches off adaptive thinking its provider turns on with an explicit false", () => {
+  assert.deepEqual(
+    setCompatFlag({ id: "claude-haiku-4-5" }, "forceAdaptiveThinking", false, true),
+    { id: "claude-haiku-4-5", compat: { forceAdaptiveThinking: false } },
+  );
+  const entry = { id: "claude-opus-5-5", compat: { forceAdaptiveThinking: false } };
+  assert.deepEqual(setCompatFlag(entry, "forceAdaptiveThinking", true, true), { id: "claude-opus-5-5", compat: undefined });
+  const plain = { id: "claude-opus-5-5" };
+  assert.equal(setCompatFlag(plain, "forceAdaptiveThinking", false), plain);
+});
+
+// Plus: the switch only shows for anthropic-messages models, like upstream (#1331).
+test("the adaptive thinking switch is offered for anthropic-messages models only", () => {
+  const compatibility = source.slice(source.indexOf('{t("models.compatibility")}'));
+  assert.match(compatibility, /\(model\.api \?\? provider\.api\) === "anthropic-messages" && \(/);
+  assert.match(compatibility, /label=\{t\("models\.adaptiveThinking"\)\}/);
+  assert.match(compatibility, /setCompatFlag\(model, "forceAdaptiveThinking", v, provider\.compat\?\.\["forceAdaptiveThinking"\] === true\)/);
+  assert.match(compatibility, /compat\.forceAdaptiveThinking/);
 });
 
 test("editing a header preserves row order and stable identities", () => {
