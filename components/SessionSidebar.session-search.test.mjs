@@ -50,9 +50,20 @@ test("the search row confirms content search with Enter, not a mode button", () 
 test("selecting a result carries the entry id so the chat can jump to the match", () => {
   // SessionSearch hands (session, entryId, blockIndex) to the sidebar, which
   // forwards them to AppShell.handleSelectSession -> setSearchTarget.
-  assert.match(searchSource, /onSelectSession\(session, entryId, blockIndex\)/);
+  // Plus: ported pi-web 7c0778a8 (#1318) — a title hit passes no entryId, so
+  // the session opens without jumping to block 0.
+  assert.match(searchSource, /onSelectSession\(session, titleMatch \? undefined : entryId, blockIndex\)/);
   assert.match(source, /onSelectSession\(s, false, entryId, blockIndex\)/);
   assert.match(routeSource, /searchSessionContents\(sessions, query, request\.signal\)/);
+});
+
+test("a title hit highlights the title and hides the empty snippet", () => {
+  assert.match(searchSource, /response\?\.results\.map\(\(\{ session, entryId, blockIndex, titleMatch, before, match, after \}\)/);
+  assert.match(
+    searchSource,
+    /\{titleMatch \? <>\{before\}<mark className="rounded-sm bg-accent\/20 text-text">\{match\}<\/mark>\{after\}<\/> : session\.name \|\| session\.firstMessage\}/,
+  );
+  assert.match(searchSource, /\{!titleMatch && \(/);
 });
 
 test("content-search rows label chats without exposing the hidden workspace path", () => {
