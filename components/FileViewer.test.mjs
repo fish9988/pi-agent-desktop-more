@@ -3,8 +3,12 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import React from "react";
 import ts from "typescript";
+import { createJiti } from "jiti";
 
 const source = await readFile(new URL("./FileViewer.tsx", import.meta.url), "utf8");
+const cssSource = await readFile(new URL("../app/plus.css", import.meta.url), "utf8");
+const jiti = createJiti(import.meta.url);
+const { forkLocalePlugins } = await jiti.import("../lib/i18n/locale-plugins.ts");
 
 test("large source previews bypass the per-line syntax highlighter", () => {
   assert.match(source, /const SOURCE_HIGHLIGHT_MAX_LINES = 1_000;/);
@@ -70,4 +74,20 @@ test("lightweight source rows are skipped for highlighted, diff, and preview vie
 test("markdown preview links carry PDF page fragments", () => {
   assert.match(source, /parsePdfPageFragment/);
   assert.match(source, /onOpenFile\(linkedFile, parsePdfPageFragment\(href\) \?\? undefined\)/);
+});
+
+// Plus: ported pi-web 246c1f20 — the dropped @@ headers made two hunks read as
+// if their lines were adjacent, and the collapsed-lines marker was hard-coded
+// English.
+test("the diff view keeps gap rows and labels them through i18n", () => {
+  assert.match(source, /if \(row\.type === "gap"\) return \[row\];/);
+  assert.match(source, /const isShown = \(j: number\) => diff\[j\]\.type !== "gap" && visible\.has\(j\);/);
+  assert.match(source, /seg\.count === null \? "⋯" : `⋯ \$\{diffGapLabel\(seg\.count, t\)\}`/);
+  assert.doesNotMatch(source, /unchanged lines \.\.\./);
+  assert.match(cssSource, /\.diff-gap-row \{/);
+
+  for (const { id, messages } of forkLocalePlugins) {
+    assert.ok(messages["diff.unchangedLine"], `${id} needs the gap label`);
+    assert.match(messages["diff.unchangedLines"], /\{count\}/, `${id} placeholder`);
+  }
 });

@@ -630,3 +630,57 @@ test("keeps the registered name where no result names the server and tool", (t) 
   });
   assert.match(textOf(html), /mcp__docs_v2__search_pages\{\}/);
 });
+
+// Plus: ported pi-web 246c1f20 — the dropped @@ headers made two hunks read as
+// if their lines were adjacent in the file. Both view modes now show a gap row.
+function withDiffMode(mode, run) {
+  const previous = globalThis.window;
+  globalThis.window = { localStorage: { getItem: (key) => (key === "pi-diff-view-mode" ? mode : null), setItem() {} } };
+  try {
+    return run();
+  } finally {
+    globalThis.window = previous;
+  }
+}
+
+const hunkA = "@@ -3,3 +3,3 @@";
+const hunkB = "@@ -20,3 +20,4 @@";
+const gapPatch = ["--- a/demo.ts", "+++ b/demo.ts", hunkA, " a", "-b", "+B", " c", hunkB, " x", "+y", " z", " w"].join("\n");
+const v4aPatch = ["*** Begin Patch", "*** Update File: c.ts", "@@ a", "-x", "+y", "@@ b", " ctx", "-q", "+r", "*** End Patch"].join("\n");
+
+test("marks the lines a diff leaves out between hunks in both view modes", (t) => {
+  const block = { type: "toolCall", toolCallId: "call-gap-1", toolName: "edit", input: {} };
+  const result = {
+    role: "toolResult",
+    toolCallId: block.toolCallId,
+    content: [{ type: "text", text: "Edited demo.ts" }],
+    details: { patch: gapPatch },
+  };
+  setToolCallExpanded(block.toolCallId, true);
+  t.after(() => setToolCallExpanded(block.toolCallId, false));
+  for (const mode of ["split", "unified"]) {
+    const html = withDiffMode(mode, () => renderMessage({
+      role: "assistant",
+      provider: "anthropic",
+      model: "claude-test",
+      content: [block],
+    }, { toolResults: new Map([[block.toolCallId, result]]) }));
+    assert.match(html, /class="diff-gap-row"/, mode);
+    assert.match(html, /⋯ 14 unchanged lines/, mode);
+  }
+});
+
+test("shows a bare ellipsis where a gap's count is unknown", (t) => {
+  // V4A chunks carry no line numbers, so the gap between them has no count.
+  const block = { type: "toolCall", toolCallId: "call-gap-2", toolName: "apply_patch", input: { input: v4aPatch } };
+  setToolCallExpanded(block.toolCallId, true);
+  t.after(() => setToolCallExpanded(block.toolCallId, false));
+  const html = withDiffMode("split", () => renderMessage({
+    role: "assistant",
+    provider: "anthropic",
+    model: "claude-test",
+    content: [block],
+  }, { toolResults: new Map() }));
+  assert.match(html, /class="diff-gap-row">⋯</);
+  assert.doesNotMatch(html, /unchanged line/);
+});

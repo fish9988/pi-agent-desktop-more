@@ -640,3 +640,17 @@ html.plus-theme-transition *::after {
   border: var(--hairline) solid var(--border);
   border-radius: 6px;
 }
+
+/* ---- Plus: diff gap rows (pi-web 246c1f20) ------------------------------- */
+/* The unchanged lines a patch leaves out between two hunks. A full-width band
+   in the diff's own panel colour, so it reads as a break in the file rather
+   than as a line of the file, in light and dark themes alike. */
+.diff-gap-row {
+  grid-column: 1 / -1;
+  padding: 0 10px;
+  color: var(--text-dim);
+  background: var(--bg-panel);
+  border-top: var(--hairline) solid var(--border);
+  border-bottom: var(--hairline) solid var(--border);
+  user-select: none;
+}

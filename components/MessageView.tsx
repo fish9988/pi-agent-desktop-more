@@ -10,7 +10,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { useDiffViewMode } from "@/hooks/useDiffViewMode";
 import { parseCompactionSummary } from "@/lib/compaction-summary";
 import { getAssistantErrorMessage, getThinkingPreview, hasAssistantAnswer, isAssistantTruncated, isEmptyThinkingBlock } from "@/lib/message-display";
-import { parseUnifiedPatch, type SplitDiffCell, type SplitDiffFile } from "@/lib/patch";
+import { diffGapLabel, parseUnifiedPatch, type SplitDiffCell, type SplitDiffFile } from "@/lib/patch";
 import { applyPatchPreviewToFiles, applyPatchResultHasFailures, extractApplyPatchPaths, getApplyPatchInputText, parseApplyPatchInput } from "@/lib/apply-patch";
 import { isApplyPatchToolName, isEditToolName } from "@/lib/tool-names";
 import { isToolCallExpanded, setToolCallExpanded } from "@/lib/tool-call-expansion";
@@ -1409,6 +1409,10 @@ function SplitFilesView({ files, mode = "split" }: { files: SplitDiffFile[]; mod
             <div>
               {file.rows.flatMap((row, rowIndex) => {
                 if (row.type === "hunk") return [];
+                // Plus: ported pi-web 246c1f20 — the lines a diff leaves out
+                // between two hunks get their own row, so two hunks never read
+                // as if their lines were adjacent in the file.
+                if (row.type === "gap") return [<DiffGapRow key={`${rowIndex}-gap`} count={row.count} />];
                 const cells = [];
                 const { left, right } = row;
                 if (left.type === "removed") {
@@ -1429,6 +1433,9 @@ function SplitFilesView({ files, mode = "split" }: { files: SplitDiffFile[]; mod
                 if (row.type === "hunk") {
                   return null;
                 }
+                if (row.type === "gap") {
+                  return <DiffGapRow key={rowIndex} count={row.count} />;
+                }
 
                 return (
                   <div key={rowIndex} style={{ display: "contents" }}>
@@ -1441,6 +1448,16 @@ function SplitFilesView({ files, mode = "split" }: { files: SplitDiffFile[]; mod
           )}
         </div>
       ))}
+    </div>
+  );
+}
+
+/** The unchanged lines a diff leaves out between two hunks (pi-web 246c1f20). */
+function DiffGapRow({ count }: { count: number | null }) {
+  const { t } = useI18n();
+  return (
+    <div className="diff-gap-row">
+      {count === null ? "⋯" : `⋯ ${diffGapLabel(count, t)}`}
     </div>
   );
 }
