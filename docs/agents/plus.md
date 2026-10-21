@@ -164,6 +164,7 @@ Start-Process "<…>\Pi Agent Plus Test_*_x64-setup.exe" -ArgumentList '/S','/D=
 - 每周一 01:00 UTC，`upstream-watch.yml` 会把新提交汇总成 Issue（#1 是第一份）。用户选好要哪些后，移植完运行 `node scripts/upstream-reviewed.mjs` 记为已看。
 - 已移植的：
   - pi-web #1176、#1181、#1191（性能），#1334、#1345、cf3ebfba（预览密钥轮换），1ddaf11f（#1039）。
+  - pi-web 5a2f991b（#1307 子目录后仍能打开仓库根会话）、bc762a3e（#1319「在此提问」光标留在引用末尾）、7c0778a8（#1318 改过名/自动生成标题的会话搜索）、35af7102（#1329 终端跟随聊天字号）、42909b6d（.agents/skills 归到 skills.sh 分组）。
   - abcwyc #127。
 - 已决定不移植：#1183（代码语言按需加载）。Plus 本来就静态注册了 33 种语言，用不上。
 - abcwyc 那一层的规则（上游合并哨兵、拒绝过的 UI 等）见 `AGENTS.md` 后半部分和 `docs/agents/fork-*.md`，仍然有效。
