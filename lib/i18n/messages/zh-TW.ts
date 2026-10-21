@@ -1400,6 +1400,7 @@ export const zhTWLocale: LocalePlugin = {
     "models.discoverySelectShown": "選取目前顯示的項目",
     "models.discoveryNoMatches": "找不到相符的模型。",
     "models.configUnreadable": "無法讀取 models.json，為避免覆寫已停用儲存。請修正該檔案後重新開啟此面板。{error}",
+    "models.applyHelp": "已開啟的會話在重新選擇該模型後套用儲存的變更。",
     "models.providerNameTaken": "已存在名為「{name}」的 Provider，請換一個名稱。",
     "models.discoveryAdded": "已新增",
     "models.discoveryShowing": "顯示前 {shown} 個，共 {total} 個",

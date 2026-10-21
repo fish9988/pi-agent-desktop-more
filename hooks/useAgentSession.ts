@@ -2284,6 +2284,35 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     loadModels().catch(() => {});
   }, [loadModels]);
 
+  // Plus: ported pi-web 0347c5d4 (#1287). Choosing the model that is already selected
+  // sends `set_model` again so the server can re-read models.json and rebind an edited
+  // definition on an open session. The server drops an unchanged model without writing
+  // anything, so an unchanged reselect does not touch the transcript and must not run
+  // the `loadSession` a real switch needs (no racing load, no dropped thinking level).
+  // Only the routed-model hint and the model list need a quiet refresh.
+  const handleModelReselect = useCallback(async (provider: string, modelId: string) => {
+    const sid = sessionIdRef.current;
+    if (!sid || isNew || modelSwitchPendingRef.current) return;
+    try {
+      const selected = await sendAgentCommand<{ provider: string; id: string }>(sid, { type: "set_model", provider, modelId });
+      if (sessionIdRef.current !== sid) return;
+      setLiveModel({ provider: selected.provider, modelId: selected.id });
+      sendAgentCommand<AgentStateResponse>(sid, { type: "get_state" })
+        .then((state) => {
+          if (sessionIdRef.current === sid) syncLiveModel(state);
+        })
+        .catch(() => undefined);
+      reloadModelsQuietly();
+    } catch (e) {
+      console.error("Failed to reapply model:", e);
+      if (sessionIdRef.current !== sid) return;
+      addNotice({
+        type: "error",
+        message: `Failed to apply saved model settings: ${e instanceof Error ? e.message : String(e)}`,
+      });
+    }
+  }, [addNotice, isNew, reloadModelsQuietly, syncLiveModel]);
+
   const handleSetDefaultModel = useCallback(async (provider: string, modelId: string) => {
     try {
       await saveDefaultPreferences({ provider, modelId });
@@ -3028,7 +3057,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     lastUserMsgRef, pendingScrollToUserRef, initialScrollDoneRef,
     // Actions
     branchSummaryPending, handleAbortBranchSummary, routedModel,
-    handleSend, handleAbort, handleAbortRetry, handleFork, handleNavigate, handleModelChange,
+    handleSend, handleAbort, handleAbortRetry, handleFork, handleNavigate, handleModelChange, handleModelReselect,
     handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior, handleAbortCompaction, handleQueuedMessageAction,
     handleRecallQueue,
     handleBuiltinSlashCommand,
