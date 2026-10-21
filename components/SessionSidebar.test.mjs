@@ -216,7 +216,9 @@ test("a chat cwd skips worktree lookup and stays out of project pickers", () => 
   assert.match(source, /if \(!selectedCwd \|\| selectedCwdIsChat\) \{\s*setWorktreeState\(null\)/);
   assert.match(source, /const selectedProjectRoot = selectedProjectObject\?\.kind === "project"/);
   assert.match(source, /selectedCwd=\{selectedCwdProp && !isChatCwd\(selectedCwdProp\) \? selectedCwdProp : null\}/);
-  assert.match(source, /if \(isChatCwd\(cwd\)\) return projectSelection\(cwd, cwd, "chat"\)/);
+  // Plus: ported pi-web 5a2f991b (#1307) — the lookup moved to
+  // lib/sidebar-project.ts (projectForCwd), covered by lib/sidebar-project.test.mjs.
+  assert.match(source, /return projectForCwd\(cwd, \{ listing: worktreeState, sessions: allSessions, isChat: isChatCwd\(cwd\) \}\)/);
 });
 
 test("the project context menu reveals the project in the OS file manager", async () => {

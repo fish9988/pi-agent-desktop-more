@@ -5,7 +5,7 @@ import type { SessionInfo, SessionWorkspaceKind } from "@/lib/types";
 import { listSessionFamilies } from "@/lib/session-family";
 import { dispatchSessionRowContextMenu } from "@/lib/session-row-context-menu";
 import { skillExpansionToCommand } from "@/lib/slash-display";
-import { workspaceKeyOf } from "@/lib/workspace-memory";
+import { projectForCwd } from "@/lib/sidebar-project";
 import { useI18n } from "@/hooks/useI18n";
 import { formatCompactRelativeTime, formatRelativeTime } from "@/lib/i18n/format";
 import { createPortal } from "react-dom";
@@ -337,9 +337,13 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     if (!cwd) return null;
     if (isChatCwd(cwd)) return null;
     if (worktreeState && worktreeState.forCwd === cwd) return worktreeState.projectRoot;
-    // Any path in the loaded worktree list belongs to that project — covers
+    // Any path in a checkout's worktree list belongs to that project — covers
     // worktrees without sessions, so switching to them keeps the row mounted.
-    if (worktreeState?.worktrees.some((w) => w.path === cwd)) return worktreeState.projectRoot;
+    // A subdirectory's listing names the repo's checkouts under its own
+    // identity, so only a top-level listing may name them (pi-web 5a2f991b).
+    if (worktreeState?.isTopLevel && worktreeState.worktrees.some((w) => w.path === cwd)) {
+      return worktreeState.projectRoot;
+    }
     const match = allSessions.find((s) => s.cwd === cwd);
     return match?.projectRoot ?? cwd;
   }, [allSessions, isChatCwd, worktreeState]);
@@ -813,37 +817,15 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
 
   const restoredRef = useRef(false);
 
-  const projectSelection = useCallback((root: string, key: string, kind: SessionWorkspaceKind = "project"): ProjectSelection => ({
-    root,
-    key,
-    kind,
-  }), []);
-
   /** Resolve both display root and stable identity from server-provided data. */
   const projectFor = useCallback((cwd: string | null): ProjectSelection | null => {
     if (!cwd) return null;
-    if (isChatCwd(cwd)) return projectSelection(cwd, cwd, "chat");
     // Custom-path identity validation lives in ProjectPicker (the extraction
     // boundary this file's sentinel test guards); identity here resolves from
     // server-provided worktree and session data only.
-    if (worktreeState && worktreeState.forCwd === cwd) {
-      return projectSelection(worktreeState.projectRoot, worktreeState.projectKey);
-    }
-    // Any path in the loaded worktree list belongs to that project — covers
-    // worktrees without sessions, so switching to them keeps the row mounted.
-    if (worktreeState?.worktrees.some((w) => w.path === cwd)) {
-      return projectSelection(worktreeState.projectRoot, worktreeState.projectKey);
-    }
-    const match = allSessions.find((session) => (
-      session.cwd === cwd || (session.projectRoot ?? session.cwd) === cwd
-    ));
-    if (match?.workspaceKind === "chat") {
-      return projectSelection(match.cwd, match.cwd, "chat");
-    }
-    return match
-      ? projectSelection(match.projectRoot ?? match.cwd, workspaceKeyOf(match))
-      : projectSelection(cwd, cwd);
-  }, [worktreeState, allSessions, isChatCwd, projectSelection]);
+    // projectForCwd() holds the lookup (ported pi-web 5a2f991b, #1307).
+    return projectForCwd(cwd, { listing: worktreeState, sessions: allSessions, isChat: isChatCwd(cwd) });
+  }, [worktreeState, allSessions, isChatCwd]);
 
   // Selecting a directory is also the explicit "add project" action. If the
   // project was previously removed from the sidebar, make it visible again
