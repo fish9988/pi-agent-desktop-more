@@ -23,6 +23,8 @@ test("search result rows offer mention and download actions like the file tree",
   assert.match(source, /onAtMention\(getRelativeFilePath\(node\.fullPath, cwd\), node\.isDir\)/);
   assert.match(source, /<MentionIcon \/>/);
   assert.match(source, /encodeFilePathForApi\(node\.fullPath\)\}\?type=download/);
+  // Plus: the desktop WebView ignores `<a download>`; the click saves through saveLocalFileAs.
+  assert.match(source, /e\.preventDefault\(\);[\s\S]{0,600}saveLocalFileAs\(node\.fullPath, getFileName\(node\.fullPath\), href\)/);
 });
 
 test("keeps search on the bounded index and reports request failures", () => {

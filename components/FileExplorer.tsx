@@ -17,6 +17,7 @@ import { buildSearchTree, type SearchTreeNode } from "@/lib/search-tree";
 import { useI18n } from "@/hooks/useI18n";
 import { isImeComposing } from "@/lib/ime";
 import { openDomMenu } from "@/lib/dom-menu-store";
+import { appNotify } from "@/lib/notification-store";
 import {
   DeleteConfirm,
   FileTreeOpsContext,
@@ -521,7 +522,17 @@ export function TreeNode({
           <a
             href={`/api/files/${encodeFilePathForApi(node.fullPath)}?type=download`}
             download
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              // Plus: the desktop WebView ignores `<a download>`, so the click
+              // goes through the same save dialog as the file viewer's button
+              // (a plain browser download outside the desktop app).
+              e.preventDefault();
+              e.stopPropagation();
+              const href = e.currentTarget.getAttribute("href") ?? "";
+              void import("@/lib/desktop-native")
+                .then(({ saveLocalFileAs }) => saveLocalFileAs(node.fullPath, getFileName(node.fullPath), href))
+                .catch((error: unknown) => appNotify.error({ message: t("fileOps.failed", { reason: error instanceof Error ? error.message : String(error) }) }));
+            }}
             title={t("files.download")}
             style={{
               position: "absolute",

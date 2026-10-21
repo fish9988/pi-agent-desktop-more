@@ -7,7 +7,7 @@ _最后更新：2026-10-21_
 
 ## 当前状态
 
-- **最新发布：v1.6.0**（tag `v1.6.0`）：从上游周报 Issue #1 移植的 7 个修复、5 个功能和 1 个性能改进，详见 CHANGELOG-PLUS.md。
+- **最新发布：v1.6.1**：修复文件树下载按钮无反应、「在资源管理器中显示」打开错目录（正斜杠路径 + Rust 引号问题，改用 `raw_arg`）。v1.6.0 是上游周报 #1 的移植。
 - 用户的正式版 `D:\Pi Agent Plus` 是 **1.5.0**，用户会自己点「更新」升级到 1.6.0。
 - 测试版 `D:\Pi Agent Plus Test` 还是 1.5.0-test.16，没在运行。
 - 上游周报 #1 已处理并标记为已看（`.github/upstream-reviewed.json` 指向 pi-web `7c0778a8`、abcwyc `d414e9db`）。
@@ -23,6 +23,7 @@ _最后更新：2026-10-21_
 | 1.4.0 | 应用内更新（签名）、设置镜像到文件、主题库（OpenCode 32 个）和 VS Code 主题导入、问题列表导航、若干上游修复、每周上游报告 |
 | 1.4.1 | 用来验证应用内升级的版本；版本号显示完整的 vX.Y.Z |
 | 1.5.0 | 工作时间线、外观独立成页并带实时预览、粗体与标题字体、输入框下扩展标签、只显示费用的用量行、轻动效、移植 pi-web 0.12 性能、测试版打包 |
+| 1.6.1 | 文件树下载按钮、在资源管理器中显示 |
 | 1.6.0 | 上游周报 #1：子目录→根目录会话不再被关、在此提问光标、页内锚点、模型改动对已开会话生效、标题搜索、.agents/skills 分组、diff 省略行；Claude 自适应思考、单模型 Base URL、按服务商搜模型、内联音视频、终端字号跟随；状态轮询不带系统提示词 |
 
 ## 待办 / 候选
@@ -41,6 +42,10 @@ _最后更新：2026-10-21_
 - **性能**：在 WSL 里对 `/mnt/c` 上的本仓库跑 `git status` 要 6.1 s，Windows 原生 75 ms。Windows 盘上的项目不适合用 WSL 跑命令；放在 `~/` 里的 Linux 项目才合适。
 - pi 的 bash 工具支持传入自定义 `operations`（`createBashToolDefinition(cwd, { operations })`），可以用一个内置扩展把 `bash` 换成走 `wsl.exe` 的版本；`shellPath` 只能指向接受 `-c` 的 bash，不能直接指向 `wsl.exe`。
 - Codex 的做法：「Agent 环境」（Windows 原生 / WSL，全局，改完要重启）和「集成终端」（PowerShell / CMD / Git Bash / WSL）分开设置；社区要求按项目设置（openai/codex#17173）。
+
+## Shell 评测（2026-10-21）
+
+- `C:\pi-project\shell-bench\`：Opus 5.5 / Sonnet 5.5 / Gemini 4 Argon / DeepSeek V4.1 Flash × PowerShell 7 / Git Bash / WSL × 8 个任务 × 2 次 = 192 次。成功率几乎一样，没有 shell 语法错误；WSL 费用比 PS7 少 0–28%（DeepSeek 最多）。结论：Windows 默认 PS7 即可，WSL 选项只对 Linux 项目有价值，优先级下调。`wsl-bash.ts` 可作 WSL 扩展原型。
 
 ## 交接注意
 

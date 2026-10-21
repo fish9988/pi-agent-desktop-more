@@ -151,8 +151,14 @@ fn reveal_path_in_file_manager(path: &Path) -> Result<(), String> {
 
     #[cfg(target_os = "windows")]
     {
+        // Plus: explorer only understands backslashes (a `C:/a/b` path opens
+        // the Desktop with "Documents" selected), and it needs the quotes
+        // after the comma (`/select,"C:\a b\c"`): Rust's own quoting wraps the
+        // whole argument and explorer then falls back to Documents. Windows
+        // paths cannot contain `"`, so the raw argument is safe.
+        let native = path.to_string_lossy().replace('/', "\\");
         Command::new("explorer.exe")
-            .arg(format!("/select,{}", path.to_string_lossy()))
+            .raw_arg(format!("/select,\"{}\"", native))
             .creation_flags(CREATE_NO_WINDOW)
             .spawn()
             .map_err(|error| error.to_string())?;

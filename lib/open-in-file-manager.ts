@@ -23,7 +23,9 @@ export function fileManagerCommand(
   target: string,
 ): { command: string; args: string[] } | null {
   const command = FILE_MANAGER_BY_PLATFORM.get(platform);
-  return command ? { command, args: [target] } : null;
+  if (!command) return null;
+  // Plus: explorer.exe opens Documents for a forward-slash path (`C:/a/b`).
+  return { command, args: [platform === "win32" ? target.replace(/\//g, "\\") : target] };
 }
 
 /**
