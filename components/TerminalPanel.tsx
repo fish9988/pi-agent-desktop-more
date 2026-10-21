@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
+import { terminalFontSize, useChatAppearance } from "@/hooks/useChatAppearance";
 import { useI18n } from "@/hooks/useI18n";
 import { createTerminalWriter, terminalRequest } from "@/lib/terminal-client";
 import type { TerminalEvent } from "@/lib/terminal-manager";
@@ -29,6 +30,13 @@ export function TerminalPanel({ tab, active, onRestart, onClosed, onCloseError }
   const [error, setError] = useState<string | null>(null);
   const [exitCode, setExitCode] = useState<number | null>(null);
   const [reconnectKey, setReconnectKey] = useState(0);
+  // Plus: ported pi-web 35af7102 (#1329) — the terminal follows the chat font
+  // size (13px at the 14px default). A slider move updates the live xterm and
+  // refits, whose onResize sends the new cols/rows to the shell.
+  const fontSize = terminalFontSize(useChatAppearance().fontSize);
+  const fontSizeRef = useRef(fontSize);
+  fontSizeRef.current = fontSize;
+  const refitRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     const container = containerRef.current;
@@ -46,7 +54,7 @@ export function TerminalPanel({ tab, active, onRestart, onClosed, onCloseError }
     const terminal = new Terminal({
       cursorBlink: true,
       fontFamily: getComputedStyle(container).getPropertyValue("--font-mono").trim() || "monospace",
-      fontSize: 13,
+      fontSize: fontSizeRef.current,
       lineHeight: 1.25,
       scrollback: 8000,
       screenReaderMode: true,
@@ -93,6 +101,7 @@ export function TerminalPanel({ tab, active, onRestart, onClosed, onCloseError }
     });
     const resizeObserver = new ResizeObserver(fitAndResize);
     resizeObserver.observe(container);
+    refitRef.current = () => fitAndResize();
 
     const connect = () => {
       if (disposed || exited || !navigator.onLine) return;
@@ -174,12 +183,21 @@ export function TerminalPanel({ tab, active, onRestart, onClosed, onCloseError }
       window.removeEventListener("online", connect);
       terminal.dispose();
       terminalRef.current = null;
+      refitRef.current = () => {};
     };
   }, [id, cwd, restored, reconnectKey]);
 
   useEffect(() => {
     if (active) terminalRef.current?.focus();
   }, [active]);
+
+  useEffect(() => {
+    const terminal = terminalRef.current;
+    if (!terminal || terminal.options.fontSize === fontSize) return;
+    // A refit sends the new cols/rows to the shell through onResize, as a font change does.
+    terminal.options.fontSize = fontSize;
+    refitRef.current();
+  }, [fontSize]);
 
   useEffect(() => {
     if (!tab.closing) return;

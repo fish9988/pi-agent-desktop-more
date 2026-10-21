@@ -97,7 +97,7 @@ npx eslint components lib hooks app scripts --quiet
 | 主题系统 | `lib/plus-theme.ts`（设置、字体栈、初始化脚本）、`lib/plus-theme-catalog.ts`（调色板转 CSS 变量、内置主题、`compileThemeCss`）、`lib/plus-user-themes.ts` 加 `app/api/plus-themes/**`、`lib/plus-theme-import.ts`（导入 VS Code 主题）、`lib/plus-theme-gallery-opencode.ts`（由 `scripts/build-theme-gallery.mjs` 生成）、`hooks/usePlusTheme.ts`、`components/PlusAppearanceRuntime.tsx`、`PlusThemeEditor.tsx`、`PlusThemeGallery.tsx` |
 | 字体 | `lib/system-fonts.ts` 加 `/api/system-fonts`、`components/FontPicker.tsx`（角色：ui、chat、chatBold、code） |
 | 外观设置页 | `components/AppearanceSettingsPage.tsx`、`AppearancePreview.tsx`（用真实组件渲染示例对话）、`PlusAppearanceSettings.tsx`、`lib/settings-navigation.ts`（分区 `appearance`） |
-| 聊天宽度与字号 | `hooks/useChatAppearance.ts`、`components/ChatColumnResizeHandles.tsx` |
+| 聊天宽度与字号 | `hooks/useChatAppearance.ts`（`terminalFontSize()` 让终端跟随聊天字号，移植 pi-web #1329）、`components/ChatColumnResizeHandles.tsx` |
 | 工作过程 | `lib/work-details.ts` 加 `hooks/useWorkDetails.ts`（四档：精简、标准、详细、完整）、`components/WorkGroups.tsx`、**时间线** `lib/work-timeline.ts` 加 `components/WorkTimeline.tsx`（只在精简、标准档使用） |
 | 流式渲染（移植 pi-web #1191） | `lib/streaming-message.ts`（`createStreamingStore`）、`hooks/useStreamingSelector.ts`、`components/LiveStream.tsx`；`useAgentSession` 返回 `streamingStore` |
 | Markdown 与高亮性能（移植 #1176、#1181） | `lib/markdown-blocks.ts`、`lib/highlight-queue.ts`、`components/MarkdownBody.tsx`、`MermaidBlock.tsx` 里的 `CodeBlock` |

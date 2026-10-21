@@ -10,7 +10,7 @@ const settingsPanel = await readFile(new URL("./AppearanceSettingsPage.tsx", imp
 const globals = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
 const chatAppearanceHook = await readFile(new URL("../hooks/useChatAppearance.ts", import.meta.url), "utf8");
 const jiti = createJiti(import.meta.url);
-const { clampChatContentWidth, clampChatContentWidthPercent, chatContentMaxWidthValue, clampChatContentFontSize } = await jiti.import("../hooks/useChatAppearance.ts");
+const { clampChatContentWidth, clampChatContentWidthPercent, chatContentMaxWidthValue, clampChatContentFontSize, terminalFontSize } = await jiti.import("../hooks/useChatAppearance.ts");
 
 const widthVariable = /var\(--chat-content-max-width, 820px\)/g;
 
@@ -60,4 +60,23 @@ test("chat font size preserves the default and bounds stored or supplied values"
   assert.equal(clampChatContentFontSize("18"), 18);
   assert.equal(clampChatContentFontSize(18.7), 19);
   assert.equal(clampChatContentFontSize(30), 24);
+});
+
+// Plus: ported pi-web 35af7102 (#1329) — the terminal follows the chat size.
+test("the terminal keeps 13px at the default chat size and moves with the slider", () => {
+  for (const value of [undefined, null, "invalid", 14]) assert.equal(terminalFontSize(value), 13);
+  assert.equal(terminalFontSize(12), 11);
+  assert.equal(terminalFontSize(18), 17);
+  assert.equal(terminalFontSize(24), 23);
+  // Plus's slider stops at 24, so the terminal follows to 23.
+  assert.equal(terminalFontSize(30), 23);
+});
+
+test("the terminal panel applies the derived size and refits on a change", async () => {
+  const terminalPanel = await readFile(new URL("./TerminalPanel.tsx", import.meta.url), "utf8");
+  assert.match(terminalPanel, /const fontSize = terminalFontSize\(useChatAppearance\(\)\.fontSize\)/);
+  assert.match(terminalPanel, /fontSize: fontSizeRef\.current/);
+  assert.doesNotMatch(terminalPanel, /fontSize: 13,/);
+  assert.match(terminalPanel, /terminal\.options\.fontSize = fontSize;/);
+  assert.match(terminalPanel, /refitRef\.current\(\);/);
 });
