@@ -106,6 +106,27 @@ test("the adaptive thinking switch is offered for anthropic-messages models only
   assert.match(compatibility, /compat\.forceAdaptiveThinking/);
 });
 
+// Plus: ported pi-web dd8201b9 (#1288) — per-model Base URL override.
+test("a model's Advanced settings edit models[].baseUrl above the API override", () => {
+  const modelDetail = source.slice(
+    source.indexOf("function ModelDetail"),
+    source.indexOf("// ── OAuth detail"),
+  );
+  const baseUrlField = modelDetail.indexOf('t("models.baseUrlOverride")');
+  const apiField = modelDetail.indexOf('t("models.apiOverride")');
+
+  assert.ok(baseUrlField >= 0);
+  assert.ok(apiField > baseUrlField);
+  // Blank removes the key so the model inherits the provider URL again.
+  assert.match(modelDetail, /onChange=\{\(v\) => set\("baseUrl", v\.trim\(\) \|\| undefined\)\}/);
+  assert.match(modelDetail, /placeholder=\{provider\.baseUrl \?\? t\("models\.providerDefaults"\)\}/);
+  assert.match(modelDetail, /t\("models\.baseUrlHelp"\)/);
+  // The catalog lookup follows the effective URL, and the summary names the override.
+  assert.match(modelDetail, /const effectiveBaseUrl = model\.baseUrl \?\? provider\.baseUrl/);
+  assert.match(modelDetail, /if \(effectiveBaseUrl\?\.trim\(\)\) params\.set\("baseUrl", effectiveBaseUrl\.trim\(\)\)/);
+  assert.match(modelDetail, /model\.baseUrl \? t\("models\.baseUrlOverride"\) : null/);
+});
+
 test("editing a header preserves row order and stable identities", () => {
   const rows = [
     { id: 10, name: "X-First", value: "one" },

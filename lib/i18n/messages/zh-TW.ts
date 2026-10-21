@@ -1438,6 +1438,8 @@ export const zhTWLocale: LocalePlugin = {
     "models.compatSummary": "相容性：{count}",
     "models.thinkingSummary": "思考等級：{count}",
     "models.apiOverride": "API 覆寫",
+    "models.baseUrlOverride": "Base URL 覆寫",
+    "models.baseUrlHelp": "僅此模型使用該位址，留空則使用提供商的位址。",
     "models.headers": "Headers",
     "models.headersHelp": "加入此模型的請求，並覆寫 Provider 的同名 Header。",
     "models.compatibility": "相容性",
