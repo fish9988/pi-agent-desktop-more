@@ -169,6 +169,12 @@ export function renameProviderEntry<T extends ModelsConfigDraft>(
   return { ...config, providers: Object.fromEntries(entries) };
 }
 
+/** Add provider's search: a provider matches by its id or its shown name, case-insensitive. */
+export function providerMatchesSearch(search: string, id: string, label: string): boolean {
+  const query = search.trim().toLowerCase();
+  return !query || label.toLowerCase().includes(query) || id.toLowerCase().includes(query);
+}
+
 /** The spec fields a `modelOverrides` entry can set that the model form edits as numbers. */
 export const MODEL_SPEC_FIELDS = ["contextWindow", "maxTokens"] as const;
 

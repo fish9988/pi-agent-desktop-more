@@ -11,6 +11,7 @@ const {
   modelCostToDraft,
   modelOverrideSpecs,
   parseCompleteModelCost,
+  providerMatchesSearch,
   renameProviderEntry,
   resolveModelSpecHint,
   savedModelIds,
@@ -334,4 +335,19 @@ test("an override wins over the form value and an empty field names pi's fallbac
 test("spec inputs never use a bare number as placeholder (#131)", () => {
   assert.doesNotMatch(source, /placeholder="128000"|placeholder="16384"/);
   assert.match(source, /t\("models\.specNotSet"\)/);
+});
+
+// Plus: ported pi-web df163cdb (#1308) — OAuth providers match by id as well as name.
+test("Add provider's search matches a provider by id or name", () => {
+  const oauth = { id: "fixture-subscription-id", name: "Fixture Subscription" };
+  assert.equal(providerMatchesSearch("subscription", oauth.id, oauth.name), true);
+  assert.equal(providerMatchesSearch(" FIXTURE-SUBSCRIPTION-ID ", oauth.id, oauth.name), true);
+  assert.equal(providerMatchesSearch("missing", oauth.id, oauth.name), false);
+  assert.equal(providerMatchesSearch("  ", oauth.id, oauth.name), true);
+  assert.equal(providerMatchesSearch("", oauth.id, oauth.name), true);
+});
+
+test("both Add provider lists go through providerMatchesSearch (#1308)", () => {
+  assert.match(source, /availableOAuth = oauthProviders\.filter\(\(p\) => !p\.loggedIn && providerMatchesSearch\(q, p\.id, p\.name\)\)/);
+  assert.match(source, /availableApiKey = apiKeyProviders\.filter\(\(p\) => !p\.configured && providerMatchesSearch\(q, p\.id, p\.displayName\)\)/);
 });

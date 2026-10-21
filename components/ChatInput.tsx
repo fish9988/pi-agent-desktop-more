@@ -305,16 +305,9 @@ function compareModelOptions(a: ModelOption, b: ModelOption): number {
     || MODEL_OPTION_COLLATOR.compare(a.modelId, b.modelId);
 }
 
-export function filterModelOptions(options: ModelOption[], query: string): ModelOption[] {
-  const normalizedQuery = query.trim().toLocaleLowerCase();
-  if (!normalizedQuery) return options;
-
-  return options.filter((option) => (
-    `${option.name} ${option.modelId}`
-      .toLocaleLowerCase()
-      .includes(normalizedQuery)
-  ));
-}
+// Plus: ported pi-web df163cdb (#1308) — the filter lives in ModelSelector only; re-export it here
+// (upstream dropped this duplicate after the selector started matching providers).
+export { filterModelOptions } from "./ModelSelector";
 
 function subscribeUpwardMenuMaxHeight(
   menu: HTMLElement,
