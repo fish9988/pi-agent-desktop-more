@@ -1,3 +1,21 @@
+# Pi Agent Plus — 先读这里
+
+本仓库是 **Pi Agent Plus**（`fish9988/pi-agent-desktop-more`，分支 `plus`），用户个人使用、仅限 Windows 的独立桌面版。用户用中文交流。
+
+1. [docs/agents/plus.md](docs/agents/plus.md)：环境与开发命令、代码地图、样式规则、构建发布、上游跟进。**改代码前必读。**
+2. [docs/agents/plus-status.md](docs/agents/plus-status.md)：当前版本、待办、交接注意。**结束工作或换会话前必须更新。**
+3. [VERSIONING-PLUS.md](VERSIONING-PLUS.md) 和 [CHANGELOG-PLUS.md](CHANGELOG-PLUS.md)：版本规则和发布流程，以及给用户看的更新记录。
+
+Plus 硬规则（细节见 plus.md §9）：
+- **`D:\Pi Agent Plus` 是用户正在用的正式版，这个 Agent 很可能就跑在里面**。不要结束它的进程，不要覆盖安装，不要改 `plus-prefs.json`。验证新版本用测试版（`D:\Pi Agent Plus Test`，端口 38591）或开发服务器（30141）。
+- 不同步上游，也不整体合并。上游改动只手工挑拣或移植。
+- 本机没有 Rust 和 VS，构建全靠 GitHub Actions。在本 shell 里先 `$env:NODE_ENV="development"`。完整的 `npm test` 会卡住，只跑相关的测试文件。
+- Plus 的 CSS 只放在 `app/plus.css` 和 `app/plus-theme.css`。tag 必须等于 `plus-version.json`。
+
+下面是从 pi-web 和 abcwyc 继承来的开发笔记，仍然适用；与 Plus 文档冲突时以 Plus 文档为准。
+
+---
+
 # Pi Web - Development Notes
 
 ## Quick Start
