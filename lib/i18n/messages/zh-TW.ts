@@ -557,6 +557,8 @@ export const zhTWLocale: LocalePlugin = {
     "plus.appearanceMode": "明暗模式",
     "plus.chatLayout": "聊天排版",
     "plus.previewLabel": "即時預覽",
+    "chat.fileOutsideProject": "專案外",
+    "chat.extensionKeysHere": "按鍵送往面板",
     "plus.appearanceTitle": "Plus 外觀",
     "plus.style": "介面風格",
     "plus.style.clean": "簡潔",

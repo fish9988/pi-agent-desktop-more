@@ -1420,6 +1420,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const canQueueStreamingMessage = hasInputText || attachedImages.length > 0 || attachedFiles.length > 0;
   const canSend = canQueueStreamingMessage && !workspaceUnavailable;
   const showStop = isStreaming && !canQueueStreamingMessage;
+  // Plus 1.7: while a run is going and there is something to send, both ways
+  // in are buttons: Send (Enter, unchanged: a follow-up when the session takes
+  // one) and Steer, plus Stop, which otherwise hides until the box is empty.
+  const showRunChoices = isStreaming && canQueueStreamingMessage && !compact && Boolean(onSteer) && Boolean(onFollowUp);
   // Warn when images are attached but the selected model is known not to accept
   // image input (#584), including a resolved default. Unknown models stay silent.
   const showImageUnsupportedWarning = (
@@ -2353,8 +2357,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           </div>
         )}
 
-        {/* Main input */}
-        <div style={{ position: "relative", minWidth: 0 }}>
+        {/* Main input. Plus: the frame is the composer card in the clean theme
+            engine, so the controls row sits inside it (app/plus-theme.css). */}
+        <div className="chat-composer-frame" style={{ position: "relative", minWidth: 0 }}>
           {historyMenuOpen && inputHistory.length > 0 && (
             <div
               ref={historyMenuRef}
@@ -2833,9 +2838,20 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             />
           )}
 
+          {showRunChoices && (
+            <button
+              type="button"
+              className="composer-steer-button"
+              onClick={() => void sendQueued("steer")}
+              disabled={!canSend}
+              title={t("chat.steerHint")}
+            >
+              {t("chat.steer")}
+            </button>
+          )}
           <button
             type="button"
-            className={compact ? "native-primary-button" : "native-primary-button composer-send-button"}
+            className={compact ? "native-primary-button" : `native-primary-button composer-send-button${showRunChoices ? " is-labeled" : ""}`}
             data-action={showStop ? "stop" : isStreaming ? "queue" : "send"}
             onClick={showStop ? onAbort : isStreaming ? () => void sendQueued(onFollowUp ? "followup" : "steer") : handleSend}
             disabled={!showStop && (!canSend || (isStreaming && !onFollowUp && !onSteer))}
@@ -2851,7 +2867,19 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               </svg>
             )}
             {compact && t(showStop ? "chat.stop" : "chat.send")}
+            {showRunChoices && <span className="composer-send-label">{t("chat.followUp")}</span>}
           </button>
+          {showRunChoices && onAbort && (
+            <button
+              type="button"
+              className="composer-stop-button composer-run-stop"
+              onClick={onAbort}
+              title={t("chat.stopAgent")}
+              aria-label={t("chat.stopAgent")}
+            >
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="3" y="3" width="10" height="10" rx="2" /></svg>
+            </button>
+          )}
           </div>
           {/* Session controls sit below the input card, not inside it. */}
           </div>

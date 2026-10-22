@@ -72,6 +72,11 @@ export interface ThemeTypography {
   reading?: string;
   /** Markdown headings font family list. */
   heading?: string;
+  /**
+   * Bold text and table heads in replies, for reading fonts whose bold is
+   * weak or synthesized. Only applies while the user has not picked a chat font.
+   */
+  bold?: string;
   /** Assistant reply size in px before the chat size offset (default 14). */
   readingSize?: number;
   readingLeading?: number;
@@ -96,6 +101,10 @@ export interface BuiltinTheme extends ThemeDefinition {
   description?: { en: string; zh: string };
 }
 
+/** The redesign's reading pair: LXGW Neo ZhiSong for text, Noto Serif SC for bold and headings. */
+const PLUS_READING = "\"霞鹜新致宋＋\", \"LXGW Neo ZhiSong Plus\", \"LXGW Neo ZhiSong\", \"Noto Serif SC\", \"Source Han Serif SC\", Georgia, serif";
+const PLUS_BOLD = "\"Noto Serif SC\", \"Source Han Serif SC\", \"Source Han Serif\", Georgia, serif";
+
 const SERIF_READING = "\"Anthropic Serif\", \"Copernicus\", \"Tiempos Text\", Georgia, \"Noto Serif SC\", \"Source Han Serif SC\", \"Source Han Serif\", \"Songti SC\", \"STSong\", \"SimSun\", serif";
 
 const s = (
@@ -107,6 +116,30 @@ const s = (
 });
 
 export const BUILTIN_THEMES: readonly BuiltinTheme[] = [
+  {
+    // The redesign (see .design/ui-demo): layered surfaces with clear steps in
+    // both modes, one blue accent, serif reading at 16px / 1.85.
+    id: "plus",
+    name: { en: "Plus", zh: "Plus 分层", tw: "Plus 分層" },
+    description: { en: "Layered surfaces, blue accent, serif reading", zh: "分层底色 + 蓝色强调，衬线阅读" },
+    base: "clean",
+    typography: { reading: PLUS_READING, heading: PLUS_BOLD, bold: PLUS_BOLD, readingSize: 16, readingLeading: 1.85 },
+    radius: 8,
+    light: {
+      bg: "#eceef2", panel: "#eceef2", workbench: "#fafbfc", surface: "#ffffff", text: "#1b1b1f", muted: "#55565e", dim: "#7a7b83",
+      accent: "#2f6fed", fill: "#1f5fe0", border: "#dfe2e8", user: "#ffffff", code: "#f2f4f7", codeHeader: "#e8ebf0",
+      inlineCode: "#2a3a58", inlineCodeBg: "#e9edf3", marker: "#8a8b93",
+      danger: "#d64545", success: "#1e9a53", warning: "#b7791f",
+      syntax: s("#8d8e96", "#8a3ffc", "#2f7d32", "#b4530f", "#1f5fe0", "#9a6a00", "#2357c4", "#55565e", "#7a7b83", "#c0306b", "#b4530f", "#c2410c", "#232328", "#1e9a53", "#d64545"),
+    },
+    dark: {
+      bg: "#131417", panel: "#131417", workbench: "#1f2024", surface: "#27282d", text: "#ececef", muted: "#b1b2b9", dim: "#8a8b93",
+      accent: "#7ea8ff", accentText: "#0c1222", fill: "#7ea8ff", fillText: "#0c1222", border: "#303137", user: "#27282d", code: "#17181b", codeHeader: "#26272c",
+      inlineCode: "#dfe5f7", inlineCodeBg: "#2c2d33", marker: "#8a8b93",
+      danger: "#ff8080", success: "#63cf8e", warning: "#e9b65c",
+      syntax: s("#6f7079", "#c9a0ff", "#9fd39a", "#f0b986", "#8cc2ff", "#e9c46a", "#a9c7ff", "#b1b2b9", "#8e8f97", "#f29bb0", "#f0b986", "#ff9a7a", "#ececef", "#63cf8e", "#ff8080"),
+    },
+  },
   {
     id: "clean",
     name: { en: "Clean", zh: "简洁", tw: "簡潔" },
@@ -327,7 +360,8 @@ export const BUILTIN_THEMES: readonly BuiltinTheme[] = [
   },
 ];
 
-export const DEFAULT_THEME_ID = "clean";
+/** Plus 1.7: the redesign theme is the default for anyone who has not picked one. */
+export const DEFAULT_THEME_ID = "plus";
 
 export function findBuiltinTheme(id: string): BuiltinTheme | undefined {
   return BUILTIN_THEMES.find((theme) => theme.id === id);
@@ -429,6 +463,7 @@ export function sharedTokens(def: ThemeDefinition): Record<string, string> {
   const t = def.typography;
   if (t?.reading) tokens["--plus-reading-font"] = t.reading;
   if (t?.heading) tokens["--plus-heading-font"] = t.heading;
+  if (t?.bold) tokens["--plus-bold-font"] = t.bold;
   if (t?.readingSize) tokens["--plus-reading-size"] = `${t.readingSize}px`;
   if (t?.readingLeading) tokens["--plus-reading-leading"] = String(t.readingLeading);
   if (t?.thinkingItalic) tokens["--plus-thinking-style"] = "italic";
@@ -520,8 +555,10 @@ export function sanitizeThemeDefinition(value: unknown): ThemeDefinition | undef
     const typography: ThemeTypography = {};
     const reading = fontList(t.reading);
     const heading = fontList(t.heading);
+    const bold = fontList(t.bold);
     if (reading) typography.reading = reading;
     if (heading) typography.heading = heading;
+    if (bold) typography.bold = bold;
     if (typeof t.readingSize === "number" && t.readingSize >= 11 && t.readingSize <= 24) typography.readingSize = Math.round(t.readingSize * 2) / 2;
     if (typeof t.readingLeading === "number" && t.readingLeading >= 1.2 && t.readingLeading <= 2.2) typography.readingLeading = t.readingLeading;
     if (t.thinkingItalic === true) typography.thinkingItalic = true;

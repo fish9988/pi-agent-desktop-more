@@ -3,13 +3,14 @@
 > 每次工作结束（或上下文快满、要换会话时）更新本文件。长期知识写在 [plus.md](plus.md)。
 > 新会话接手的顺序：`AGENTS.md` 开头的 Plus 部分 → `plus.md` → 本文件 → `git log --oneline -10` → `CHANGELOG-PLUS.md` 的最新条目。
 
-_最后更新：2026-10-21_
+_最后更新：2026-10-22_
 
 ## 当前状态
 
 - **最新发布：v1.6.1**：修复文件树下载按钮无反应、「在资源管理器中显示」打开错目录（正斜杠路径 + Rust 引号问题，改用 `raw_arg`）。v1.6.0 是上游周报 #1 的移植。
 - 用户的正式版 `D:\Pi Agent Plus` 是 **1.5.0**，用户会自己点「更新」升级到 1.6.0。
 - 测试版 `D:\Pi Agent Plus Test` 还是 1.5.0-test.16，没在运行。
+- **界面重设计 6 步已完成（未提交、未发版，等用户验收）**：见下方「界面重设计」。
 - 上游周报 #1 已处理并标记为已看（`.github/upstream-reviewed.json` 指向 pi-web `7c0778a8`、abcwyc `d414e9db`）。
 
 ## 版本历史速览（详见 CHANGELOG-PLUS.md）
@@ -26,12 +27,30 @@ _最后更新：2026-10-21_
 | 1.6.1 | 文件树下载按钮、在资源管理器中显示 |
 | 1.6.0 | 上游周报 #1：子目录→根目录会话不再被关、在此提问光标、页内锚点、模型改动对已开会话生效、标题搜索、.agents/skills 分组、diff 省略行；Claude 自适应思考、单模型 Base URL、按服务商搜模型、内联音视频、终端字号跟随；状态轮询不带系统提示词 |
 
+## 界面重设计（2026-10-22 开工，目标 1.7.0）
+
+- 效果图：`.design/ui-demo/index.html`（已在 `.git/info/exclude`，不进仓库），三个场景：对话、扩展面板、运行中；预览条切换，`?theme=&scn=chat|ext|run&anno=1`。截图脚本 `C:\pi-project\plus-shots\ui-demo-shot.mjs`。
+- 方向：Fluent 2 外壳 + 阅读优先正文；用户认定 Plus 和 Codex 桌面版同类（Agent 干活、人把关），不照搬 Cursor/Windsurf 的编辑器式设计。Gemini 评审的取舍记在效果图说明抽屉里。
+- 分 6 步，每步和效果图对照截图：
+  1. [x] 主题和设计规范：内置主题 `plus`（「Plus 分层」，效果图配色，正文霞鹜新致宋＋ 16px/1.85，粗体和标题思源宋体）；主题新增 `typography.bold`（→ `--plus-bold-font`，用户选了聊天字体时让位）；阶梯变量 `--plus-fs-1..5`、`--plus-r-ctl/card/overlay`、`--plus-s1..6`、`--plus-dur-1/2`、`--plus-stroke(-strong)`，TS 镜像 `lib/plus-design-scale.ts`（`scaleVar()`）；`lib/plus-design-scale.test.mjs` 校对两边并做"只降不升"的棘轮（Plus CSS 非阶梯字号 30、圆角 21；组件行内非阶梯字号 186）。**默认主题已改为 `plus`**（`DEFAULT_THEME_ID`，排在主题列表第一），只影响没选过主题的人。
+  2. [x] 外壳：桌面宽度（≥769px）下侧栏、标题栏在窗口底色上，中间内容（`.app-content-layer`，AppShell 新加的类名）和打开的右侧面板都是圆角 12 的面板，间距 8；标题栏一行：会话名 + 项目标签 + 分支标签（`selectedSession.branch`）。窄窗口和 native 主题不变。侧栏行样式、新建会话按钮还没按效果图改。
+  3. [x] 消息：用户气泡（右下角收尖）、回复底部信息行、代码块（标题条 + 等宽小字语言名）、改动卡（每行加相对项目的目录，项目外文件加「项目外」标签：`writtenFileLocation()` in `lib/turn-written-files.ts`，`TurnWrittenFiles` 新增 `cwd` 属性）。
+  4. [x] 输入框：工具行收进同一张卡片（ChatInput 新类名 `.chat-composer-frame`，bash/steer 的描边提示移到外框）；上下文改为饼图加百分比（`ContextUsageRing`，灰色，≥90% 变红）；发送键圆形，空时灰；运行中有字时出现「引导」「后续消息」（回车行为不变，仍是后续消息优先）和单独的停止键（`showRunChoices`）。
+  5. [x] 运行中：工作过程改为平的一行，运行中加跳动蓝点；侧栏运行中转圈改灰、子任务图标改灰（蓝色只表示未读）；选中会话左侧蓝色竖条。
+  6. [x] 扩展面板外框：标题取面板第一行（`lib/custom-panel-title.ts`，例如「Smart Compact · 扩展面板」），贴在输入框上方，焦点时描边 +「按键发给面板」，收起/关闭为图标按钮，终端区用代码块底色；`AnsiText` 改用类名，16 色映射到主题色（`app/plus.css` 的 `.ansi-*`），256 色/真彩色仍内联。
+- 已真机验证（开发服务器 + 临时会话，验证后已删除）：运行中的三个按钮、工作过程蓝点、侧栏灰色转圈、`/smart-compact` 真实面板。脚本：`C:\pi-project\plus-shots\run-shot.mjs`。
+- 和效果图不同、有意保留的：回车在运行中仍发「后续消息」（效果图假设是「引导」）；回复的模型名仍在回复上方，没有挪到底部信息行；斜杠命令仍会显示成用户气泡（改它要动消息流，另议）；子任务卡（对话里的聚合卡）和侧栏「4/4 完成」需要子任务结束状态的数据，没做。
+- 没做的：侧栏行样式/新建会话按钮按效果图细调、Fluent 图标替换、把 186 处组件写死字号迁到阶梯。
+- 预览不碰用户设置：`C:\pi-project\plus-shots\app-shot.mjs <名字> <会话id> <dark|light> plus` 和 `app-views.mjs`（新建页、右侧面板、窄窗口）在页面里临时把主题设成 `plus`，拦截所有 `/api/plus-prefs` 写请求。注意用户主题的样式 `#plus-user-theme` 用 `html[data-plus-theme]:root` 选择器，不移除会盖住内置主题。
+- **读截图判断深浅色不可靠**（缩略图会把深色看成浅色），颜色以 System.Drawing 取像素为准。
+
 ## 待办 / 候选
 
 - [ ] **WSL 支持**（用户 2026-10-21 提出，参考 Codex）：方案已给用户，等确认。要点见下方「WSL 调研」。
 - [ ] 暂缓的上游项：#1324 工具参数按行显示（先出预览）、1280e4f6 模型页文案。
 - [ ] 1.5.0 / 1.6.0 的使用反馈（时间线、外观页预览、扩展标签）。
 - [ ] 设置页搜索（老点子，未做）。
+- [ ] `components/AppShell.file-viewer-state.test.mjs` 4 项在本机工作区（CRLF）上失败，改动前就如此：测试用 `\n` 在源码里找文本。CI 上是 LF，应该能过；要么让测试先把 CRLF 换成 LF。
 - [ ] 两个历史遗留的失败测试（1.6.0 之前就失败，与本次无关）：`components/fork-extractions.test.mjs` 的 artifacts 哨兵（`useArtifactPublisher(` 标记）、`components/restored-wiring.test.mjs` 第 5 项（运行结束刷新右侧文件树）。值得查一下是测试过时还是功能丢了。
 - [ ] 不做的事：会话标题的悬停提示、主题卡片的悬停预览、#1183。
 

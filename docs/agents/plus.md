@@ -117,6 +117,8 @@ npx eslint components lib hooks app scripts --quiet
   - 引擎规则写在 `plus-theme.css` 里，用 `:where(html[data-plus-style="clean"])`。
   - 语法高亮颜色映射到 `--plus-syn-*`。
   - custom.css 只是可选的叠加层（`customCssOverlay`，默认关闭）。
+- **设计阶梯（1.7 起）**：字号 12/13/14/16/20、圆角 4/8/12、间距 4 的倍数，CSS 用 `--plus-fs-*`、`--plus-r-*`、`--plus-s*`，组件行内样式用 `lib/plus-design-scale.ts` 的 `scaleVar()`。`lib/plus-design-scale.test.mjs` 是只降不升的棘轮：新代码不要再写阶梯外的字号和圆角；迁移一批后把基线调低。
+- **重设计层**：`plus-theme.css` 末尾的 "Redesign layer" 按步骤分组（外壳、消息、输入框、运行、扩展面板），覆盖前面的引擎规则。外壳只在 ≥769px 生效；新元素（改动卡目录、运行中按钮、扩展面板外框、ANSI 色）的基础样式在 `plus.css`，对所有主题生效。
 - 弹层统一使用 zIndex 2400，否则会被设置窗口挡住。
 - 动效都要用 `prefers-reduced-motion` 包起来。
 - 文案走 i18n。三个语言文件 `lib/i18n/messages/{en,zh-CN,zh-TW}.ts` 都要加，新键插在 `"plus.appearanceTitle"` 前面。

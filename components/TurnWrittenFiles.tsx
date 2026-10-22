@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useFileContextMenu } from "@/hooks/useFileContextMenu";
 import { useI18n } from "@/hooks/useI18n";
 import { getFileName } from "@/lib/file-paths";
-import type { WrittenFile } from "@/lib/turn-written-files";
+import { writtenFileLocation, type WrittenFile } from "@/lib/turn-written-files";
 import { getFileIcon } from "./FileIcons";
 
 function LineStats({ added, removed }: { added?: number; removed?: number }) {
@@ -32,9 +32,11 @@ function Chevron({ className }: { className?: string }) {
  * from the turn's successful `write`/`edit`/`apply_patch` tool calls — the
  * reply text is never scanned for paths.
  */
-export function TurnWrittenFiles({ files, onOpenFile }: {
+export function TurnWrittenFiles({ files, onOpenFile, cwd }: {
   files: WrittenFile[];
   onOpenFile?: (filePath: string) => void;
+  /** Project folder: rows show their folder relative to it and flag files outside it. */
+  cwd?: string;
 }) {
   const { t } = useI18n();
   const showFileMenu = useFileContextMenu(onOpenFile);
@@ -65,6 +67,7 @@ export function TurnWrittenFiles({ files, onOpenFile }: {
       </button>
       {expanded && files.map(({ filePath, added, removed }) => {
         const name = getFileName(filePath);
+        const where = writtenFileLocation(filePath, cwd);
         return (
           <button
             key={filePath}
@@ -77,6 +80,8 @@ export function TurnWrittenFiles({ files, onOpenFile }: {
           >
             <span className="turn-files-icon">{getFileIcon(name, 14)}</span>
             <span className="turn-files-name">{name}</span>
+            {where.outside && <span className="turn-files-tag">{t("chat.fileOutsideProject")}</span>}
+            <span className="turn-files-dir">{where.dir}</span>
             <LineStats added={added} removed={removed} />
             <Chevron className="turn-files-row-chevron" />
           </button>

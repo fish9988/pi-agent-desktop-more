@@ -557,6 +557,8 @@ export const enLocale: LocalePlugin = {
     "plus.appearanceMode": "Light & dark",
     "plus.chatLayout": "Chat layout",
     "plus.previewLabel": "Live preview",
+    "chat.fileOutsideProject": "Outside project",
+    "chat.extensionKeysHere": "Keys go to the panel",
     "plus.appearanceTitle": "Plus appearance",
     "plus.style": "Interface style",
     "plus.style.clean": "Clean",

@@ -34,9 +34,12 @@ test("xterm 256-color palette", () => {
   assert.match(html, />red<\/span> rest/);
 });
 
+// Plus 1.7: the 16 standard colours render as classes mapped to theme colours
+// (app/plus.css), not as fixed rgb values.
 test("standard 16 colors and full reset", () => {
   const html = toHtml("\x1b[32mgreen\x1b[0m tail");
-  assert.match(html, /color:rgb\(0,187,0\)/);
+  assert.match(html, /class="ansi-green-fg"/);
+  assert.doesNotMatch(html, /rgb\(0,187,0\)/);
   assert.match(html, /tail/);
 });
 
@@ -57,6 +60,7 @@ test("newlines inside text are preserved", () => {
 });
 
 test("styles do not leak between complete widget snapshots", () => {
-  assert.match(toHtml("\x1b[31mred"), /color:rgb\(187,0,0\)/);
+  // Plus 1.7: standard colours are classes (see the 16-colour test above).
+  assert.match(toHtml("\x1b[31mred"), /class="ansi-red-fg"/);
   assert.equal(toHtml("plain"), "<span>plain</span>");
 });

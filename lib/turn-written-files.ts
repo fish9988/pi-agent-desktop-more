@@ -40,6 +40,30 @@ function splitLines(text: string): string[] {
  * and newText, so counting both whole would report a one-line fix as +10 −10;
  * lines the two share at the start and end are not changes.
  */
+/**
+ * Where a written file sits, for the files card: its folder relative to the
+ * project (`""` at the project root), or — outside the project — a short
+ * `../` path when it is a near neighbour, else its absolute folder.
+ * Windows paths compare case-insensitively and with either slash.
+ */
+export function writtenFileLocation(filePath: string, cwd?: string): { dir: string; outside: boolean } {
+  const split = (p: string) => p.replace(/\\/g, "/").replace(/\/+$/, "").split("/").filter((part, i) => part.length > 0 || i === 0);
+  const file = split(filePath);
+  const parent = file.slice(0, -1);
+  const absoluteDir = parent.join("/") || "/";
+  if (!cwd) return { dir: absoluteDir, outside: false };
+  const base = split(cwd);
+  const windows = /^[a-z]:$/i.test(file[0] ?? "") || /^[a-z]:$/i.test(base[0] ?? "");
+  const same = (a: string, b: string) => (windows ? a.toLowerCase() === b.toLowerCase() : a === b);
+  let common = 0;
+  while (common < parent.length && common < base.length && same(parent[common], base[common])) common++;
+  if (common === 0) return { dir: absoluteDir, outside: true };
+  if (common === base.length) return { dir: parent.slice(common).join("/"), outside: false };
+  const ups = base.length - common;
+  if (ups > 2) return { dir: absoluteDir, outside: true };
+  return { dir: [...Array(ups).fill(".."), ...parent.slice(common)].join("/"), outside: true };
+}
+
 export function changedLineCounts(before: string, after: string): LineStats {
   const a = splitLines(before);
   const b = splitLines(after);

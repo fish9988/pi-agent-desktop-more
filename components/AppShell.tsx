@@ -1798,6 +1798,8 @@ export function AppShell() {
     : isChatWorkspaceActive
       ? translate("workspace.chatTitle")
       : activeCwdName ?? translate("appshell.subtitle");
+  // Plus: the git branch rides next to the project in the top bar.
+  const topBarBranch = !scheduledOpen && !isChatWorkspaceActive ? selectedSession?.branch ?? null : null;
   const windowTitle = isChatWorkspaceActive
     ? `${topBarTitle} - ${PRODUCT_NAME}`
     : activeCwdName
@@ -2117,7 +2119,22 @@ export function AppShell() {
           )}
           <div className="app-topbar-title" title={topBarTitle}>
             <span>{topBarTitle}</span>
-            <small>{topBarSubtitle}</small>
+            {topBarSubtitle && (
+              <small className="app-topbar-chip" title={visibleProjectCwd ?? undefined}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2h7.5A2.5 2.5 0 0 1 21 9.5v7a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 16.5z" />
+                </svg>
+                <span>{topBarSubtitle}</span>
+              </small>
+            )}
+            {topBarBranch && (
+              <small className="app-topbar-chip app-topbar-branch" title={translate("session.gitBranch")}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="6" cy="5.5" r="2.5" /><circle cx="6" cy="18.5" r="2.5" /><circle cx="18" cy="7" r="2.5" /><path d="M6 8v8M18 9.5a7 7 0 0 1-7 7H8.5" />
+                </svg>
+                <span>{topBarBranch}</span>
+              </small>
+            )}
           </div>
           {showChat && !scheduledOpen && projectTrust?.requiresTrust && !projectTrust.trusted && (
             <button
@@ -2725,7 +2742,9 @@ export function AppShell() {
               panel is a separate card; the topbar still owns the visible edge. */}
           {(!rightPanelOpen || isMobile) && <WindowControls />}
         </div>
-        <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
+        {/* Plus: the content layer is the rounded panel that sits on the window
+            canvas in the clean theme engine (app/plus-theme.css, "shell"). */}
+        <div className="app-content-layer" style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
       {/* Center: chat */}
       <div inert={rightPanelFullWidth} style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0, position: "relative" }}>
         {isMobile && renderProjectTrustWarning(true)}

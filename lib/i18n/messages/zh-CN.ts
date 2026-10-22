@@ -557,6 +557,8 @@ export const zhCNLocale: LocalePlugin = {
     "plus.appearanceMode": "明暗模式",
     "plus.chatLayout": "聊天排版",
     "plus.previewLabel": "实时预览",
+    "chat.fileOutsideProject": "项目外",
+    "chat.extensionKeysHere": "按键发给面板",
     "plus.appearanceTitle": "Plus 外观",
     "plus.style": "界面风格",
     "plus.style.clean": "简洁",

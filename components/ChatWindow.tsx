@@ -26,6 +26,7 @@ import { messageTime, summarizeWorkActivities } from "@/lib/work-details";
 import { ExtensionWidgets } from "./ExtensionWidgets";
 import { ComposerExtensionsChip } from "./ComposerExtensionsChip";
 import { AnsiText } from "./AnsiText";
+import { customPanelTitle } from "@/lib/custom-panel-title";
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { phaseLabel } from "@/lib/chat-phase-label";
@@ -2334,6 +2335,9 @@ function ExtensionCustomPanel({
   const [collapsed, setCollapsed] = useState(false);
   const displayLines = normalizeCustomPanelLines(request.lines);
   const summary = displayLines.find((line) => line.trim())?.trim();
+  // Plus 1.7: name the panel after its own first line ("╭ Smart Compact ──╮"
+  // reads "Smart Compact"); the request carries no command or title.
+  const panelTitle = customPanelTitle(displayLines);
 
   useEffect(() => {
     if (!collapsed) inputRef.current?.focus();
@@ -2347,9 +2351,10 @@ function ExtensionCustomPanel({
         bottom: "var(--chat-composer-inset, 0px)",
         zIndex: 95,
         display: "flex",
-        alignItems: collapsed ? "flex-start" : "center",
+        // Plus 1.7: the panel sits right above the composer that started it.
+        alignItems: collapsed ? "flex-start" : "flex-end",
         justifyContent: "center",
-        padding: 20,
+        padding: collapsed ? 20 : "20px 20px 12px",
         pointerEvents: "none",
       }}
     >
@@ -2394,20 +2399,19 @@ function ExtensionCustomPanel({
       ) : (
       <div
         role="dialog"
+        aria-label={panelTitle ?? t("chat.extensionPanel")}
+        className="extension-panel"
         onClick={(event) => {
           if (!(event.target as HTMLElement).closest("button")) inputRef.current?.focus();
         }}
         style={{
           pointerEvents: "auto",
           position: "relative",
-          width: "min(920px, 100%)",
+          // Same width as the chat column (globals.css always defines the variable).
+          width: "min(var(--chat-content-max-width), 100%)",
           maxHeight: "min(760px, 100%)",
           display: "flex",
           flexDirection: "column",
-          border: "var(--hairline) solid var(--border)",
-          borderRadius: 8,
-          background: "var(--bg)",
-          boxShadow: "0 20px 60px rgba(0,0,0,0.28)",
           overflow: "hidden",
           outline: "none",
         }}
@@ -2460,63 +2464,37 @@ function ExtensionCustomPanel({
             pointerEvents: "none",
           }}
         />
-        <div style={{ flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 12px", borderBottom: "var(--hairline) solid var(--border)" }}>
-           <div style={{ color: "var(--text)", fontSize: 13, fontWeight: 650 }}>{t("chat.extensionPanel")}</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div className="extension-panel-head">
+          <div className="extension-panel-title" data-kind={panelTitle ? t("chat.extensionPanel") : undefined}>{panelTitle ?? t("chat.extensionPanel")}</div>
+          <div className="extension-panel-actions">
             <ExtensionWaitingCount count={waitingCount} />
+            <span className="extension-panel-focus" aria-hidden="true">{t("chat.extensionKeysHere")}</span>
             <button
               type="button"
               onClick={() => setCollapsed(true)}
               aria-expanded={true}
               title={t("chat.extensionCollapse")}
               aria-label={t("chat.extensionCollapse")}
-              style={{
-                display: "grid",
-                placeItems: "center",
-                width: 28,
-                height: 28,
-                borderRadius: 6,
-                border: "var(--hairline) solid var(--border)",
-                background: "var(--bg-panel)",
-                color: "var(--text-muted)",
-                cursor: "pointer",
-                flexShrink: 0,
-              }}
+              className="extension-panel-button"
             >
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <polyline points="2 3.5 5 6.5 8 3.5" />
               </svg>
             </button>
             <button
+              type="button"
+              className="extension-panel-button"
               onClick={() => onInput(request, "\x03")}
-              style={{
-                padding: "5px 9px",
-                borderRadius: 6,
-                border: "var(--hairline) solid var(--border)",
-                background: "var(--bg-panel)",
-                color: "var(--text-muted)",
-                cursor: "pointer",
-                fontSize: 12,
-              }}
+              title={t("chat.close")}
+              aria-label={t("chat.close")}
             >
-               {t("chat.close")}
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden="true">
+                <path d="M3 3l6 6M9 3l-6 6" />
+              </svg>
             </button>
           </div>
         </div>
-        <pre
-          style={{
-            margin: 0,
-            padding: 14,
-            minHeight: 0,
-            overflow: "auto",
-            background: "var(--bg-panel)",
-            color: "var(--text)",
-            fontFamily: "var(--font-mono)",
-            fontSize: 13,
-            lineHeight: 1.45,
-            whiteSpace: "pre",
-          }}
-        >
+        <pre className="extension-panel-body">
           <AnsiText text={displayLines.join("\n")} />
         </pre>
       </div>

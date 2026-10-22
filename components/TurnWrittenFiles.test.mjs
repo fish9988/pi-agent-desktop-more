@@ -44,3 +44,16 @@ test("shows a summary header with total and per-file line counts", () => {
   assert.match(html, />\+17</);
   assert.match(html, />\+7</);
 });
+
+// Plus 1.7: rows show the folder relative to the project and flag files outside it.
+test("rows show the project-relative folder and an outside-project tag", () => {
+  const html = render({
+    cwd: "C:\\pi\\app",
+    files: [{ filePath: "C:/pi/app/src-tauri/src/lib.rs" }, { filePath: "C:/pi/shots/probe.ps1" }, { filePath: "c:\\PI\\app\\README.md" }],
+    onOpenFile() {},
+  });
+  assert.match(html, /class="turn-files-dir">src-tauri\/src</);
+  assert.match(html, /class="turn-files-dir">\.\.\/shots</);
+  assert.equal((html.match(/turn-files-tag/g) || []).length, 1, "only the file outside the project is tagged");
+  assert.match(html, /class="turn-files-dir"><\/span>/, "a file at the project root has an empty folder");
+});

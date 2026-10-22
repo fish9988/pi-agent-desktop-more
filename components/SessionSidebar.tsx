@@ -2139,6 +2139,8 @@ function SessionFamilyItem({
   return (
     <div
       className="session-tree-item"
+      // Plus 1.7: the exact open session (the family row also reads as selected).
+      data-current={node.session.id === selectedSessionId ? "" : undefined}
       data-session-depth={depth}
       aria-level={depth + 1}
       style={depth > 0 ? { marginLeft: depth * 14 } : undefined}
@@ -2191,6 +2193,7 @@ function RunningSessionIndicator() {
   const { t } = useI18n();
   return (
     <span
+      className="session-running-indicator"
       title={t("sidebar.agentRunning")}
       aria-label={t("sidebar.agentRunning")}
       style={{
@@ -2200,7 +2203,8 @@ function RunningSessionIndicator() {
         alignItems: "center",
         justifyContent: "center",
         flexShrink: 0,
-        color: "var(--accent)",
+        // Plus 1.7: running is grey; the accent is kept for "unread" only.
+        color: "var(--text-muted)",
       }}
     >
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ display: "block" }}>
@@ -2669,7 +2673,7 @@ function SessionItem({
           ) : isUnread ? (
             <UnreadSessionIndicator />
           ) : isSubagentChild ? (
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+            <svg className="session-item-glyph is-subagent" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
               <rect x="5" y="7" width="14" height="11" rx="2" />
               <path d="M9 11h.01M15 11h.01M9 15h6M12 7V4M10 4h4" />
             </svg>

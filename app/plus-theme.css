@@ -51,7 +51,16 @@ html[data-plus-code-font] .cm-editor .cm-content {
                  property,operator,punctuation,tag,attr,regex,variable,
                  inserted,deleted}
                --plus-reading-font/-size/-leading, --plus-heading-font,
-               --plus-thinking-style, --plus-radius, --plus-backdrop
+               --plus-thinking-style, --plus-radius, --plus-backdrop,
+               --plus-bold-font
+     scale:    --plus-fs-1..5, --plus-fs-read  font sizes (12 13 14 16 20)
+               --plus-r-ctl/-card/-overlay      radii (4 8 12)
+               --plus-s1..6                     spacing (4 8 12 16 24 32)
+               --plus-dur-1/-2                  motion (120ms 200ms)
+               --plus-stroke(-strong)           hairlines on any surface
+               Mirrored in lib/plus-design-scale.ts for inline styles;
+               lib/plus-design-scale.test.mjs keeps both in step and stops
+               new off-scale literals.
    ========================================================================== */
 
 /* ---- defaults for tokens a theme leaves out (zero specificity) ---------- */
@@ -75,6 +84,26 @@ html[data-plus-code-font] .cm-editor .cm-content {
   --plus-reading-leading: 1.7;
   --plus-thinking-style: normal;
   --plus-radius: 9px;
+  --plus-bold-font: inherit;
+  --plus-fs-1: 12px;
+  --plus-fs-2: 13px;
+  --plus-fs-3: 14px;
+  --plus-fs-4: 16px;
+  --plus-fs-5: 20px;
+  --plus-fs-read: var(--plus-reading-size);
+  --plus-r-ctl: 4px;
+  --plus-r-card: 8px;
+  --plus-r-overlay: 12px;
+  --plus-s1: 4px;
+  --plus-s2: 8px;
+  --plus-s3: 12px;
+  --plus-s4: 16px;
+  --plus-s5: 24px;
+  --plus-s6: 32px;
+  --plus-dur-1: 120ms;
+  --plus-dur-2: 200ms;
+  --plus-stroke: color-mix(in srgb, var(--text) 8%, transparent);
+  --plus-stroke-strong: color-mix(in srgb, var(--text) 14%, transparent);
   --plus-syn-comment: var(--text-dim);
   --plus-syn-keyword: var(--accent);
   --plus-syn-string: var(--success);
@@ -197,6 +226,80 @@ html[data-plus-style="clean"] .right-panel-tab-strip,
 html[data-plus-style="clean"] .file-viewer,
 html[data-plus-style="clean"] .file-workbench { background: var(--workbench-bg); }
 
+/* ---- shell: two layers (redesign step 2) -------------------------------- */
+/* Sidebar and top bar sit on the window canvas; the chat (and whatever else
+   the centre column shows) is one rounded panel on top of it, so areas are
+   told apart by surface, not by hairlines. Desktop widths only: the mobile
+   layout keeps its full-bleed panels. */
+
+@media (min-width: 769px) {
+  html[data-plus-style="clean"] .app-sidebar { border-right: 0 !important; }
+  /* native-theme paints the whole column with --workbench-bg (and re-points
+     --bg at it for everything inside); only the content layer keeps it. */
+  html[data-plus-style="clean"] .app-main-column { background: transparent; }
+  html[data-plus-style="clean"] .app-topbar {
+    background: transparent !important;
+    border-bottom: 0 !important;
+  }
+  html[data-plus-style="clean"] .app-content-layer {
+    margin: 0 var(--plus-s2) var(--plus-s2) 0;
+    border-radius: var(--plus-r-overlay);
+    background: var(--workbench-bg);
+    box-shadow: 0 0 0 1px var(--plus-stroke), var(--shadow-control);
+    overflow: hidden;
+    /* the panel clips its children to the rounded corners */
+    isolation: isolate;
+  }
+  html[data-plus-style="clean"] .app-shell:has(.app-sidebar.sidebar-closed) .app-content-layer { margin-left: var(--plus-s2); }
+  /* The right panel is a second panel of the same kind, full height. */
+  html[data-plus-style="clean"] .right-panel-container.right-panel-open {
+    margin: var(--plus-s2) var(--plus-s2) var(--plus-s2) 0;
+    border-radius: var(--plus-r-overlay);
+    border-left: 0 !important;
+    box-shadow: 0 0 0 1px var(--plus-stroke), var(--shadow-control);
+  }
+
+  /* Title on one line: session name, then project and branch as chips. */
+  html[data-plus-style="clean"] .app-topbar-title {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--plus-s2);
+    max-width: none;
+    min-width: 0;
+    flex: 0 1 auto;
+  }
+  html[data-plus-style="clean"] .app-topbar-title > span {
+    flex: 0 1 auto;
+    min-width: 4em;
+    font-family: var(--font-ui);
+    font-size: var(--plus-fs-3);
+  }
+  html[data-plus-style="clean"] .app-topbar-title > .app-topbar-chip {
+    display: inline-flex;
+    flex: none;
+    max-width: 220px;
+    align-items: center;
+    gap: 5px;
+    height: 22px;
+    margin: 0;
+    padding: 0 var(--plus-s2);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--text) 5%, transparent);
+    color: var(--text-muted);
+    font-size: var(--plus-fs-1);
+    font-weight: 400;
+  }
+  html[data-plus-style="clean"] .app-topbar-chip > svg { flex: none; }
+  html[data-plus-style="clean"] .app-topbar-chip > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  html[data-plus-style="clean"] .app-topbar-title > .app-topbar-branch { max-width: 160px; }
+}
+/* Narrow windows and the native look keep the two-line title. */
+@media (max-width: 768px) {
+  .app-topbar-chip > svg, .app-topbar-branch { display: none !important; }
+}
+html:not([data-plus-style="clean"]) .app-topbar-chip > svg,
+html:not([data-plus-style="clean"]) .app-topbar-branch { display: none !important; }
+
 /* ---- messages ----------------------------------------------------------- */
 
 html[data-plus-style="clean"] .message-user-bubble {
@@ -237,6 +340,12 @@ html[data-plus-style="clean"] .markdown-body h3 { font-size: 1.1em; font-weight:
 html[data-plus-style="clean"] .markdown-body :is(h4, h5, h6) { font-size: 1em; color: color-mix(in srgb, var(--text) 86%, var(--text-muted)); }
 html[data-plus-style="clean"] .markdown-body > :first-child { margin-top: 0; }
 html[data-plus-style="clean"] .markdown-body strong { color: var(--text); }
+/* A theme's bold font (typography.bold) pairs with its own reading font, so it
+   steps aside once the user picks a chat font; the user's bold font (below)
+   wins over both. */
+html[data-plus-style="clean"]:not([data-plus-chat-font]) .message-assistant .markdown-body :is(strong, b, th) {
+  font-family: var(--plus-bold-font, inherit);
+}
 html[data-plus-style="clean"] .markdown-body a {
   color: var(--accent);
   text-decoration: underline;
@@ -257,7 +366,7 @@ html[data-plus-style="clean"] .markdown-body blockquote {
 }
 html[data-plus-style="clean"] .markdown-body .markdown-inline-code {
   padding: 0.1em 0.4em;
-  border-radius: 5px;
+  border-radius: var(--plus-r-ctl);
   background: var(--plus-inline-code-bg) !important;
   color: var(--plus-inline-code) !important;
   box-shadow: none !important;
@@ -988,3 +1097,182 @@ html[data-plus-chat-bold-font] .message-user :is(strong, b) {
   .plus-appearance-layout { grid-template-columns: 1fr; }
   .plus-appearance-preview-pane { position: static; max-height: none; order: -1; }
 }
+
+/* ==========================================================================
+   Redesign layer (Plus 1.7, mockup in .design/ui-demo).
+
+   Last in the engine so it wins at equal specificity over the rules above.
+   Values come from the design scale (--plus-fs-*, --plus-r-*, --plus-s*);
+   hairlines use --plus-stroke so they read the same on every surface.
+   ========================================================================== */
+
+/* ---- step 3: messages ---------------------------------------------------- */
+
+/* User turns: a card with a tucked bottom-right corner, pointing at the reply. */
+html[data-plus-style="clean"] .message-user-bubble:not(.is-editing) {
+  border-radius: var(--plus-r-overlay) var(--plus-r-overlay) var(--plus-r-ctl) var(--plus-r-overlay) !important;
+  box-shadow: 0 0 0 1px var(--plus-stroke) !important;
+}
+
+/* Reply footer: one quiet line of facts; actions brighten on hover. */
+html[data-plus-style="clean"] .message-assistant-footer {
+  font-family: var(--font-ui);
+  font-size: var(--plus-fs-1);
+  color: var(--text-dim);
+}
+html[data-plus-style="clean"] .message-assistant-footer :is(button, .message-copy-action) {
+  border-radius: var(--plus-r-ctl) !important;
+  color: var(--text-dim);
+  transition: background var(--plus-dur-1) ease, color var(--plus-dur-1) ease;
+}
+html[data-plus-style="clean"] .message-assistant-footer :is(button, .message-copy-action):hover:not(:disabled) {
+  background: var(--bg-hover) !important;
+  color: var(--text) !important;
+}
+
+/* Code blocks: header strip one step above the code body, both inset. */
+html[data-plus-style="clean"] :is(.markdown-code-block, .mermaid-block) {
+  border: 1px solid var(--plus-stroke) !important;
+  border-radius: var(--plus-r-card) !important;
+}
+html[data-plus-style="clean"] .markdown-code-header {
+  min-height: 32px;
+  border-bottom: 1px solid var(--plus-stroke) !important;
+}
+html[data-plus-style="clean"] .markdown-code-lang {
+  color: var(--text-dim) !important;
+  font-family: var(--font-mono) !important;
+  font-size: var(--plus-fs-1) !important;
+  font-weight: 400 !important;
+  letter-spacing: 0;
+  text-transform: none;
+}
+html[data-plus-style="clean"] .markdown-code-action { border-radius: var(--plus-r-ctl) !important; }
+
+/* Files card: a card with a header row; each file row reads
+   type icon · name · folder (relative to the project) · +/- · chevron. */
+html[data-plus-style="clean"] .turn-files-card {
+  border: 1px solid var(--plus-stroke) !important;
+  border-radius: var(--plus-r-card) !important;
+  background: var(--surface) !important;
+  box-shadow: none;
+}
+html[data-plus-style="clean"] .turn-files-header {
+  min-height: 42px;
+  padding-left: 14px;
+  padding-right: var(--plus-s2);
+}
+html[data-plus-style="clean"] .turn-files-title { font-size: var(--plus-fs-2); font-weight: 600; }
+html[data-plus-style="clean"] .turn-files-row {
+  min-height: 32px;
+  gap: 10px;
+  padding: 0 var(--plus-s2) 0 14px;
+  border-top-color: var(--plus-stroke) !important;
+}
+html[data-plus-style="clean"] .turn-files-name { color: var(--text); font-size: var(--plus-fs-2); }
+html[data-plus-style="clean"] .turn-files-row-chevron { opacity: 0.45; transition: opacity var(--plus-dur-1) ease; }
+html[data-plus-style="clean"] .turn-files-row:hover .turn-files-row-chevron { opacity: 1; }
+
+/* ---- step 4: composer ---------------------------------------------------- */
+/* One card holds the text, Send and the controls row (model, thinking,
+   extensions, context, tools), so the composer reads as one object. The frame
+   is ChatInput's .chat-composer-frame; the old card inside goes flat. Mode
+   cues (bash / steer) move to the frame. Desktop, non-compact only. */
+@media (min-width: 769px) {
+  html[data-plus-style="clean"] .chat-composer-frame:has(> .chat-composer-controls) {
+    background: var(--surface);
+    border: 1px solid var(--plus-stroke-strong);
+    border-radius: var(--plus-r-overlay);
+    box-shadow: var(--shadow-composer);
+    transition: border-color var(--plus-dur-1) ease, box-shadow var(--plus-dur-1) ease;
+  }
+  html[data-plus-style="clean"] .chat-composer-frame:has(> .chat-composer-controls):focus-within {
+    border-color: var(--accent-border);
+    box-shadow: var(--shadow-composer), 0 0 0 3px var(--accent-soft);
+  }
+  html[data-plus-style="clean"] .chat-composer-frame:has(> .chat-composer[data-state="bash"]) {
+    border-color: color-mix(in srgb, var(--success) 48%, transparent);
+    box-shadow: var(--shadow-composer), 0 0 0 3px color-mix(in srgb, var(--success) 10%, transparent);
+  }
+  html[data-plus-style="clean"] .chat-composer-frame:has(> .chat-composer[data-state="steer"]) {
+    border-color: color-mix(in srgb, var(--warning) 48%, transparent);
+    box-shadow: var(--shadow-composer), 0 0 0 3px color-mix(in srgb, var(--warning) 10%, transparent);
+  }
+  html[data-plus-style="clean"] .chat-composer-frame:has(> .chat-composer-controls) > .chat-composer {
+    background: transparent !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding-bottom: var(--plus-s1);
+  }
+  html[data-plus-style="clean"] .chat-composer-frame > .chat-composer-controls {
+    margin-top: 0 !important;
+    padding: 0 var(--plus-s2) var(--plus-s2);
+  }
+  html[data-plus-style="clean"] .chat-composer-frame > .chat-composer-controls button { border-radius: var(--plus-r-ctl) !important; }
+}
+
+/* Send: a circle, grey while there is nothing to send, filled once there is. */
+html[data-plus-style="clean"] .composer-send-button:not(.is-labeled) { border-radius: 50% !important; }
+html[data-plus-style="clean"] .composer-send-button:disabled {
+  background: var(--bg-selected) !important;
+  color: var(--text-dim) !important;
+  box-shadow: none !important;
+}
+html[data-plus-style="clean"] .composer-stop-button { border-radius: 50% !important; }
+html[data-plus-style="clean"] .composer-stop-button:hover:not(:disabled) {
+  color: var(--danger) !important;
+  border-color: var(--danger) !important;
+}
+
+/* ---- step 5: runs -------------------------------------------------------- */
+/* Work groups: a plain line, not a pill; a live run gets a pulsing accent dot
+   (the one place the accent means "happening now" in the transcript). */
+html[data-plus-style="clean"] .work-group-trigger {
+  border-color: transparent !important;
+  border-radius: var(--plus-r-ctl) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  font-family: var(--font-ui);
+  font-size: var(--plus-fs-2);
+}
+html[data-plus-style="clean"] .work-group-trigger:hover,
+html[data-plus-style="clean"] .work-group.is-open .work-group-trigger {
+  border-color: transparent !important;
+  background: var(--bg-hover) !important;
+}
+html[data-plus-style="clean"] .work-group-summary,
+html[data-plus-style="clean"] .work-group-detail { font-size: var(--plus-fs-1); }
+html[data-plus-style="clean"] .work-group.is-live .work-group-title::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin: 0 8px 1px 2px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  vertical-align: middle;
+}
+@media (prefers-reduced-motion: no-preference) {
+  html[data-plus-style="clean"] .work-group.is-live .work-group-title::before { animation: plus-live-pulse 1.6s ease-in-out infinite; }
+}
+@keyframes plus-live-pulse { 50% { box-shadow: 0 0 0 5px transparent; } }
+html[data-plus-style="clean"] .work-group-body { border-left-color: var(--plus-stroke-strong); }
+
+/* Sidebar: running rows spin in grey; selection keeps a quiet accent bar. */
+html[data-plus-style="clean"] .session-item.is-selected { position: relative; }
+html[data-plus-style="clean"] .session-item.is-selected::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 25%;
+  bottom: 25%;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+/* A family row also reads as selected when one of its sessions is open; the
+   bar marks only the open row itself, unless that row is folded away. */
+html[data-plus-style="clean"] .session-sidebar:has(.session-tree-item[data-current]) .session-item.is-selected::before { content: none; }
+html[data-plus-style="clean"] .session-sidebar .session-tree-item[data-current] .session-item.is-selected::before { content: ""; }
