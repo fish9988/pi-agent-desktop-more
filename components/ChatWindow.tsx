@@ -29,7 +29,7 @@ import { AnsiText } from "./AnsiText";
 import { customPanelTitle } from "@/lib/custom-panel-title";
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
-import { phaseLabel } from "@/lib/chat-phase-label";
+import { lastSlashCommand, phaseLabel } from "@/lib/chat-phase-label";
 import { useAgentSession, type NoticeItem } from "@/hooks/useAgentSession";
 import { useDragDrop } from "@/hooks/useDragDrop";
 import { useScrollbarVisibility } from "@/hooks/useScrollbarVisibility";
@@ -1309,7 +1309,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
           <ExtensionDialog key={extensionDialog.id} request={extensionDialog} waitingCount={waitingExtensionDialogCount} onRespond={respondToExtensionUi} />
         )}
         {extensionCustomUi && (
-          <ExtensionCustomPanel key={extensionCustomUi.id} request={extensionCustomUi} waitingCount={waitingExtensionCustomUiCount} onInput={sendExtensionCustomInput} />
+          <ExtensionCustomPanel key={extensionCustomUi.id} request={extensionCustomUi} waitingCount={waitingExtensionCustomUiCount} command={lastSlashCommand(messages)} onInput={sendExtensionCustomInput} />
         )}
         {!isEmptyNew && <>
         <div
@@ -1667,7 +1667,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
 
             {agentRunning && !hasStreamingContent && (agentPhase || isCompacting) && !liveGroupRendered && (
               <div className="break-words py-2 text-[13px] text-text-muted">
-                <span className="animate-[pulse_1.5s_infinite]">{phaseLabel(agentPhase, t, isCompacting)}</span>
+                <span className="animate-[pulse_1.5s_infinite]">{phaseLabel(agentPhase, t, isCompacting, { name: lastSlashCommand(messages), awaitingPanel: Boolean(extensionCustomUi) })}</span>
               </div>
             )}
 
@@ -2322,9 +2322,12 @@ type ExtensionCustomRequest = Extract<ExtensionUiRequest, { method: "custom" }>;
 function ExtensionCustomPanel({
   request,
   waitingCount,
+  command,
   onInput,
 }: {
   request: ExtensionCustomRequest;
+  /** Plus 1.7: the slash command that opened the panel, when the latest turn was one. */
+  command?: string | null;
   /** Further custom panels queued behind this one; each opens after this one closes. */
   waitingCount: number;
   onInput: (request: ExtensionCustomRequest, data: string) => void;
@@ -2465,7 +2468,7 @@ function ExtensionCustomPanel({
           }}
         />
         <div className="extension-panel-head">
-          <div className="extension-panel-title" data-kind={panelTitle ? t("chat.extensionPanel") : undefined}>{panelTitle ?? t("chat.extensionPanel")}</div>
+          <div className="extension-panel-title" data-kind={panelTitle ? (command ? `${t("plus.extensionsShort")} · ${command}` : t("chat.extensionPanel")) : command ?? undefined}>{panelTitle ?? t("chat.extensionPanel")}</div>
           <div className="extension-panel-actions">
             <ExtensionWaitingCount count={waitingCount} />
             <span className="extension-panel-focus" aria-hidden="true">{t("chat.extensionKeysHere")}</span>

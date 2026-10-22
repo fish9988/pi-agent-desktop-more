@@ -1327,7 +1327,40 @@ html[data-plus-style="clean"] .session-sidebar .session-tree-item[data-current] 
     font-size: var(--plus-fs-1) !important;
     font-weight: 500 !important;
   }
-  html[data-plus-style="clean"] .sidebar-project-tree-count { color: var(--text-dim); font-size: var(--plus-fs-1); font-weight: 400; }
+  html[data-plus-style="clean"] .sidebar-project-tree-count {
+    margin-left: auto;
+    padding-right: var(--plus-s1);
+    color: var(--text-dim);
+    font-size: var(--plus-fs-1);
+    font-weight: 400;
+  }
+  html[data-plus-style="clean"] .sidebar-project-tree-row-main { gap: 10px; }
+  html[data-plus-style="clean"] .sidebar-project-tree-folder,
+  html[data-plus-style="clean"] .sidebar-project-tree-group.is-active .sidebar-project-tree-folder { color: var(--text-muted) !important; }
+  html[data-plus-style="clean"] .sidebar-project-tree-name { font-weight: 500; }
+  /* Project rows carry no leading glyph (the folder above already says what
+     they are); chats keep their bubble. Running and unread marks sit at the
+     row's end, where the time shows on hover. */
+  /* (The bubble keeps its slot, hidden, so every title starts at one edge.) */
+  html[data-plus-style="clean"] .session-item:has(> :is(.session-running-indicator, .session-unread-indicator))::after {
+    content: "";
+    width: 14px;
+    flex: none;
+    order: 0;
+  }
+  html[data-plus-style="clean"] .sidebar-chats-list .session-item-glyph { visibility: visible; }
+  html[data-plus-style="clean"] .session-item .session-item-title { order: 1; }
+  html[data-plus-style="clean"] .session-item > :not(.session-item-glyph, .session-item-subagent-glyph, .session-item-title) { order: 2; }
+  html[data-plus-style="clean"] .session-item:hover :is(.session-running-indicator, .session-unread-indicator) { display: none !important; }
+  html[data-plus-style="clean"] .sidebar-project-tree-show-more {
+    gap: 6px;
+    min-height: 26px;
+    padding-left: 24px;
+    color: var(--text-dim);
+    font-size: var(--plus-fs-1);
+  }
+  html[data-plus-style="clean"] .sidebar-project-tree-show-more:hover { color: var(--text-muted); }
+  html[data-plus-style="clean"] .sidebar-controls-row { justify-content: space-between; }
   html[data-plus-style="clean"] .session-item { color: var(--text-muted); }
   html[data-plus-style="clean"] .session-item .session-item-title { color: inherit !important; }
   html[data-plus-style="clean"] .session-item:hover { color: var(--text); }
@@ -1346,3 +1379,94 @@ html[data-plus-style="clean"] .session-sidebar .session-tree-item[data-current] 
     background: transparent !important;
   }
 }
+
+/* ---- top bar actions: icons only (gap pass) ------------------------------ */
+/* History, branch and more are square icon buttons; their names stay in the
+   tooltip and the accessible label. */
+@media (min-width: 769px) {
+  html[data-plus-style="clean"] .app-topbar-actions .native-toolbar-button > span:not(:has(svg)) { display: none; }
+  html[data-plus-style="clean"] .app-topbar-actions .native-toolbar-button {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    padding: 0 !important;
+    justify-content: center;
+    gap: 0;
+    border-radius: var(--plus-r-ctl) !important;
+    color: var(--text-muted);
+  }
+  html[data-plus-style="clean"] .app-topbar-actions { gap: 2px; align-items: center !important; }
+}
+
+/* ---- outline rail on the right (gap pass) -------------------------------- */
+/* The question rail sits at the panel's right edge, away from the reading
+   column's start; its preview and question list open towards the text. */
+@media (min-width: 769px) {
+  html[data-plus-style="clean"] .conversation-navigator { left: auto; right: 12px; }
+  html[data-plus-style="clean"] .conversation-navigator-track { inset: 0 0 0 auto; }
+  html[data-plus-style="clean"] .conversation-navigator-tick { left: auto; right: 4px; }
+  html[data-plus-style="clean"] .conversation-navigator-preview { left: auto; right: 46px; }
+  html[data-plus-style="clean"] .conversation-navigator-list-button { left: auto; right: 3px; }
+  html[data-plus-style="clean"] .conversation-navigator-list { left: auto; right: 30px; }
+}
+
+/* ---- reply footer line (gap pass) ---------------------------------------- */
+/* ● model · cost · time, then the copy icon at the line's end. */
+.message-footer-model { display: inline-flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.message-footer-time { white-space: nowrap; }
+.message-footer-dot { width: 7px; height: 7px; flex: none; border-radius: 50%; }
+.message-assistant-footer > .message-meta + .message-meta::before {
+  content: "·";
+  margin-right: 8px;
+  color: var(--text-dim);
+  opacity: 0.6;
+}
+html[data-plus-style="clean"] .message-assistant-footer .message-copy-label { display: none; }
+html[data-plus-style="clean"] .message-assistant-footer .message-copy-action {
+  width: 28px;
+  height: 28px !important;
+  padding: 0 !important;
+  justify-content: center;
+}
+html[data-plus-style="clean"] .message-assistant-footer .message-copy-action svg { width: 14px; height: 14px; }
+html[data-plus-style="clean"] .message-assistant-footer { margin-top: var(--plus-s3) !important; }
+
+/* ---- composer controls row (gap pass) ------------------------------------ */
+/* attach · model · thinking · extensions ········ context · tools · session
+   · send. The two wrapper groups dissolve (display: contents) so one row can
+   be ordered; the project chip leaves (the title bar shows the project). */
+.model-selector-dot, .composer-extensions-label { display: none; }
+@media (min-width: 769px) {
+  html[data-plus-style="clean"] .chat-composer-controls:has(> .composer-send-group) { display: flex !important; align-items: center; gap: 2px !important; }
+  html[data-plus-style="clean"] .chat-composer-controls:has(> .composer-send-group) > div:not(.composer-send-group, .composer-controls-spacer),
+  html[data-plus-style="clean"] .chat-composer-controls:has(> .composer-send-group) > div > div:not([class]) { display: contents !important; }
+  html[data-plus-style="clean"] .chat-composer-controls .chat-project-context { display: none !important; }
+  html[data-plus-style="clean"] .chat-composer-controls .composer-thinking { order: 1; }
+  html[data-plus-style="clean"] .chat-composer-controls .composer-extensions-chip { order: 2; }
+  html[data-plus-style="clean"] .chat-composer-controls .composer-controls-spacer { order: 3; flex: 1 1 auto !important; }
+  html[data-plus-style="clean"] .chat-composer-controls .context-usage-ring { order: 4; }
+  html[data-plus-style="clean"] .chat-composer-controls .composer-tool-preset { order: 5; }
+  html[data-plus-style="clean"] .chat-composer-controls .composer-automation { order: 6; }
+  html[data-plus-style="clean"] .chat-composer-controls > .composer-send-group { order: 7; }
+  html[data-plus-style="clean"] .composer-tool-preset-label { display: none; }
+  html[data-plus-style="clean"] .chat-composer-controls :is(.composer-tool-preset, .composer-automation) > button { width: 32px; padding: 0 !important; justify-content: center; }
+  html[data-plus-style="clean"] .model-selector.is-toolbar .model-selector-icon { display: none; }
+  html[data-plus-style="clean"] .model-selector.is-toolbar .model-selector-dot { display: inline-block; width: 7px; height: 7px; flex: none; border-radius: 50%; }
+  html[data-plus-style="clean"] .composer-extensions-label { display: inline; }
+  html[data-plus-style="clean"] .composer-extensions-chip { gap: 4px; }
+  html[data-plus-style="clean"] .chat-composer-controls .composer-attach-button { width: 30px; height: 30px; color: var(--text-muted); }
+  html[data-plus-style="clean"] .composer-send-group { display: flex; align-items: center; gap: 6px; margin-left: var(--plus-s1); }
+  html[data-plus-style="clean"] .composer-send-group .composer-send-button:not(.is-labeled) { width: 32px !important; height: 32px !important; min-width: 32px !important; flex: 0 0 32px !important; }
+  /* The controls row squares its buttons (step 4); the send group keeps its own shapes. */
+  html[data-plus-style="clean"] .chat-composer-frame > .chat-composer-controls .composer-send-group :is(.composer-send-button:not(.is-labeled), .composer-run-stop) { border-radius: 50% !important; }
+  html[data-plus-style="clean"] .chat-composer-frame > .chat-composer-controls .composer-send-group :is(.composer-send-button.is-labeled, .composer-steer-button) { border-radius: var(--plus-r-card) !important; }
+}
+
+/* ---- title bar: running chip (gap pass) ---------------------------------- */
+html[data-plus-style="clean"] .app-topbar-title > .app-topbar-running { order: 3; color: var(--accent); background: var(--accent-soft); }
+.app-topbar-running-dot { width: 6px; height: 6px; flex: none; border-radius: 50%; background: currentColor; }
+@media (prefers-reduced-motion: no-preference) {
+  .app-topbar-running-dot { animation: plus-dot-blink 1.6s ease-in-out infinite; }
+  @keyframes plus-dot-blink { 50% { opacity: 0.35; } }
+}
+html:not([data-plus-style="clean"]) .app-topbar-running { display: none !important; }

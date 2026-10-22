@@ -253,7 +253,8 @@ test("session rows swap a compact time for the action button in one fixed-width 
 
 test("project header shows a session count and chips only while folded", () => {
   // A folded project hides its rows, so the header carries the count.
-  assert.match(source, /\{isCollapsed && \(\s*<span className="sidebar-project-tree-count"[^>]*>\s*\(\{groupTree\.length\}\)/);
+  // Plus 1.7: the count always shows, right-aligned and without brackets (the redesign).
+  assert.match(source, /<span className="sidebar-project-tree-count"[^>]*>\s*\{groupTree\.length\}\s*<\/span>/);
   assert.match(source, /\{isCollapsed && \(\s*<span className="sidebar-project-tree-meta">/);
   // The branch moved from the row into its tooltip.
   assert.doesNotMatch(source, /className="sidebar-project-tree-branch"/);
@@ -297,10 +298,8 @@ test("show more reveals five sessions at a time and a project toggle resets it",
     source,
     /\[group\.projectRoot\]: \(prev\[group\.projectRoot\] \?\? 0\) \+ 1/,
   );
-  assert.match(
-    source,
-    /count: Math\.min\(MAX_VISIBLE_PROJECT_SESSIONS, hiddenSessionCount\)/,
-  );
+  // Plus 1.7: the button names every hidden session ("12 more sessions"); a click still adds five.
+  assert.match(source, /t\("sidebar\.moreSessionsInProject", \{ count: hiddenSessionCount \}\)/);
   // Reopening a project starts from its latest five sessions again.
   assert.match(source, /setProjectSessionPages\(\(prev\) => \{[\s\S]*?delete next\[group\.projectRoot\]/);
   // Legacy arrays meant "expanded everything"; migrate them to one extra page.

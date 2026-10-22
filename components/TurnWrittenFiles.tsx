@@ -5,6 +5,7 @@ import { useFileContextMenu } from "@/hooks/useFileContextMenu";
 import { useI18n } from "@/hooks/useI18n";
 import { getFileName } from "@/lib/file-paths";
 import { writtenFileLocation, type WrittenFile } from "@/lib/turn-written-files";
+import { fileTypeBadge } from "@/lib/file-type-badge";
 import { getFileIcon } from "./FileIcons";
 
 function LineStats({ added, removed }: { added?: number; removed?: number }) {
@@ -68,6 +69,7 @@ export function TurnWrittenFiles({ files, onOpenFile, cwd }: {
       {expanded && files.map(({ filePath, added, removed }) => {
         const name = getFileName(filePath);
         const where = writtenFileLocation(filePath, cwd);
+        const badge = fileTypeBadge(name);
         return (
           <button
             key={filePath}
@@ -79,6 +81,8 @@ export function TurnWrittenFiles({ files, onOpenFile, cwd }: {
             onContextMenu={(event) => showFileMenu(event, { filePath })}
           >
             <span className="turn-files-icon">{getFileIcon(name, 14)}</span>
+            {/* Plus 1.7: a coloured type tag; the clean engine shows it instead of the icon. */}
+            <span className="turn-files-badge" data-tone={badge.tone} aria-hidden="true">{badge.label}</span>
             <span className="turn-files-name">{name}</span>
             {where.outside && <span className="turn-files-tag">{t("chat.fileOutsideProject")}</span>}
             <span className="turn-files-dir">{where.dir}</span>

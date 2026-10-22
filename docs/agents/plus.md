@@ -82,7 +82,7 @@ npx eslint components lib hooks app scripts --quiet
 - 浏览器验证用 Playwright 加系统自带的 Edge：
   - 启动参数：`chromium.launch({ channel: 'msedge', headless: true })`，从仓库的 `node_modules/playwright` 引入。
   - 测滚动条时加 `ignoreDefaultArgs: ['--hide-scrollbars']`。
-  - 打开设置：点 `.sidebar-controls-row button`。打开外观页：点 `.settings-section-tab` 里的「外观」。
+  - 打开设置：点侧栏底部的 `.sidebar-footer-settings`（1.7 起设置从侧栏顶部挪到了底部）。打开外观页：点 `.settings-section-tab` 里的「外观」。
   - 测试用的长会话：`?session=01a14f88-25cf-77da-b684-c2e5c1e8e659`。
   - 需要真实跑 Agent 时，在 `C:\pi-project\plus-shots` 里新建会话做小任务，验证完用 `DELETE /api/sessions/<id>`（带 `Origin` 头）删掉。
 - 检查已安装的程序：设置环境变量 `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9334` 后启动程序，再用 `chromium.connectOverCDP('http://127.0.0.1:9334')` 连上去。测试版用 9334；正式版以前用过 9333。

@@ -35,6 +35,7 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 import { useMenuNavigation } from "@/hooks/useMenuNavigation";
 import { useEnterSendMode } from "@/hooks/useEnterSendMode";
 import { useI18n } from "@/hooks/useI18n";
+import { usePlusStyle } from "@/hooks/usePlusStyle";
 import type { ReactNode } from "react";
 import type { ContextUsage, SessionStatsInfo } from "@/lib/pi-types";
 import { ContextUsageRing } from "./ContextUsageRing";
@@ -2050,8 +2051,17 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   // reports them, and manual compaction whenever it can start.
   const automationKnown = Boolean(onSetAutomation && automation && (automation.autoCompactionEnabled !== null || automation.autoRetryEnabled !== null || automation.steeringMode !== null));
   const canCompactNow = Boolean(onCompact && !isStreaming && !isCompacting);
+  // Plus 1.7: "Thinking · high" with the level in the UI language; a model's
+  // own level names (thinkingLevelMap) are shown as they are.
+  const thinkingShortLabel = (() => {
+    const lvl = resolvedThinkingLevel ?? "auto";
+    if (thinkingDisplayLabel !== lvl) return thinkingDisplayLabel;
+    const key = `plus.reasoningLevel.${lvl}`;
+    const named = t(key as Parameters<typeof t>[0]);
+    return named && named !== key ? named : lvl;
+  })();
   const runSettingsLabel = [
-    onThinkingLevelChange ? thinkingDisplayLabel : null,
+    onThinkingLevelChange ? `${t("plus.reasoningShort")} · ${thinkingShortLabel}` : null,
     chatOnly ? t("chat.chatWorkspace") : null,
     !onThinkingLevelChange && chatOnly ? toolPresetLabel : null,
   ].filter(Boolean).join(" · ");
@@ -2097,6 +2107,73 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   }, [isMobile]);
 
 
+
+  // Plus 1.7 (redesign): a desktop-width composer puts the attach button at
+  // the start of the controls row and the send group (Steer · Send / Follow-up
+  // · Stop) at its end, under the text; narrow and compact layouts keep both
+  // beside the text as before.
+  const plusStyle = usePlusStyle();
+  const toolsLayout = !compact && !isNarrow && plusStyle === "clean";
+  const attachButton = (
+    <button
+      type="button"
+      onClick={() => fileInputRef.current?.click()}
+      title={t(!onAttachFiles ? "chat.attachImage" : "chat.attachFiles")}
+      aria-label={t(!onAttachFiles ? "chat.attachImage" : "chat.attachFiles")}
+      className="native-toolbar-button composer-attach-button"
+      data-active={attachedImages.length > 0 || attachedFiles.length > 0 || undefined}
+    >
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="m21 11-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.6-8.6a3.7 3.7 0 0 1 5.2 5.2l-8.6 8.6a1.8 1.8 0 0 1-2.6-2.6L15 6.6" />
+      </svg>
+    </button>
+  );
+  const sendGroup = (
+    <>
+      {showRunChoices && (
+        <button
+          type="button"
+          className="composer-steer-button"
+          onClick={() => void sendQueued("steer")}
+          disabled={!canSend}
+          title={t("chat.steerHint")}
+        >
+          {t("chat.steer")}
+        </button>
+      )}
+      <button
+        type="button"
+        className={compact ? "native-primary-button" : `native-primary-button composer-send-button${showRunChoices ? " is-labeled" : ""}`}
+        data-action={showStop ? "stop" : isStreaming ? "queue" : "send"}
+        onClick={showStop ? onAbort : isStreaming ? () => void sendQueued(onFollowUp ? "followup" : "steer") : handleSend}
+        disabled={!showStop && (!canSend || (isStreaming && !onFollowUp && !onSteer))}
+        title={t(showStop ? "chat.stopAgent" : isStreaming ? "chat.queueMessage" : "chat.send")}
+        aria-label={t(showStop ? "chat.stopAgent" : isStreaming ? "chat.queueMessage" : "chat.send")}
+        style={{ flexShrink: 0, alignSelf: "flex-end", ...(compact ? { display: "flex", alignItems: "center", gap: 6 } : null) }}
+      >
+        {showStop ? (
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="3.5" y="3.5" width="9" height="9" rx="1.5" /></svg>
+        ) : (
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <line x1="8" y1="13" x2="8" y2="3.5" /><polyline points="3.5 7.5 8 3 12.5 7.5" />
+          </svg>
+        )}
+        {compact && t(showStop ? "chat.stop" : "chat.send")}
+        {showRunChoices && <span className="composer-send-label">{t("chat.followUp")}</span>}
+      </button>
+      {showRunChoices && onAbort && (
+        <button
+          type="button"
+          className="composer-stop-button composer-run-stop"
+          onClick={onAbort}
+          title={t("chat.stopAgent")}
+          aria-label={t("chat.stopAgent")}
+        >
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="3" y="3" width="10" height="10" rx="2" /></svg>
+        </button>
+      )}
+    </>
+  );
 
   return (
     <fieldset
@@ -2739,21 +2816,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           >
           {/* Attaching is a content action, so it lives in the card with the
               text it goes with; the row below holds only session context. */}
-          {!compact && (
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              title={t(!onAttachFiles ? "chat.attachImage" : "chat.attachFiles")}
-              aria-label={t(!onAttachFiles ? "chat.attachImage" : "chat.attachFiles")}
-              className="native-toolbar-button composer-attach-button"
-              data-active={attachedImages.length > 0 || attachedFiles.length > 0 || undefined}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <line x1="12" y1="5" x2="12" y2="19" />
-                <line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-            </button>
-          )}
+          {!compact && !toolsLayout && attachButton}
           <textarea
             ref={textareaRef}
             className="chat-input-textarea"
@@ -2790,6 +2853,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 : isStreaming ? t("chat.agentPlaceholder")
                 : isNarrow
                 ? (t("chat.messagePlaceholderShort") || "Message…")
+                : toolsLayout
+                // Plus 1.7: the placeholder carries the / @ hints (the faint hint beside
+                // Send is gone here); chats get their own wording, without @ files.
+                ? t(chatOnly ? "chat.composerHintChatOnly" : "plus.composerPlaceholder")
                 : t("chat.messagePlaceholder")
             }
             rows={1}
@@ -2813,7 +2880,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
           {/* The / @ # triggers, kept out of the placeholder: shown faintly
               beside Send only while the card is focused and empty. */}
-          {!compact && !isNarrow && !isStreaming && value.length === 0 && (
+          {!compact && !isNarrow && !toolsLayout && !isStreaming && value.length === 0 && (
             <span className="composer-trigger-hint" aria-hidden="true">
               {t(chatOnly ? "chat.composerHintChatOnly" : "chat.composerHint")}
             </span>
@@ -2838,48 +2905,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             />
           )}
 
-          {showRunChoices && (
-            <button
-              type="button"
-              className="composer-steer-button"
-              onClick={() => void sendQueued("steer")}
-              disabled={!canSend}
-              title={t("chat.steerHint")}
-            >
-              {t("chat.steer")}
-            </button>
-          )}
-          <button
-            type="button"
-            className={compact ? "native-primary-button" : `native-primary-button composer-send-button${showRunChoices ? " is-labeled" : ""}`}
-            data-action={showStop ? "stop" : isStreaming ? "queue" : "send"}
-            onClick={showStop ? onAbort : isStreaming ? () => void sendQueued(onFollowUp ? "followup" : "steer") : handleSend}
-            disabled={!showStop && (!canSend || (isStreaming && !onFollowUp && !onSteer))}
-            title={t(showStop ? "chat.stopAgent" : isStreaming ? "chat.queueMessage" : "chat.send")}
-            aria-label={t(showStop ? "chat.stopAgent" : isStreaming ? "chat.queueMessage" : "chat.send")}
-            style={{ flexShrink: 0, alignSelf: "flex-end", ...(compact ? { display: "flex", alignItems: "center", gap: 6 } : null) }}
-          >
-            {showStop ? (
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="3.5" y="3.5" width="9" height="9" rx="1.5" /></svg>
-            ) : (
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <line x1="8" y1="13" x2="8" y2="3.5" /><polyline points="3.5 7.5 8 3 12.5 7.5" />
-              </svg>
-            )}
-            {compact && t(showStop ? "chat.stop" : "chat.send")}
-            {showRunChoices && <span className="composer-send-label">{t("chat.followUp")}</span>}
-          </button>
-          {showRunChoices && onAbort && (
-            <button
-              type="button"
-              className="composer-stop-button composer-run-stop"
-              onClick={onAbort}
-              title={t("chat.stopAgent")}
-              aria-label={t("chat.stopAgent")}
-            >
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="3" y="3" width="10" height="10" rx="2" /></svg>
-            </button>
-          )}
+          {/* Plus 1.7: on a desktop-width composer these sit at the end of the controls row. */}
+          {!toolsLayout && sendGroup}
           </div>
           {/* Session controls sit below the input card, not inside it. */}
           </div>
@@ -2903,6 +2930,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           {/* LEFT: project context + model selector (idle) or steer/followup toggle (streaming) */}
 
           <div style={{ flex: isNarrow ? "1 1 auto" : "0 0 auto", minWidth: 0, display: "flex", alignItems: "center", gap: 2 }}>
+            {toolsLayout && attachButton}
             {projectLabel && (
               <ComposerProjectChip
                 menuRef={projectDropdownRef}
@@ -2944,7 +2972,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           </div>
 
           {/* spacer */}
-          {!isNarrow && <div style={{ flex: 1 }} />}
+          {!isNarrow && <div className="composer-controls-spacer" style={{ flex: 1 }} />}
 
           {/* RIGHT: thinking + tools preset + compact + sound (idle) | Stop + sound (streaming) */}
           <div ref={controlsMenuRef} style={{
@@ -3009,7 +3037,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             }}>
             {/* Keep reasoning and Config as separate, consistent option menus. */}
             {(onThinkingLevelChange || chatOnly) && (
-              <div ref={thinkingDropdownRef} style={{ position: "relative" }}>
+              <div ref={thinkingDropdownRef} className="composer-thinking" style={{ position: "relative" }}>
                 <button
                   className="native-toolbar-button"
                   onClick={() => setThinkingDropdownOpen((v) => !v)}
@@ -3032,8 +3060,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   }}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <line x1="4" y1="7" x2="14" y2="7" /><line x1="18" y1="7" x2="20" y2="7" /><circle cx="16" cy="7" r="2" />
-                    <line x1="4" y1="17" x2="6" y2="17" /><line x1="10" y1="17" x2="20" y2="17" /><circle cx="8" cy="17" r="2" />
+                    <path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.6.5 1.1 1.3 1.1 2.2h5c0-.9.5-1.7 1.1-2.2A6 6 0 0 0 12 3z" />
                   </svg>
                   {(!isCompact || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{runSettingsLabel}</span>}
                 </button>
@@ -3156,7 +3183,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             )}
 
             {onToolPresetChange && (
-              <div ref={toolDropdownRef} style={{ position: "relative" }}>
+              <div ref={toolDropdownRef} className="composer-tool-preset" style={{ position: "relative" }}>
                 <button
                   className="native-toolbar-button"
                   onClick={() => !isStreaming && setToolDropdownOpen((v) => !v)}
@@ -3183,7 +3210,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
                   </svg>
-                  {(!isCompact || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{toolPresetLabel}</span>}
+                  {(!isCompact || controlsMenuOpen) && <span className="composer-tool-preset-label" style={{ whiteSpace: "nowrap" }}>{toolPresetLabel}</span>}
                 </button>
                 {toolDropdownOpen && (() => {
                   const vh = typeof window !== "undefined" ? window.visualViewport?.height ?? window.innerHeight : 800;
@@ -3273,6 +3300,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             )}
             </div>
           </div>
+          {toolsLayout && <div className="composer-send-group">{sendGroup}</div>}
 
         </div>}
         </div>

@@ -34,9 +34,10 @@ test("Appearance settings own the chat width preference", () => {
 });
 
 test("chat width validation preserves the default and supported range", () => {
-  assert.equal(clampChatContentWidth(undefined), 820);
-  assert.equal(clampChatContentWidth("invalid"), 820);
-  assert.equal(clampChatContentWidth(null), 820);
+  // Plus 1.7: the default column is 760px (globals.css keeps 820px as the CSS fallback).
+  assert.equal(clampChatContentWidth(undefined), 760);
+  assert.equal(clampChatContentWidth("invalid"), 760);
+  assert.equal(clampChatContentWidth(null), 760);
   assert.equal(clampChatContentWidth(300), 480);
   assert.equal(clampChatContentWidth(700), 700);
   assert.equal(clampChatContentWidth(1104), 1104);

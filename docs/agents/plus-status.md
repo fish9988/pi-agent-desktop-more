@@ -10,7 +10,7 @@ _最后更新：2026-10-22_
 - 上一版 v1.6.1：修复文件树下载按钮无反应、「在资源管理器中显示」打开错目录（正斜杠路径 + Rust 引号问题，改用 `raw_arg`）。v1.6.0 是上游周报 #1 的移植。
 - 用户的正式版 `D:\Pi Agent Plus` 是 **1.5.0**，用户会自己点「更新」升级到 1.6.0。
 - 测试版 `D:\Pi Agent Plus Test` 是 1.7.0-test.23（`plus-prefs.test.json` 里主题选了「Plus 分层」、深色），没在运行。
-- **最新发布：v1.7.0**（2026-10-22，a7b505a8）：界面重设计第一批，Release 带签名的 `latest.json`；测试版 1.7.0-test.23 已装到 `D:\Pi Agent Plus Test` 并验证过。第二批（侧栏细调、11px→12px）已在其后提交，未发版。
+- **最新发布：v1.7.0**（2026-10-22，a7b505a8）：界面重设计第一批，Release 带签名的 `latest.json`；测试版 1.7.0-test.23 已装到 `D:\Pi Agent Plus Test` 并验证过。第二批（侧栏细调、11px→12px）和补齐效果图的 1.7.1 已提交，见下方。
 - 上游周报 #1 已处理并标记为已看（`.github/upstream-reviewed.json` 指向 pi-web `7c0778a8`、abcwyc `d414e9db`）。
 
 ## 版本历史速览（详见 CHANGELOG-PLUS.md）
@@ -46,6 +46,12 @@ _最后更新：2026-10-22_
 - 测试：全部组件测试 1021 过，7 个失败都是改动前就有的（FileViewer 4 项 CRLF、`FileTreeResizer` 第 3 项、artifacts 哨兵、restored-wiring 第 5 项）。
 - 预览不碰用户设置：`C:\pi-project\plus-shots\app-shot.mjs <名字> <会话id> <dark|light> plus` 和 `app-views.mjs`（新建页、右侧面板、窄窗口）在页面里临时把主题设成 `plus`，拦截所有 `/api/plus-prefs` 写请求。注意用户主题的样式 `#plus-user-theme` 用 `html[data-plus-theme]:root` 选择器，不移除会盖住内置主题。
 - **读截图判断深浅色不可靠**（缩略图会把深色看成浅色），颜色以 System.Drawing 取像素为准。
+
+### 补齐效果图（1.7.1，2026-10-22）
+
+用户指出 1.7.0 和效果图差很多：我之前只按"这一步要改的"看截图，没有和效果图整张并排比。教训：**每块做完都用 `C:\pi-project\plus-shots\compare.ps1 -Mock <效果图> -App <截图> -Out <输出> -Label <说明>` 拼上下对照图逐处核对**。1.7.1 补齐了 13 处（见 CHANGELOG），新增：`hooks/usePlusStyle.ts`（clean / native，输入框新布局只在 clean 下启用）、`lib/model-dot.ts`、`lib/file-type-badge.ts`、`lib/chat-phase-label.ts` 的 `lastSlashCommand`、侧栏 `footer` 属性和 Ctrl+K、`CHAT_CONTENT_WIDTH_DEFAULT` 760。
+- 仍和效果图不同：改动卡没有「查看全部改动」（Plus 没有全部改动的视图，右侧 diff 标签在上游就被注释掉了，要做得新做 diff 面板）；回复底部没有「重试 / 分支」（助手回复本来没有这两个功能）；对话里的子任务汇总卡和侧栏「4/4 完成」（缺子任务成败数据）；标题栏「运行中」不带计时（拿不到这一轮的开始时间）；斜杠命令仍显示为用户气泡。
+- 开发服务器坑：运行中做 `git stash` 会把 Turbopack 路由表弄坏（多个 API 404、Next 提示 1 Issue），停掉服务、删 `.next/dev` 重启即可。**别按 ExecutablePath 统计正式版进程**：开发服务器用的是正式版自带的 node.exe；看 `pi-agent-plus.exe` 和 `desktop-server.cjs` 两个进程，正式版端口可能是 38572。
 
 ## 待办 / 候选
 

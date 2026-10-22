@@ -26,7 +26,7 @@ export function SessionAutomationMenu({
 }: SessionAutomationMenuProps) {
   const { t } = useI18n();
   return (
-    <div ref={menuRef} style={{ position: "relative" }}>
+    <div ref={menuRef} className="composer-automation" style={{ position: "relative" }}>
       <button
         className="native-toolbar-button"
         onClick={() => onOpenChange((v) => !v)}

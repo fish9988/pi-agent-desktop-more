@@ -72,7 +72,16 @@ test("server supports the automation command set end to end", () => {
 test("narrow screens keep Stop one tap away while streaming", () => {
   const html = render({ isStreaming: true });
   assert.equal((html.match(/data-action="stop"/g) ?? []).length, 1);
-  assert.ok(html.indexOf('data-action="stop"') < html.indexOf('class="chat-composer-controls"'), "Stop stays in the editor, outside collapsed controls");
+  // Plus 1.7: a desktop-width composer (what this render is) moves the send
+  // group to the end of the controls row; narrow and compact layouts keep it in
+  // the editor, outside the collapsible controls menu.
+  if (html.includes('class="composer-send-group"')) {
+    assert.ok(html.indexOf('data-action="stop"') > html.indexOf('class="composer-send-group"'), "Stop sits in the send group at the row's end");
+  } else {
+    assert.ok(html.indexOf('data-action="stop"') < html.indexOf('class="chat-composer-controls"'), "Stop stays in the editor, outside collapsed controls");
+  }
+  assert.match(source, /const toolsLayout = !compact && !isNarrow && plusStyle === "clean";/);
+  assert.match(source, /\{!toolsLayout && sendGroup\}/);
   assert.match(html, /aria-label="Stop agent"/);
   assert.doesNotMatch(html, /composer-stop-button/);
 });

@@ -16,6 +16,7 @@ import { isApplyPatchToolName, isEditToolName } from "@/lib/tool-names";
 import { isToolCallExpanded, setToolCallExpanded } from "@/lib/tool-call-expansion";
 import { isThinkingExpandedByDefault, THINKING_EXPANDED_EVENT } from "@/lib/thinking-expansion-preference";
 import { TurnWrittenFiles } from "./TurnWrittenFiles";
+import { modelDotColor } from "@/lib/model-dot";
 import type { WrittenFile } from "@/lib/turn-written-files";
 import { skillExpansionToCommand } from "@/lib/slash-display";
 import { splitAttachedFiles } from "@/lib/chat-attachments";
@@ -808,8 +809,10 @@ function AssistantMessageView({
       data-entry-id={entryId}
       style={{ marginBottom: compactStep ? 6 : 16 }}
     >
-      {/* Model label (hidden for steps inside a work group) */}
-      {!compactStep && <div
+      {/* Model label (hidden for steps inside a work group). Plus 1.7: only
+          while the reply streams (it carries the live token rate); a finished
+          reply names its model in the footer line instead. */}
+      {!compactStep && isStreaming && <div
         className="message-assistant-model"
         style={{
           fontSize: 12,
@@ -929,12 +932,22 @@ function AssistantMessageView({
       {!compactStep && <div className="message-assistant-footer" style={{
         display: "flex", alignItems: "center", gap: 8, marginTop: 4,
       }}>
+        {/* Plus 1.7: one line of facts: ● model · cost · time, copy at the end. */}
+        {message.provider && !isStreaming && (
+          <span className="message-meta message-footer-model">
+            <span className="message-footer-dot" aria-hidden="true" style={{ background: modelDotColor(message.provider, message.model) }} />
+            {getModelDisplayName(message.provider, message.model, modelNames)}
+          </span>
+        )}
         {message.usage && !isStreaming && (
           // Plus: the cost alone by default; hovering the footer shows the full line.
           <div className="message-meta message-usage" style={{ fontSize: 12, color: "var(--text-dim)" }} title={formatUsage(message.usage)}>
             <span className="message-usage-compact">{formatUsageCompact(message.usage)}</span>
             <span className="message-usage-full">{formatUsage(message.usage)}</span>
           </div>
+        )}
+        {time && !isStreaming && (
+          <span className="message-meta message-footer-time" style={{ fontSize: 12, color: "var(--text-dim)" }}>{time}</span>
         )}
         {textContent && !isStreaming && (
           <button
@@ -966,11 +979,8 @@ function AssistantMessageView({
                 <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
               </svg>
             )}
-             {copied ? t("i18n.copied") : t("i18n.copy")}
+             <span className="message-copy-label">{copied ? t("i18n.copied") : t("i18n.copy")}</span>
           </button>
-        )}
-        {time && !isStreaming && (
-          <span className="message-meta" style={{ fontSize: 10, color: "var(--text-dim)", marginLeft: "auto" }}>{time}</span>
         )}
       </div>}
     </div>

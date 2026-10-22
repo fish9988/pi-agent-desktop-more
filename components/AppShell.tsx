@@ -43,7 +43,7 @@ import { useNativeContextMenu } from "@/hooks/useNativeContextMenu";
 import { DomContextMenuHost } from "./DomContextMenuHost";
 import { getFileName } from "@/lib/file-paths";
 import { buildAtMentionText, buildFileAtMentionsText, buildFileLineMentionText } from "@/lib/file-fuzzy";
-import { PRODUCT_NAME } from "@/lib/branding";
+import { APP_VERSION, PRODUCT_NAME } from "@/lib/branding";
 import { isImeComposing } from "@/lib/ime";
 import {
   resolveInitialNavigation,
@@ -137,7 +137,7 @@ export function AppShell() {
   // following OS scheme changes and the resolved palette keeps being mirrored
   // into the desktop config while the settings dialog is closed. The sidebar's
   // sun/moon toggle was removed — theme selection lives in Settings → General.
-  useTheme();
+  const { theme: resolvedTheme, setThemePreference } = useTheme();
   const { locale, t: translate } = useI18n();
   const isMobile = useIsMobile();
   useViewportHeight();
@@ -1810,21 +1810,14 @@ export function AppShell() {
 
   // Settings + collapse controls at the sidebar's own top-right (Claude Desktop
   // style). When the sidebar is closed, the topbar shows a reopen button.
+  // Plus 1.7: the top row carries the product mark and the collapse button;
+  // Settings moved to the footer row below (settings · version · light / dark).
   const sidebarHeaderControls = (
     <>
-      <button
-        type="button"
-        className="sidebar-chrome-button"
-        onClick={openSettingsAtLastSection}
-        title={translate("common.settings")}
-        aria-label={translate("common.settings")}
-        aria-haspopup="dialog"
-      >
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="3" />
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-        </svg>
-      </button>
+      <span className="sidebar-brand" aria-hidden="true">
+        <span className="sidebar-brand-mark">π</span>
+        <span className="sidebar-brand-name">{PRODUCT_NAME}</span>
+      </span>
       <button
         className="sidebar-chrome-button"
         onClick={handleSidebarToggle}
@@ -1836,6 +1829,42 @@ export function AppShell() {
         </svg>
       </button>
     </>
+  );
+
+  const sidebarFooter = (
+    <div className="sidebar-footer">
+      <button
+        type="button"
+        className="sidebar-footer-settings"
+        onClick={openSettingsAtLastSection}
+        title={translate("common.settings")}
+        aria-label={translate("common.settings")}
+        aria-haspopup="dialog"
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+        </svg>
+        <span>{translate("common.settings")}</span>
+        <span className="sidebar-footer-version">v{APP_VERSION}</span>
+      </button>
+      <button
+        type="button"
+        className="sidebar-chrome-button sidebar-footer-theme"
+        onClick={(event) => {
+          const rect = event.currentTarget.getBoundingClientRect();
+          setThemePreference(resolvedTheme === "dark" ? "light" : "dark", { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+        }}
+        title={translate("plus.toggleThemeMode")}
+        aria-label={translate("plus.toggleThemeMode")}
+      >
+        {resolvedTheme === "dark" ? (
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" /></svg>
+        ) : (
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4" /></svg>
+        )}
+      </button>
+    </div>
   );
 
   const sidebarContent = (
@@ -1853,6 +1882,7 @@ export function AppShell() {
         onCwdChange={handleCwdChange}
         onProjectsChange={handleProjectsChange}
         headerControls={sidebarHeaderControls}
+        footer={sidebarFooter}
         onOpenTerminal={handleOpenTerminal}
         onBackgroundTaskDone={handleBackgroundTaskDone}
         onRunningSessionIdsChange={handleRunningSessionIdsChange}
@@ -2125,6 +2155,13 @@ export function AppShell() {
                   <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2h7.5A2.5 2.5 0 0 1 21 9.5v7a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 16.5z" />
                 </svg>
                 <span>{topBarSubtitle}</span>
+              </small>
+            )}
+            {/* Plus 1.7: the open session is working (the title bar says so from anywhere). */}
+            {selectedSession && !scheduledOpen && runningSessionIds.has(selectedSession.id) && (
+              <small className="app-topbar-chip app-topbar-running">
+                <span className="app-topbar-running-dot" aria-hidden="true" />
+                <span>{translate("plus.runningNow")}</span>
               </small>
             )}
             {topBarBranch && (

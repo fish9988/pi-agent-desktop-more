@@ -92,6 +92,7 @@ export function ComposerExtensionsChip({ widgets, statuses }: { widgets: Extensi
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M10 3h4v3a2 2 0 1 0 4 0V3h3v7h-3a2 2 0 1 0 0 4h3v7h-7v-3a2 2 0 1 0-4 0v3H3v-7h3a2 2 0 1 0 0-4H3V3z" />
         </svg>
+        <span className="composer-extensions-label">{t("plus.extensionsShort")}</span>
         <span className="composer-extensions-count">{count}</span>
       </button>
       {open && position && createPortal(

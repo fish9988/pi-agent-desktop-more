@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useLayoutEffect, useState, useCallback, useRef, type ReactNode } from "react";
+import { Fragment, useEffect, useLayoutEffect, useState, useCallback, useRef, type CSSProperties, type ReactNode } from "react";
 import type { SessionInfo, SessionWorkspaceKind } from "@/lib/types";
 import { listSessionFamilies } from "@/lib/session-family";
 import { dispatchSessionRowContextMenu } from "@/lib/session-row-context-menu";
@@ -78,6 +78,8 @@ interface Props {
   onSessionsChange?: (sessions: SessionInfo[]) => void;
   onProjectsChange?: (projectRoots: string[]) => void;
   headerControls?: ReactNode;
+  /** Plus 1.7: pinned to the bottom of the sidebar (settings, version, light / dark). */
+  footer?: ReactNode;
   /** Opens the Scheduled page; the row under New Session is absent without it. */
   onOpenScheduled?: () => void;
   scheduledOpen?: boolean;
@@ -264,7 +266,7 @@ function readIdSetPref(key: Parameters<typeof getPrefJson>[0]): Set<string> {
     : new Set();
 }
 
-export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, skipInitialProjectSelection, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onChatWorkspaceCwdChange, onProjectsChange, onBackgroundTaskDone, onRunningSessionIdsChange, onSessionsChange, headerControls, onOpenTerminal, onOpenScheduled, scheduledOpen = false }: Props) {
+export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, skipInitialProjectSelection, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onChatWorkspaceCwdChange, onProjectsChange, onBackgroundTaskDone, onRunningSessionIdsChange, onSessionsChange, headerControls, footer, onOpenTerminal, onOpenScheduled, scheduledOpen = false }: Props) {
   const { t } = useI18n();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
   const [chatWorkspaceCwd, setChatWorkspaceCwd] = useState<string | null>(null);
@@ -1433,11 +1435,9 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             </span>
             {/* A folded project hides its rows, so the count (and any running
                 or unread chips) must stay readable on the header itself. */}
-            {isCollapsed && (
-              <span className="sidebar-project-tree-count" title={t("sidebar.sessionCount", { count: groupTree.length })}>
-                ({groupTree.length})
-              </span>
-            )}
+            <span className="sidebar-project-tree-count" title={t("sidebar.sessionCount", { count: groupTree.length })}>
+              {groupTree.length}
+            </span>
             {isCollapsed && (
               <span className="sidebar-project-tree-meta">
                 {runningCount > 0 && (
@@ -1517,9 +1517,8 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                   [group.projectRoot]: (prev[group.projectRoot] ?? 0) + 1,
                 }))}
               >
-                {t("sidebar.showMoreSessions", {
-                  count: Math.min(MAX_VISIBLE_PROJECT_SESSIONS, hiddenSessionCount),
-                })}
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="3 4.5 6 7.5 9 4.5" /></svg>
+                {t("sidebar.moreSessionsInProject", { count: hiddenSessionCount })}
               </button>
             )}
           </div>
@@ -1695,6 +1694,20 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     });
   };
 
+  // Plus 1.7: Ctrl+K (⌘K) puts the cursor in the session search.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() !== "k" || !(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey) return;
+      const input = document.querySelector<HTMLInputElement>(".sidebar-search-input");
+      if (!input || input.offsetParent === null) return;
+      event.preventDefault();
+      input.focus();
+      input.select();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   return (
     <div className="session-sidebar" style={{ display: "flex", flexDirection: "column", flex: "1 1 0%", minHeight: 0, height: "100%", overflow: "hidden" }}>
       {/* Header */}
@@ -1776,9 +1789,10 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             }
           }}
           title={t("sidebar.searchAllHint")}
-          placeholder={t("sidebar.searchSessions")}
+          placeholder={t("sidebar.searchSessionsShort")}
           aria-label={t("sidebar.searchSessions")}
         />
+        {!sessionQuery && <kbd className="sidebar-search-kbd" aria-hidden="true">Ctrl K</kbd>}
         {sessionQuery && (
           <button
             type="button"
@@ -2101,6 +2115,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
           </div>
         </div>
       )}
+      {footer}
     </div>
   );
 }
@@ -2135,8 +2150,33 @@ function SessionFamilyItem({
   /** Cross-project context, shown by the chronological sidebar view. */
   subtitle?: string;
 }) {
+  const { t } = useI18n();
   const [collapsed, setCollapsed] = useState(false);
   const hasChildren = node.children.length > 0;
+  // Plus 1.7: subagent sessions fold into one "Subagents N" row (open while
+  // one of them is selected or running); forks and other children stay rows.
+  const subagentChildren = node.children.filter((child) => child.session.relation?.kind === "subagent");
+  const otherChildren = node.children.filter((child) => child.session.relation?.kind !== "subagent");
+  const subagentsRunning = subagentChildren.filter((child) => runningSessionIds.has(child.session.id)).length;
+  const subagentActive = subagentsRunning > 0 || subagentChildren.some((child) => child.session.id === selectedSessionId);
+  const [subagentsOpen, setSubagentsOpen] = useState(subagentActive);
+  useEffect(() => {
+    if (subagentActive) setSubagentsOpen(true);
+  }, [subagentActive]);
+  const renderChild = (child: SessionTreeNode) => (
+    <SessionFamilyItem
+      key={child.session.id}
+      node={child}
+      depth={depth + 1}
+      selectedSessionId={selectedSessionId}
+      runningSessionIds={runningSessionIds}
+      unreadSessionIds={unreadSessionIds}
+      onSelectSession={onSelectSession}
+      onRenamed={onRenamed}
+      onSessionDeleted={onSessionDeleted}
+      subtitle={subtitle}
+    />
+  );
 
   return (
     <div
@@ -2171,20 +2211,23 @@ function SessionFamilyItem({
       </div>
       {hasChildren && !collapsed && (
         <div>
-          {node.children.map((child) => (
-            <SessionFamilyItem
-              key={child.session.id}
-              node={child}
-              depth={depth + 1}
-              selectedSessionId={selectedSessionId}
-              runningSessionIds={runningSessionIds}
-              unreadSessionIds={unreadSessionIds}
-              onSelectSession={onSelectSession}
-              onRenamed={onRenamed}
-              onSessionDeleted={onSessionDeleted}
-              subtitle={subtitle}
-            />
-          ))}
+          {subagentChildren.length > 0 && (
+            <div className="session-subagent-group" data-open={subagentsOpen ? "" : undefined} style={{ "--subagent-indent": (depth + 1) * 14 + "px" } as CSSProperties}>
+              <button
+                type="button"
+                className="session-subagent-toggle"
+                aria-expanded={subagentsOpen}
+                onClick={() => setSubagentsOpen((open) => !open)}
+              >
+                <svg className="session-subagent-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="4.5 2.5 8 6 4.5 9.5" /></svg>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3 3 7.5l9 4.5 9-4.5z" /><path d="m3 12 9 4.5 9-4.5" /><path d="m3 16.5 9 4.5 9-4.5" /></svg>
+                <span className="session-subagent-label">{t("sidebar.subagentGroup", { count: subagentChildren.length })}</span>
+                {subagentsRunning > 0 && <span className="session-subagent-summary">{t("sidebar.subagentRunningCount", { count: subagentsRunning })}</span>}
+              </button>
+              {subagentsOpen && <div className="session-subagent-list">{subagentChildren.map((child) => renderChild(child))}</div>}
+            </div>
+          )}
+          {otherChildren.map(renderChild)}
         </div>
       )}
     </div>
@@ -2235,6 +2278,7 @@ function UnreadSessionIndicator() {
   const { t } = useI18n();
   return (
     <span
+      className="session-unread-indicator"
       title={t("sidebar.newActivity")}
       aria-label={t("sidebar.newSessionActivity")}
       style={{
@@ -2244,7 +2288,8 @@ function UnreadSessionIndicator() {
         alignItems: "center",
         justifyContent: "center",
         flexShrink: 0,
-        color: "#0891b2",
+        // Plus 1.7: the accent means "unread" in the sidebar, and only that.
+        color: "var(--accent)",
       }}
     >
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true" style={{ display: "block" }}>

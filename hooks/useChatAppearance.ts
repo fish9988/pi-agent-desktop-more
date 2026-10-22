@@ -2,7 +2,9 @@
 
 import { useSyncExternalStore } from "react";
 
-export const CHAT_CONTENT_WIDTH_DEFAULT = 820;
+// Plus 1.7: the redesign reads in a ~44-character column (composer 760px);
+// a width the user already saved is kept.
+export const CHAT_CONTENT_WIDTH_DEFAULT = 760;
 // Plus: allow narrower columns; 820px as a floor made the slider useless on
 // laptop screens and when the side panels are open.
 export const CHAT_CONTENT_WIDTH_MIN = 480;

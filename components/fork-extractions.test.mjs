@@ -262,6 +262,9 @@ const FORK_FEATURES = [
   {
     name: "sidebar header controls",
     file: "components/AppShell.tsx",
+    // Plus 1.7: Settings moved to the sidebar footer with the version and one
+    // light / dark button (the user's approved redesign); the markers below
+    // still hold, and the old toggle's strings stay forbidden.
     // The top-right row of the sidebar is settings + collapse only. The sun/moon
     // theme toggle that used to sit beside them (upstream's "toolbar theme
     // selector", reachable here through the fork's restyle) was removed on
