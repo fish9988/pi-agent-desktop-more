@@ -103,7 +103,7 @@ export function SessionAutomationMenu({
           )}
           {automation.steeringMode !== null && (
             <div style={{ padding: "6px 12px", borderTop: "var(--hairline) solid var(--border)", marginTop: 4, paddingTop: 10 }}>
-              <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 4 }}>{t("chat.steeringMode")}</div>
+              <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 4 }}>{t("chat.steeringMode")}</div>
               <div style={{ display: "flex", gap: 4 }}>
                 {(["all", "one-at-a-time"] as const).map((mode) => (
                   <button
@@ -111,7 +111,7 @@ export function SessionAutomationMenu({
                     type="button"
                     onClick={() => onSetAutomation({ steeringMode: mode })}
                     style={{
-                      flex: 1, height: 26, fontSize: 11,
+                      flex: 1, height: 26, fontSize: 12,
                       border: "var(--hairline) solid var(--border)", borderRadius: 6,
                       background: automation.steeringMode === mode ? "var(--accent)" : "var(--bg)",
                       color: automation.steeringMode === mode ? "var(--accent-contrast)" : "var(--text-muted)",
@@ -126,7 +126,7 @@ export function SessionAutomationMenu({
           )}
           {automation.followUpMode !== null && (
             <div style={{ padding: "6px 12px 4px", marginBottom: 2 }}>
-              <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 4 }}>{t("chat.followUpMode")}</div>
+              <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 4 }}>{t("chat.followUpMode")}</div>
               <div style={{ display: "flex", gap: 4 }}>
                 {(["all", "one-at-a-time"] as const).map((mode) => (
                   <button
@@ -134,7 +134,7 @@ export function SessionAutomationMenu({
                     type="button"
                     onClick={() => onSetAutomation({ followUpMode: mode })}
                     style={{
-                      flex: 1, height: 26, fontSize: 11,
+                      flex: 1, height: 26, fontSize: 12,
                       border: "var(--hairline) solid var(--border)", borderRadius: 6,
                       background: automation.followUpMode === mode ? "var(--accent)" : "var(--bg)",
                       color: automation.followUpMode === mode ? "var(--accent-contrast)" : "var(--text-muted)",

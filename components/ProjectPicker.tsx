@@ -249,7 +249,7 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
               style={{ flex: 1, fontFamily: "var(--font-mono)", fontSize: 12 }}
             />
           ) : (
-            <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-dim)" }}>
+            <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-dim)" }}>
               Select project…
             </span>
           )
@@ -296,7 +296,7 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
               autoFocus
               style={{
                 width: "100%",
-                fontSize: 11,
+                fontSize: 12,
                 fontFamily: "var(--font-mono)",
                 padding: "5px 8px",
                 background: "var(--bg-panel)",
@@ -330,7 +330,7 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
                 color: project === selectedProject ? "var(--text)" : "var(--text-muted)",
                 cursor: "pointer",
                 textAlign: "left",
-                fontSize: 11,
+                fontSize: 12,
                 fontFamily: "var(--font-mono)",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
@@ -342,7 +342,7 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
             </button>
           ))}
           {visibleProjects.length === 0 && trimmedFilter && (
-            <div style={{ padding: "8px 10px", fontSize: 11, color: "var(--text-dim)" }}>No matching projects</div>
+            <div style={{ padding: "8px 10px", fontSize: 12, color: "var(--text-dim)" }}>No matching projects</div>
           )}
         </div>
 
@@ -363,7 +363,7 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
               color: "var(--text-muted)",
               cursor: "pointer",
               textAlign: "left",
-              fontSize: 11,
+              fontSize: 12,
             }}
           >
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
@@ -392,7 +392,7 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
             color: "var(--text-muted)",
             cursor: "pointer",
             textAlign: "left",
-            fontSize: 11,
+            fontSize: 12,
           }}
         >
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" style={{ flexShrink: 0 }}>
@@ -408,7 +408,7 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
               padding: "6px 10px 8px",
               borderTop: "var(--hairline) solid var(--border)",
               color: "var(--danger)",
-              fontSize: 11,
+              fontSize: 12,
               lineHeight: 1.35,
               overflowWrap: "anywhere",
             }}

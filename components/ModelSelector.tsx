@@ -293,7 +293,7 @@ export function ModelSelector({
                     background: "var(--bg)",
                     color: "var(--text)",
                     fontFamily: "var(--font-mono)",
-                    fontSize: 11,
+                    fontSize: 12,
                   }}
                 />
               </div>

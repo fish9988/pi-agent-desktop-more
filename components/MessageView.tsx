@@ -525,7 +525,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
                 borderRadius: 5,
                 color: copied ? "var(--accent)" : "var(--text-dim)",
                 cursor: "pointer",
-                fontSize: 11, fontWeight: 400,
+                fontSize: 12, fontWeight: 400,
                 whiteSpace: "nowrap",
                 transition: "color 0.12s",
               }}
@@ -563,7 +563,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
                     borderRadius: 5,
                     color: "var(--text-dim)",
                     cursor: editBlocked ? "not-allowed" : "pointer",
-                    fontSize: 11, fontWeight: 400,
+                    fontSize: 12, fontWeight: 400,
                     whiteSpace: "nowrap",
                     transition: "color 0.12s",
                   }}
@@ -590,7 +590,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
                     borderRadius: 5,
                     color: "var(--accent)",
                     cursor: "pointer",
-                    fontSize: 11, fontWeight: 500,
+                    fontSize: 12, fontWeight: 500,
                     whiteSpace: "nowrap",
                   }}
                 >
@@ -612,7 +612,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
                     borderRadius: 5,
                     color: forking ? "var(--accent)" : "var(--text-dim)",
                     cursor: forking ? "not-allowed" : "pointer",
-                    fontSize: 11, fontWeight: 400,
+                    fontSize: 12, fontWeight: 400,
                     whiteSpace: "nowrap",
                     transition: "color 0.12s",
                   }}
@@ -812,7 +812,7 @@ function AssistantMessageView({
       {!compactStep && <div
         className="message-assistant-model"
         style={{
-          fontSize: 11,
+          fontSize: 12,
           color: "var(--text-dim)",
           marginBottom: 4,
           display: "flex",
@@ -830,7 +830,7 @@ function AssistantMessageView({
 
               {est > 0 && (
                 <span style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--text)" }} title={t("i18n.estimatedTokens")}>
-                  <span style={{ display: "flex", alignItems: "center", gap: 2, fontSize: 11, fontWeight: 400 }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 2, fontSize: 12, fontWeight: 400 }}>
                     <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
                       <line x1="5" y1="1.5" x2="5" y2="8.5" /><polyline points="2 6 5 8.5 8 6" />
                     </svg>
@@ -839,7 +839,7 @@ function AssistantMessageView({
                   {tps !== null && (() => {
                     const bg = tps >= 50 ? "#53b3cb" : tps >= 30 ? "#9bc53d" : tps >= 15 ? "#f9c22e" : "#e01a4f";
                     return (
-                      <span style={{ marginLeft: 6, padding: "1px 6px", borderRadius: 4, background: bg, color: "#fff", fontSize: 11, fontWeight: 400 }}>
+                      <span style={{ marginLeft: 6, padding: "1px 6px", borderRadius: 4, background: bg, color: "#fff", fontSize: 12, fontWeight: 400 }}>
                         {tps.toFixed(1)} t/s
                       </span>
                     );
@@ -931,7 +931,7 @@ function AssistantMessageView({
       }}>
         {message.usage && !isStreaming && (
           // Plus: the cost alone by default; hovering the footer shows the full line.
-          <div className="message-meta message-usage" style={{ fontSize: 11, color: "var(--text-dim)" }} title={formatUsage(message.usage)}>
+          <div className="message-meta message-usage" style={{ fontSize: 12, color: "var(--text-dim)" }} title={formatUsage(message.usage)}>
             <span className="message-usage-compact">{formatUsageCompact(message.usage)}</span>
             <span className="message-usage-full">{formatUsage(message.usage)}</span>
           </div>
@@ -949,7 +949,7 @@ function AssistantMessageView({
               borderRadius: 5,
               color: copied ? "var(--accent)" : "var(--text-dim)",
               cursor: "pointer",
-              fontSize: 11, fontWeight: 400,
+              fontSize: 12, fontWeight: 400,
               whiteSpace: "nowrap",
               transition: "opacity 0.12s, color 0.12s",
             }}
@@ -1217,7 +1217,7 @@ export function ToolCallBlock({ block, result, duration, aborted, defaultExpande
           <span
             className="plus-tool-name"
             title={mcpLabel ? block.toolName : undefined}
-            style={{ color: isError ? "var(--danger)" : aborted ? "var(--text-dim)" : "var(--success)", fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: 11, flexShrink: 0 }}
+            style={{ color: isError ? "var(--danger)" : aborted ? "var(--text-dim)" : "var(--success)", fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: 12, flexShrink: 0 }}
           >
             {mcpLabel ? (
               <>
@@ -1231,18 +1231,18 @@ export function ToolCallBlock({ block, result, duration, aborted, defaultExpande
               {t("chat.toolCancelled")}
             </span>
           )}
-          <span style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
+          <span style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
             {isStreamingInput
               ? t("chat.generatingToolInput")
               : (patchLabel ?? (codemode ? codemodeScriptPreview(codemode.code) : getToolPreview(block)))}
           </span>
           {codemodeCallCount > 0 && (
-            <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
+            <span style={{ fontSize: 12, color: "var(--text-dim)", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
               {codemodeCallCount === 1 ? t("codemode.callCountOne") : t("codemode.callCount", { count: codemodeCallCount })}
             </span>
           )}
           {duration !== undefined && (
-            <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{duration}s</span>
+            <span style={{ fontSize: 12, color: "var(--text-dim)", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{duration}s</span>
           )}
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--text-dim)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>
             <polyline points="2 3.5 5 6.5 8 3.5" />
@@ -1843,7 +1843,7 @@ function CollapsibleUserText({ text, cwd, onOpenFile }: {
             border: "none",
             color: "var(--text-muted)",
             cursor: "pointer",
-            fontSize: 11,
+            fontSize: 12,
           }}
         >
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>
@@ -1883,7 +1883,7 @@ function CompactionMessageView({ message, kind = "compaction" }: { message: Cust
             color: "var(--text-muted)",
           }}
         >
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 650 }}>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 650 }}>
             {kind === "branch_summary" ? "branch summary" : "compaction"}
           </span>
           {time && <span className="message-meta" style={{ marginLeft: "auto", color: "var(--text-dim)", fontSize: 10 }}>{time}</span>}
@@ -1982,10 +1982,10 @@ function CustomMessageView({ message, cwd, onOpenFile }: { message: CustomMessag
             fontSize: 12,
           }}
         >
-          <span style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 650 }}>
+          <span style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 650 }}>
             {title}
           </span>
-          {isHiddenDisplay && <span style={{ color: "var(--text-dim)", fontSize: 11 }}>{t("i18n.hiddenExtensionMessage")}</span>}
+          {isHiddenDisplay && <span style={{ color: "var(--text-dim)", fontSize: 12 }}>{t("i18n.hiddenExtensionMessage")}</span>}
           {time && <span className="message-meta" style={{ marginLeft: "auto", color: "var(--text-dim)", fontSize: 10 }}>{time}</span>}
         </div>
 
@@ -2049,7 +2049,7 @@ function CustomMessageView({ message, cwd, onOpenFile }: { message: CustomMessag
                 background: "none",
                 color: copied ? "var(--accent)" : "var(--text-dim)",
                 cursor: "pointer",
-                fontSize: 11,
+                fontSize: 12,
               }}
             >
                {copied ? t("i18n.copied") : t("i18n.copy")}
@@ -2068,7 +2068,7 @@ function CustomMessageView({ message, cwd, onOpenFile }: { message: CustomMessag
                 background: "none",
                 color: "var(--text-dim)",
                 cursor: "pointer",
-                fontSize: 11,
+                fontSize: 12,
               }}
             >
               {isHiddenDisplay
@@ -2247,12 +2247,12 @@ function BashExecutionView({ message, sessionId }: { message: BashExecutionMessa
     <div style={{ margin: "6px 0" }}>
       <ToolCallBlock block={block} result={result} defaultExpanded={isRunning} />
       {message.truncated && fullOutputUrl && (
-        <div style={{ padding: "4px 10px", fontSize: 11, marginTop: -1 }}>
+        <div style={{ padding: "4px 10px", fontSize: 12, marginTop: -1 }}>
           {showFullButton && (
             <button
               onClick={loadFullOutput}
               disabled={loadingFull}
-              style={{ background: "none", border: "none", color: "var(--accent)", cursor: loadingFull ? "default" : "pointer", fontSize: 11, padding: 0, textDecoration: "underline" }}
+              style={{ background: "none", border: "none", color: "var(--accent)", cursor: loadingFull ? "default" : "pointer", fontSize: 12, padding: 0, textDecoration: "underline" }}
             >
               {loadingFull ? "loading…" : "view full output"}
             </button>
@@ -2270,14 +2270,14 @@ function BashExecutionView({ message, sessionId }: { message: BashExecutionMessa
               border: "none",
               padding: 0,
               color: "var(--accent)",
-              fontSize: 11,
+              fontSize: 12,
               textDecoration: "underline",
               cursor: "pointer",
             }}
           >
             download full output
           </button>
-          {fullError && <span style={{ marginLeft: 6, color: "var(--text-dim)", fontSize: 11 }}>({fullError})</span>}
+          {fullError && <span style={{ marginLeft: 6, color: "var(--text-dim)", fontSize: 12 }}>({fullError})</span>}
         </div>
       )}
     </div>

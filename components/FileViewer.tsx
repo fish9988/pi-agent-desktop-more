@@ -81,7 +81,7 @@ const FILE_LINE_NUMBER_STYLE: CSSProperties = {
   background: "var(--bg-panel)",
   borderRight: "var(--hairline) solid var(--border)",
   fontFamily: "var(--font-mono)",
-  fontSize: 11,
+  fontSize: 12,
   fontStyle: "normal",
   fontVariantNumeric: "tabular-nums",
   lineHeight: "20.8px",
@@ -469,7 +469,7 @@ function DiffView({ patch }: { patch: string }) {
                 padding: "2px 16px",
                 color: "var(--text-dim)",
                 background: "var(--bg-panel)",
-                fontSize: 11,
+                fontSize: 12,
                 borderTop: "var(--hairline) solid var(--border)",
                 borderBottom: "var(--hairline) solid var(--border)",
               }}
@@ -872,7 +872,7 @@ function VideoViewer({ filePath, cwd, sourceSessionId, watchEnabled = true }: Pr
           gap: 12,
           padding: "4px 16px",
           borderBottom: "var(--hairline) solid var(--border)",
-          fontSize: 11,
+          fontSize: 12,
           color: "var(--text-dim)",
           background: "var(--bg)",
           flexShrink: 0,
@@ -1511,7 +1511,7 @@ function TextFileViewer({
           gap: 8,
           padding: "5px 12px",
           borderBottom: "var(--hairline) solid var(--border)",
-          fontSize: 11,
+          fontSize: 12,
           color: "var(--text-dim)",
           background: "var(--bg)",
           flexShrink: 0,
@@ -1642,7 +1642,7 @@ function TextFileViewer({
             border: "var(--hairline) solid var(--border)",
             borderRadius: 6,
             color: "var(--text-dim)",
-            fontSize: 11,
+            fontSize: 12,
           }}
         >
           <span>{formatSize(data.nextOffset)} / {formatSize(data.size)}</span>

@@ -1738,6 +1738,8 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             </svg>
           </span>
           {t("sidebar.newChat")}
+          {/* Plus 1.7: the shortcut, shown in the clean theme engine only. */}
+          <kbd className="sidebar-new-kbd" aria-hidden="true">Ctrl N</kbd>
         </button>
 
         {onOpenScheduled && <ScheduledSidebarRow active={scheduledOpen} onOpen={onOpenScheduled} />}
@@ -2673,7 +2675,7 @@ function SessionItem({
           ) : isUnread ? (
             <UnreadSessionIndicator />
           ) : isSubagentChild ? (
-            <svg className="session-item-glyph is-subagent" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+            <svg className="session-item-subagent-glyph" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
               <rect x="5" y="7" width="14" height="11" rx="2" />
               <path d="M9 11h.01M15 11h.01M9 15h6M12 7V4M10 4h4" />
             </svg>
@@ -2765,7 +2767,7 @@ function SessionItem({
                   className="session-item-time"
                   title={formatRelativeTime(session.modified, locale)}
                   style={{
-                    fontSize: 11, lineHeight: 1, color: "var(--text-dim)",
+                    fontSize: 12, lineHeight: 1, color: "var(--text-dim)",
                     whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums",
                     paddingRight: 2,
                   }}
@@ -2885,7 +2887,7 @@ function SessionItem({
                 {t("sidebar.delete")}
               </button>
               <div style={{ height: 1, margin: "4px 3px", background: "var(--border)" }} />
-              <div style={{ padding: "3px 8px 5px", color: "var(--text-dim)", fontSize: 11, lineHeight: 1.6 }}>
+              <div style={{ padding: "3px 8px 5px", color: "var(--text-dim)", fontSize: 12, lineHeight: 1.6 }}>
                 <div title={session.created}>
                   {formatRelativeTime(session.modified, locale)} · {t("sidebar.messagesCount", { count: session.messageCount })}
                 </div>

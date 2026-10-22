@@ -172,7 +172,7 @@ export function UpdateReminder({ onOpenSettings }: { onOpenSettings: () => void 
               style={{
                 flexShrink: 0,
                 color: "var(--accent)",
-                fontSize: 11,
+                fontSize: 12,
                 fontWeight: 650,
                 textDecoration: "none",
               }}

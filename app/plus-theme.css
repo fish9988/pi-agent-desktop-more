@@ -1276,3 +1276,73 @@ html[data-plus-style="clean"] .session-item.is-selected::before {
    bar marks only the open row itself, unless that row is folded away. */
 html[data-plus-style="clean"] .session-sidebar:has(.session-tree-item[data-current]) .session-item.is-selected::before { content: none; }
 html[data-plus-style="clean"] .session-sidebar .session-tree-item[data-current] .session-item.is-selected::before { content: ""; }
+
+/* ---- sidebar (redesign batch 2) ------------------------------------------ */
+/* Hidden outside the desktop clean look (narrow windows, native theme). */
+.sidebar-new-kbd { display: none; }
+/* New session is the one card-like button; the rest are quiet rows. Group
+   labels are small grey captions. Times stay hidden until a row is hovered,
+   so titles show more. The selected row is a tint, not a raised card. */
+@media (min-width: 769px) {
+  html[data-plus-style="clean"] .sidebar-new-row {
+    height: 36px !important;
+    gap: 10px;
+    margin-bottom: var(--plus-s1);
+    padding: 0 10px 0 12px !important;
+    border: 1px solid var(--plus-stroke) !important;
+    border-radius: var(--plus-r-ctl) !important;
+    background: var(--surface) !important;
+    box-shadow: 0 1px 0 var(--plus-stroke);
+    color: var(--text) !important;
+    font-weight: 500 !important;
+  }
+  html[data-plus-style="clean"] .sidebar-new-row:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 3%, var(--surface)) !important; }
+  html[data-plus-style="clean"] .sidebar-new-plus,
+  html[data-plus-style="clean"] .sidebar-new-row:hover .sidebar-new-plus {
+    background: transparent !important;
+    color: var(--accent) !important;
+  }
+  /* The shortcut chip on New session (SessionSidebar .sidebar-new-kbd). */
+  html[data-plus-style="clean"] .sidebar-new-kbd {
+    display: inline-block;
+    margin-left: auto;
+    padding: 0 5px;
+    border: 1px solid var(--plus-stroke-strong);
+    border-radius: var(--plus-r-ctl);
+    color: var(--text-dim);
+    font-family: var(--font-ui);
+    font-size: var(--plus-fs-1);
+    font-weight: 400;
+    line-height: 18px;
+  }
+  html[data-plus-style="clean"] :is(.sidebar-scheduled-row, .sidebar-project-tree-row, .session-item) { border-radius: var(--plus-r-ctl) !important; }
+  html[data-plus-style="clean"] .sidebar-search-input {
+    height: 32px !important;
+    border-radius: var(--plus-r-ctl) !important;
+    background: color-mix(in srgb, var(--text) 4%, transparent) !important;
+    border-color: var(--plus-stroke) !important;
+  }
+  html[data-plus-style="clean"] :is(.sidebar-chats-title, .sidebar-project-tree-header) .sidebar-project-tree-title {
+    color: var(--text-dim) !important;
+    font-size: var(--plus-fs-1) !important;
+    font-weight: 500 !important;
+  }
+  html[data-plus-style="clean"] .sidebar-project-tree-count { color: var(--text-dim); font-size: var(--plus-fs-1); font-weight: 400; }
+  html[data-plus-style="clean"] .session-item { color: var(--text-muted); }
+  html[data-plus-style="clean"] .session-item .session-item-title { color: inherit !important; }
+  html[data-plus-style="clean"] .session-item:hover { color: var(--text); }
+  html[data-plus-style="clean"] .session-item.is-selected,
+  html.dark[data-plus-style="clean"] .session-item.is-selected {
+    background: var(--bg-selected) !important;
+    box-shadow: none !important;
+    color: var(--text);
+  }
+  html[data-plus-style="clean"] .session-tree-item[data-current] .session-item.is-selected .session-item-title { font-weight: 500; }
+  /* The time slot only takes room on hover, so idle titles get its width. */
+  html[data-plus-style="clean"] .session-item:not(:hover):not(:focus-within) .session-item-trailing { display: none !important; }
+  /* A family row reads as selected while one of its sessions is open; only
+     the open row is tinted, the family row just keeps full-strength text. */
+  html[data-plus-style="clean"] .session-sidebar:has(.session-tree-item[data-current]) .session-tree-item:not([data-current]) > div > .session-item.is-selected:not(:hover) {
+    background: transparent !important;
+  }
+}

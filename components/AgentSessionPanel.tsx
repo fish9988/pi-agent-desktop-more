@@ -162,11 +162,11 @@ function AgentRow({
         <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12, fontWeight: selected ? 600 : 500 }} title={primary}>
           {primary}
         </span>
-        <span style={{ display: "block", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-dim)", fontSize: 11 }} title={secondary}>
+        <span style={{ display: "block", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-dim)", fontSize: 12 }} title={secondary}>
           {secondary}
         </span>
       </span>
-      <span style={{ display: "flex", alignItems: "center", gap: 6, color: main && !running ? "var(--text-dim)" : statusColor(status), fontSize: 11, whiteSpace: "nowrap" }}>
+      <span style={{ display: "flex", alignItems: "center", gap: 6, color: main && !running ? "var(--text-dim)" : statusColor(status), fontSize: 12, whiteSpace: "nowrap" }}>
         {main && !running ? (
           selected ? t("agentSwitcher.current") : null
         ) : (
@@ -283,17 +283,17 @@ export function AgentSessionPanel({ rootSession, subagents, selectedSessionId, r
       <div>
         <div style={{ minHeight: 44, display: "flex", alignItems: "center", gap: 8, padding: "7px 12px", borderBottom: "var(--hairline) solid var(--border)" }}>
           <strong style={{ fontSize: 12, fontWeight: 600 }}>{t("agentSwitcher.title")}</strong>
-          <span style={{ color: "var(--text-dim)", fontSize: 11 }}>
+          <span style={{ color: "var(--text-dim)", fontSize: 12 }}>
             {t("agentSwitcher.count", { count: subagents.length })}
           </span>
           {runningCount > 0 && (
-            <span style={{ marginLeft: "auto", color: "var(--accent)", fontSize: 11 }}>
+            <span style={{ marginLeft: "auto", color: "var(--accent)", fontSize: 12 }}>
               {t("agentSwitcher.runningCount", { count: runningCount })}
             </span>
           )}
         </div>
         {controlError && (
-          <div role="alert" style={{ padding: "6px 12px", background: "rgba(239,68,68,0.07)", color: "#ef4444", fontSize: 11, borderBottom: "var(--hairline) solid var(--border)" }}>
+          <div role="alert" style={{ padding: "6px 12px", background: "rgba(239,68,68,0.07)", color: "#ef4444", fontSize: 12, borderBottom: "var(--hairline) solid var(--border)" }}>
             {controlError}
           </div>
         )}

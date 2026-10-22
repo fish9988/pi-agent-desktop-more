@@ -281,7 +281,7 @@ function TreeNodeView({ node, activePathIds, depth, isLast, parentLines, onSelec
 
         {/* Label */}
         <span style={{
-          fontSize: 11,
+          fontSize: 12,
           color: isActive ? "var(--text)" : isOnPath ? "var(--text-muted)" : "var(--text-dim)",
           fontWeight: isActive ? 500 : 400,
           overflow: "hidden",
@@ -377,7 +377,7 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
   }, [locked, onLeafChange, summaryTargetId]);
 
   const lockedNotice = locked && (
-    <div style={{ padding: "2px 0 4px", fontSize: 11, color: "var(--text-dim)", fontStyle: "italic" }}>
+    <div style={{ padding: "2px 0 4px", fontSize: 12, color: "var(--text-dim)", fontStyle: "italic" }}>
       {t("i18n.branchesLockedWhileRunning")}
     </div>
   );
@@ -424,7 +424,7 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
             border: "none",
             cursor: "pointer",
             color: open ? "var(--text)" : "var(--text-muted)",
-            fontSize: 11,
+            fontSize: 12,
             whiteSpace: "nowrap",
             transition: "color 0.1s, background 0.1s",
           }}
@@ -489,7 +489,7 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
           border: "none",
           cursor: "pointer",
           color: "var(--text-muted)",
-          fontSize: 11,
+          fontSize: 12,
           textAlign: "left",
         }}
       >

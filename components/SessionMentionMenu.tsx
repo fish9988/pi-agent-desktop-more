@@ -44,7 +44,7 @@ export function SessionMentionMenu({ loaded, matches, activeIndex, itemRefs, onP
         alignItems: "center",
         justifyContent: "space-between",
         gap: 8,
-        fontSize: 11,
+        fontSize: 12,
         color: "var(--text-dim)",
       }}>
         <span>{loaded ? t("chat.sessions", { label: matchCountLabel }) : t("chat.loadingSessions")}</span>

@@ -87,7 +87,7 @@ export function CodemodeCallList({ calls, omitted, isError }: {
         minWidth: 0,
       }}
     >
-      <div style={{ color: "var(--text-dim)", fontFamily: "inherit", fontSize: 11 }}>{t("codemode.calls")}</div>
+      <div style={{ color: "var(--text-dim)", fontFamily: "inherit", fontSize: 12 }}>{t("codemode.calls")}</div>
       {omitted > 0 && (
         <div style={{ color: "var(--text-dim)" }}>{t("codemode.omittedCalls", { count: omitted })}</div>
       )}

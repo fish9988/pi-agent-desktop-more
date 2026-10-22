@@ -648,7 +648,7 @@ function ModelNoticeBanner({ tone, title, body, action, onClose, dismissLabel }:
         borderRadius: 6,
         background: `rgba(${color},0.07)`,
         color: `rgb(${color})`,
-        fontSize: 11,
+        fontSize: 12,
         lineHeight: 1.45,
       }}
     >
@@ -725,7 +725,7 @@ export function WorkspaceUnavailableBanner({ workspace, onRecheck }: { workspace
               background: "transparent",
               color: "inherit",
               cursor: "pointer",
-              fontSize: 11,
+              fontSize: 12,
               lineHeight: 1.4,
               whiteSpace: "nowrap",
             }}
@@ -798,7 +798,7 @@ export function ModelScopeWarningBanner({
             background: "transparent",
             color: "inherit",
             cursor: "pointer",
-            fontSize: 11,
+            fontSize: 12,
             lineHeight: 1.4,
             whiteSpace: "nowrap",
           }}
@@ -2223,7 +2223,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                <button
                  type="button"
                  onClick={onAbortRetry}
-                 style={{ marginLeft: "auto", flexShrink: 0, background: "none", border: "none", color: "inherit", cursor: "pointer", fontSize: 11, padding: 0, textDecoration: "underline", textUnderlineOffset: 2 }}
+                 style={{ marginLeft: "auto", flexShrink: 0, background: "none", border: "none", color: "inherit", cursor: "pointer", fontSize: 12, padding: 0, textDecoration: "underline", textUnderlineOffset: 2 }}
                >
                  {t("chat.cancelRetry")}
                </button>
@@ -2248,7 +2248,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               <button
                 type="button"
                 onClick={onAbortBranchSummary}
-                style={{ marginLeft: "auto", flexShrink: 0, background: "none", border: "none", color: "inherit", cursor: "pointer", fontSize: 11, padding: 0, textDecoration: "underline", textUnderlineOffset: 2 }}
+                style={{ marginLeft: "auto", flexShrink: 0, background: "none", border: "none", color: "inherit", cursor: "pointer", fontSize: 12, padding: 0, textDecoration: "underline", textUnderlineOffset: 2 }}
               >
                 {t("chat.branchSummaryStop")}
               </button>
@@ -2436,7 +2436,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                         lineHeight: 1.45,
                       }}
                     >
-                      <span style={{ flexShrink: 0, fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-dim)", paddingTop: 1 }}>
+                      <span style={{ flexShrink: 0, fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-dim)", paddingTop: 1 }}>
                         {index + 1}
                       </span>
                       <span style={{ minWidth: 0, display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2, overflow: "hidden", overflowWrap: "anywhere" }}>
@@ -2479,7 +2479,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   alignItems: "center",
                   justifyContent: "space-between",
                   gap: 8,
-                  fontSize: 11,
+                  fontSize: 12,
                   color: "var(--text-dim)",
                   flexShrink: 0,
                 }}
@@ -2584,7 +2584,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                                   WebkitBoxOrient: "vertical",
                                   WebkitLineClamp: 2,
                                   overflow: "hidden",
-                                  fontSize: 11,
+                                  fontSize: 12,
                                   lineHeight: 1.35,
                                   color: "var(--text-dim)",
                                 }}>
@@ -2650,7 +2650,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     alignItems: "center",
                     justifyContent: "space-between",
                     gap: 8,
-                    fontSize: 11,
+                    fontSize: 12,
                     color: "var(--text-dim)",
                     flexShrink: 0,
                   }}
@@ -3093,7 +3093,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                               {displayLabel}
                               {showOriginal && <span style={{ fontSize: 10, color: "var(--text-dim)", fontFamily: "var(--font-mono)", marginLeft: 5 }}>({lvl})</span>}
                             </span>
-                            <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 8 }}>{desc}</span>
+                            <span style={{ fontSize: 12, color: "var(--text-dim)", marginLeft: 8 }}>{desc}</span>
                           </SelectorRow>
                         );
                       })}
@@ -3113,7 +3113,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                           title={t("chat.chatOnlyDescription")}
                         >
                           <span style={{ flex: 1 }}>{t("chat.chatWorkspace")}</span>
-                          <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 8, whiteSpace: "normal" }}>
+                          <span style={{ fontSize: 12, color: "var(--text-dim)", marginLeft: 8, whiteSpace: "normal" }}>
                             {t("chat.chatOnlyDescription")}
                           </span>
                         </div>

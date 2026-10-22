@@ -70,7 +70,7 @@ export function SessionStatsPanel({ sessionStats, contextUsage, isMobile }: Sess
           compact = false,
         ) => (
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>{title}</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>{title}</div>
               <div style={{
                 display: "grid",
                 gridTemplateColumns: compact ? "max-content max-content" : "auto minmax(0, 1fr)",
@@ -142,7 +142,7 @@ export function SessionStatsPanel({ sessionStats, contextUsage, isMobile }: Sess
         };
         const sessionInfoSection = (
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>{translate("session.infoSection")}</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>{translate("session.infoSection")}</div>
             <div style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto", columnGap: 12, rowGap: 8, alignItems: "start" }}>
               {sessionRows.map((row) => (
                 <div key={`session-info:${row.label}`} style={{ display: "contents" }}>

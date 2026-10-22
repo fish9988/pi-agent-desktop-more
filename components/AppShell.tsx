@@ -1888,7 +1888,7 @@ export function AppShell() {
           color: "#d97706",
           cursor: "pointer",
           flexShrink: 0,
-          fontSize: 11,
+          fontSize: 12,
           lineHeight: 1.35,
           textAlign: "left",
         }}
@@ -2033,7 +2033,7 @@ export function AppShell() {
               background: "var(--bg)",
               color: "var(--accent)",
               cursor: "pointer",
-              fontSize: 11,
+              fontSize: 12,
               fontWeight: 600,
             }}
           >
@@ -2191,7 +2191,7 @@ export function AppShell() {
                   cursor: selectedSession ? "pointer" : "not-allowed",
                   opacity: selectedSession ? 1 : 0.45,
                   flexShrink: 0,
-                  fontSize: 11,
+                  fontSize: 12,
                   whiteSpace: "nowrap",
                 }}
               >
@@ -2320,7 +2320,7 @@ export function AppShell() {
                         borderTop: topMoreOpen ? "2px solid var(--accent)" : "2px solid transparent",
                         color: topMoreOpen ? "var(--text)" : "var(--text-muted)",
                         cursor: "pointer",
-                        fontSize: 11, whiteSpace: "nowrap",
+                        fontSize: 12, whiteSpace: "nowrap",
                         transition: "color 0.1s, background 0.1s",
                       }}
                     >
@@ -2592,7 +2592,7 @@ export function AppShell() {
                       compact = false,
                     ) => (
                         <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>{title}</div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>{title}</div>
                           <div style={{
                             display: "grid",
                             gridTemplateColumns: compact ? "max-content max-content" : "auto minmax(0, 1fr)",
@@ -2665,7 +2665,7 @@ export function AppShell() {
                     const cacheWarmingSectionRows = cacheWarmingInfo ? cacheWarmingRows(cacheWarmingInfo, translate) : [];
                     const sessionInfoSection = (
                       <div style={{ minWidth: 0 }}>
-                         <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>{translate("session.infoSection")}</div>
+                         <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>{translate("session.infoSection")}</div>
                         <div style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto", columnGap: 12, rowGap: 8, alignItems: "start" }}>
                           {sessionRows.map((row) => (
                             <div key={`session-info:${row.label}`} style={{ display: "contents" }}>
@@ -2685,7 +2685,7 @@ export function AppShell() {
                     );
                     const projectInfoSection = projectRows.length > 0 ? (
                       <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>{translate("session.projectSection")}</div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>{translate("session.projectSection")}</div>
                         <div style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto", columnGap: 12, rowGap: 8, alignItems: "start" }}>
                           {projectRows.map((row) => (
                             <div key={`project-info:${row.label}`} style={{ display: "contents" }}>

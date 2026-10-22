@@ -111,7 +111,7 @@ function ProviderUsageContent({ providerId, enabled }: { providerId: string; ena
           )}
         </button>
         {report && (
-          <span title={new Date(report.capturedAt).toLocaleString(locale)} style={{ fontSize: 11, color: "var(--text-dim)", whiteSpace: "nowrap" }}>
+          <span title={new Date(report.capturedAt).toLocaleString(locale)} style={{ fontSize: 12, color: "var(--text-dim)", whiteSpace: "nowrap" }}>
             {t("providerUsage.updated", { time: formatUpdatedTime(report.capturedAt, locale) })}
           </span>
         )}
