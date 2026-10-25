@@ -2151,18 +2151,22 @@ function SessionFamilyItem({
   subtitle?: string;
 }) {
   const { t } = useI18n();
-  const [collapsed, setCollapsed] = useState(false);
   const hasChildren = node.children.length > 0;
-  // Plus 1.7: subagent sessions fold into one "Subagents N" row (open while
-  // one of them is selected or running); forks and other children stay rows.
+  // Plus 1.7: subagent sessions fold into one "Subagents N" row; forks and
+  // other children stay rows. Plus 1.9: a session whose only children are
+  // subagents starts folded, and only a selected subagent opens it (a running
+  // one already shows as the spinner on the parent row).
   const subagentChildren = node.children.filter((child) => child.session.relation?.kind === "subagent");
   const otherChildren = node.children.filter((child) => child.session.relation?.kind !== "subagent");
   const subagentsRunning = subagentChildren.filter((child) => runningSessionIds.has(child.session.id)).length;
-  const subagentActive = subagentsRunning > 0 || subagentChildren.some((child) => child.session.id === selectedSessionId);
-  const [subagentsOpen, setSubagentsOpen] = useState(subagentActive);
+  const subagentSelected = subagentChildren.some((child) => child.session.id === selectedSessionId);
+  const [collapsed, setCollapsed] = useState(() => otherChildren.length === 0 && subagentChildren.length > 0 && !subagentSelected);
+  const [subagentsOpen, setSubagentsOpen] = useState(subagentSelected);
   useEffect(() => {
-    if (subagentActive) setSubagentsOpen(true);
-  }, [subagentActive]);
+    if (!subagentSelected) return;
+    setCollapsed(false);
+    setSubagentsOpen(true);
+  }, [subagentSelected]);
   const renderChild = (child: SessionTreeNode) => (
     <SessionFamilyItem
       key={child.session.id}

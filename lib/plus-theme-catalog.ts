@@ -88,7 +88,7 @@ export interface ThemeDefinition {
   light?: ThemePalette;
   dark?: ThemePalette;
   typography?: ThemeTypography;
-  /** Base corner radius in px for controls and cards (default 9). */
+  /** Ignored since Plus 1.9 (corners are the base's); kept so older theme files still parse. */
   radius?: number;
 }
 
@@ -168,7 +168,6 @@ export const BUILTIN_THEMES: readonly BuiltinTheme[] = [
     description: { en: "Warm paper, clay accent, serif reading", zh: "暖奶油纸 + 陶土橙，衬线阅读" },
     base: "clean",
     typography: { reading: SERIF_READING, heading: SERIF_READING, readingSize: 15, readingLeading: 1.72, thinkingItalic: true },
-    radius: 9,
     light: {
       bg: "#f2f0e8", panel: "#f2f0e8", workbench: "#faf9f5", surface: "#ffffff", text: "#141413", muted: "#5e5d59", dim: "#6f6e68",
       accent: "#b85636", fill: "#c15f3c", border: "#e3dfd3", user: "#efece3",
@@ -189,7 +188,6 @@ export const BUILTIN_THEMES: readonly BuiltinTheme[] = [
     name: { en: "GitHub", zh: "GitHub", tw: "GitHub" },
     description: { en: "GitHub Primer colours", zh: "GitHub 官方配色" },
     base: "clean",
-    radius: 6,
     light: {
       bg: "#f6f8fa", panel: "#f6f8fa", workbench: "#ffffff", surface: "#ffffff", text: "#1f2328", muted: "#59636e", dim: "#6e7781",
       accent: "#0969da", fill: "#1f883d", border: "#d1d9e0", user: "#f6f8fa", code: "#f6f8fa", codeHeader: "#eff2f5", inlineCode: "#1f2328", inlineCodeBg: "#eff1f3", marker: "#59636e",
@@ -247,7 +245,6 @@ export const BUILTIN_THEMES: readonly BuiltinTheme[] = [
     name: { en: "Catppuccin", zh: "Catppuccin", tw: "Catppuccin" },
     description: { en: "Latte by day, Mocha by night", zh: "日用 Latte，夜用 Mocha，柔和粉彩" },
     base: "clean",
-    radius: 11,
     light: {
       bg: "#e6e9ef", panel: "#e6e9ef", workbench: "#eff1f5", surface: "#ffffff", text: "#4c4f69", muted: "#5c5f77", dim: "#6c6f85",
       accent: "#8839ef", border: "#ccd0da", user: "#e6e9ef", code: "#e6e9ef", codeHeader: "#dce0e8", inlineCode: "#d20f39", marker: "#ea76cb",
@@ -286,7 +283,6 @@ export const BUILTIN_THEMES: readonly BuiltinTheme[] = [
     name: { en: "Rosé Pine", zh: "玫瑰松", tw: "玫瑰松" },
     description: { en: "Soho vibes, muted rose", zh: "低饱和玫瑰色" },
     base: "clean",
-    radius: 11,
     typography: { heading: "Georgia, \"Noto Serif SC\", \"Source Han Serif SC\", \"SimSun\", serif" },
     light: {
       bg: "#f2e9e1", panel: "#f2e9e1", workbench: "#faf4ed", surface: "#fffaf3", text: "#575279", muted: "#6e6a86", dim: "#797593",
@@ -307,7 +303,6 @@ export const BUILTIN_THEMES: readonly BuiltinTheme[] = [
     name: { en: "Gruvbox", zh: "Gruvbox 复古", tw: "Gruvbox 復古" },
     description: { en: "Retro groove, warm contrast", zh: "复古暖色高对比" },
     base: "clean",
-    radius: 6,
     light: {
       bg: "#f2e5bc", panel: "#f2e5bc", workbench: "#fbf1c7", surface: "#fffbe8", text: "#3c3836", muted: "#504945", dim: "#7c6f64",
       accent: "#af3a03", border: "#e0d0a6", user: "#ebdbb2", code: "#f2e5bc", codeHeader: "#ebdbb2", inlineCode: "#9d0006", marker: "#d65d0e",
@@ -344,7 +339,6 @@ export const BUILTIN_THEMES: readonly BuiltinTheme[] = [
     name: { en: "Graphite", zh: "石墨黑白", tw: "石墨黑白" },
     description: { en: "Monochrome, ink on paper", zh: "纯黑白，墨水感" },
     base: "clean",
-    radius: 6,
     light: {
       bg: "#efefef", panel: "#efefef", workbench: "#fafafa", surface: "#ffffff", text: "#111111", muted: "#4a4a4a", dim: "#6a6a6a",
       accent: "#111111", border: "#dddddd", user: "#ececec", code: "#f2f2f2", codeHeader: "#e8e8e8", inlineCode: "#111111", inlineCodeBg: "#ebebeb", marker: "#8a8a8a",
@@ -365,6 +359,116 @@ export const DEFAULT_THEME_ID = "plus";
 
 export function findBuiltinTheme(id: string): BuiltinTheme | undefined {
   return BUILTIN_THEMES.find((theme) => theme.id === id);
+}
+
+/**
+ * Plus 1.9: "Plus" is the base every clean theme stacks on. A theme only
+ * says how it differs (colours and fonts); anything it leaves out comes from
+ * the base, layout and corner radius always do. See docs/agents/plus.md §6.
+ */
+export const BASE_THEME: BuiltinTheme = findBuiltinTheme(DEFAULT_THEME_ID)!;
+
+/** Optional fields derived from a parent colour: a theme that sets the parent derives them instead of inheriting the base's. */
+const DERIVED_FROM: ReadonlyArray<[keyof ThemePalette, keyof ThemePalette]> = [
+  ["accentText", "accent"], ["fill", "accent"], ["fillText", "accent"], ["marker", "accent"],
+  ["codeHeader", "code"], ["codeText", "code"], ["inlineCodeBg", "inlineCode"],
+];
+const REQUIRED_COLOURS = ["bg", "panel", "workbench", "surface", "text", "muted", "dim", "accent", "border", "user", "code", "inlineCode"] as const;
+
+/** A theme palette laid over the base palette of the same mode. */
+export function mergePalette(base: ThemePalette, p: Partial<ThemePalette>): ThemePalette {
+  const out: Record<string, unknown> = { ...p };
+  for (const key of REQUIRED_COLOURS) out[key] ??= base[key];
+  for (const [key, parent] of DERIVED_FROM) {
+    if (out[key] === undefined && p[parent] === undefined && base[key] !== undefined) out[key] = base[key];
+  }
+  for (const key of ["danger", "success", "warning"] as const) out[key] ??= base[key];
+  // Syntax colours follow the theme's accent and text unless it names them.
+  if (p.syntax === undefined && p.accent === undefined && p.text === undefined) out.syntax = base.syntax;
+  return out as unknown as ThemePalette;
+}
+
+// ---- layer steps: canvas (bg) → content panel (workbench) → cards (surface) ----
+
+function rgb(hex: string): [number, number, number] {
+  let h = hex.replace("#", "").slice(0, 6);
+  if (h.length === 3) h = [...h].map((c) => c + c).join("");
+  return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)) as [number, number, number];
+}
+function hex([r, g, b]: [number, number, number]): string {
+  return `#${[r, g, b].map((v) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, "0")).join("")}`;
+}
+function luminance(color: string): number {
+  const [r, g, b] = rgb(color).map((v) => v / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+/** WCAG contrast ratio of two #rrggbb colours. */
+export function contrastRatio(a: string, b: string): number {
+  const [x, y] = [luminance(a), luminance(b)].sort((m, n) => n - m);
+  return (x + 0.05) / (y + 0.05);
+}
+/** `color` moved `amount` (0–1) of the way to `target`, in sRGB like CSS color-mix. */
+function toward(color: string, target: string, amount: number): string {
+  const a = rgb(color);
+  const b = rgb(target);
+  return hex([0, 1, 2].map((i) => a[i] + (b[i] - a[i]) * amount) as [number, number, number]);
+}
+/** Moves `color` toward `target` in small steps until it stands `min` apart from `from`. */
+function pushApart(color: string, from: string, target: string, min: number): string {
+  let out = color;
+  for (let step = 1; step <= 40 && contrastRatio(out, from) < min; step += 1) out = toward(color, target, step * 0.01);
+  return out;
+}
+
+/** Smallest steps the base's two-layer shell needs to read (the base itself: 1.12 / 1.04 light, 1.13 / 1.11 dark). */
+export const LAYER_MIN_CANVAS_STEP = 1.06;
+export const LAYER_MIN_CARD_STEP = 1.03;
+
+/**
+ * Plus 1.9: the base's three layers, kept readable in every theme. The
+ * content panel (workbench) stays the theme's own reading background. The
+ * window canvas (bg, where the sidebar sits) must stand one notch below it,
+ * darker when there is room, else lighter; cards (surface) must stand one
+ * notch away from it, raised or inset as the theme draws them. Too-close
+ * layers move toward black or white only, so the hue stays the theme's own.
+ */
+export function layeredPalette(p: ThemePalette): ThemePalette {
+  const valid = [p.bg, p.panel, p.workbench, p.surface].every((c) => /^#[0-9a-f]{3}(?:[0-9a-f]{3})?(?:[0-9a-f]{2})?$/i.test(c));
+  if (!valid) return p;
+  const { workbench } = p;
+  let { bg, surface } = p;
+  const sidebarOnCanvas = p.panel.toLowerCase() === p.bg.toLowerCase();
+  if (luminance(bg) > luminance(workbench) || contrastRatio(bg, workbench) < LAYER_MIN_CANVAS_STEP) {
+    // From the theme's canvas when it is already below the panel, else from the panel itself.
+    const start = luminance(bg) < luminance(workbench) ? bg : workbench;
+    const darker = pushApart(start, workbench, "#000000", LAYER_MIN_CANVAS_STEP);
+    bg = contrastRatio(darker, workbench) >= LAYER_MIN_CANVAS_STEP
+      ? darker
+      : pushApart(workbench, workbench, "#ffffff", LAYER_MIN_CANVAS_STEP);
+  }
+  if (contrastRatio(surface, workbench) < LAYER_MIN_CARD_STEP) {
+    const up = pushApart(surface, workbench, "#ffffff", LAYER_MIN_CARD_STEP);
+    surface = luminance(up) > luminance(workbench) && contrastRatio(up, workbench) >= LAYER_MIN_CARD_STEP
+      ? up
+      : pushApart(surface, workbench, "#000000", LAYER_MIN_CARD_STEP);
+  }
+  if (bg === p.bg && surface === p.surface) return p;
+  return { ...p, bg, panel: sidebarOnCanvas ? bg : p.panel, surface };
+}
+
+/**
+ * The definition a theme actually renders with: its palettes laid over the
+ * base and put in the base's layer order, its fonts over the base's, and the
+ * base's radius (corner radius is layout, not a theme's call).
+ */
+export function resolveThemeDefinition(def: ThemeDefinition): ThemeDefinition {
+  const base = BASE_THEME;
+  return {
+    light: def.light ? layeredPalette(mergePalette(base.light!, def.light)) : undefined,
+    dark: def.dark ? layeredPalette(mergePalette(base.dark!, def.dark)) : undefined,
+    typography: { ...base.typography, ...def.typography },
+    radius: base.radius,
+  };
 }
 
 const mix = (color: string, percent: number, other = "transparent") => `color-mix(in srgb, ${color} ${percent}%, ${other})`;
@@ -482,9 +586,10 @@ function block(selector: string, tokens: Record<string, string>): string {
   return `${selector}{${Object.entries(tokens).map(([name, value]) => `${name}:${value}`).join(";")}}`;
 }
 
-/** CSS for a definition under the given light / dark root selectors. */
-export function compileThemeCss(def: ThemeDefinition, lightSelector: string, darkSelector: string): string {
+/** CSS for a definition under the given light / dark root selectors, stacked on the base. */
+export function compileThemeCss(raw: ThemeDefinition, lightSelector: string, darkSelector: string): string {
   const out: string[] = [];
+  const def = resolveThemeDefinition(raw);
   const shared = sharedTokens(def);
   const light = def.light ? { ...shared, ...paletteTokens(def.light, false) } : shared;
   if (Object.keys(light).length) out.push(block(lightSelector, light));
@@ -498,11 +603,19 @@ export function compileThemeCss(def: ThemeDefinition, lightSelector: string, dar
  * palettes written on html:root / html.dark:root.
  */
 export function builtinThemesCss(themes: readonly BuiltinTheme[] = BUILTIN_THEMES): string {
-  return themes
+  // The base first: every clean-style page starts as Plus, so a CSS-only theme
+  // on the clean base (or a theme that leaves things out) stacks on it.
+  const base = compileThemeCss(BASE_THEME, BASE_LIGHT_SELECTOR, BASE_DARK_SELECTOR);
+  return [base, ...themes
+    // The native base is upstream's look: nothing stacks on it.
+    .filter((theme) => theme.base === "clean")
     .map((theme) => compileThemeCss(theme, `html[data-plus-theme="${theme.id}"]:root`, `html.dark[data-plus-theme="${theme.id}"]:root`))
-    .filter(Boolean)
-    .join("\n");
+    .filter(Boolean)].join("\n");
 }
+
+/** Where the base's tokens apply: any page on the clean style, at the same specificity themes use (themes come later and win). */
+export const BASE_LIGHT_SELECTOR = 'html[data-plus-style="clean"]:root';
+export const BASE_DARK_SELECTOR = 'html.dark[data-plus-style="clean"]:root';
 
 /** Selectors a custom theme's generated tokens use (only one is ever active). */
 export const USER_THEME_LIGHT_SELECTOR = "html[data-plus-theme]:root";

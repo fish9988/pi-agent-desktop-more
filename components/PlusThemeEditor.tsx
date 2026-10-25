@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  BASE_THEME,
   compileUserThemeCss,
   deriveSyntax,
   SYNTAX_KEYS,
@@ -14,6 +15,10 @@ import { FontPicker } from "./FontPicker";
 import { THEME_PREVIEW_ATTR } from "./PlusAppearanceRuntime";
 
 type Translate = (key: string, params?: Record<string, string | number>) => string;
+
+// Plus 1.9: a theme's fonts stack on the base's; an unset size or leading is the base's.
+const BASE_SIZE = BASE_THEME.typography?.readingSize ?? 14;
+const BASE_LEADING = BASE_THEME.typography?.readingLeading ?? 1.7;
 type Mode = "light" | "dark";
 type PaletteKey = Exclude<keyof ThemePalette, "syntax">;
 
@@ -281,22 +286,15 @@ export function PaletteThemeEditor({ t, id, name: initialName, definition: initi
           <div className="plus-appearance-row">
             <span><span>{t("plus.typeSize")}</span></span>
             <span className="plus-range-value">
-              <input type="range" min={12} max={18} step={0.5} value={typography.readingSize ?? 14} onChange={(event) => setTypography({ readingSize: Number(event.target.value) === 14 ? undefined : Number(event.target.value) })} />
-              <span>{typography.readingSize ?? 14}px</span>
+              <input type="range" min={12} max={18} step={0.5} value={typography.readingSize ?? BASE_SIZE} onChange={(event) => setTypography({ readingSize: Number(event.target.value) === BASE_SIZE ? undefined : Number(event.target.value) })} />
+              <span>{typography.readingSize ?? BASE_SIZE}px</span>
             </span>
           </div>
           <div className="plus-appearance-row">
             <span><span>{t("plus.typeLeading")}</span></span>
             <span className="plus-range-value">
-              <input type="range" min={1.4} max={2} step={0.02} value={typography.readingLeading ?? 1.7} onChange={(event) => setTypography({ readingLeading: Number(event.target.value) === 1.7 ? undefined : Number(event.target.value) })} />
-              <span>{(typography.readingLeading ?? 1.7).toFixed(2)}</span>
-            </span>
-          </div>
-          <div className="plus-appearance-row">
-            <span><span>{t("plus.typeRadius")}</span></span>
-            <span className="plus-range-value">
-              <input type="range" min={0} max={16} step={1} value={def.radius ?? 9} onChange={(event) => setDef((current) => ({ ...current, radius: Number(event.target.value) }))} />
-              <span>{def.radius ?? 9}px</span>
+              <input type="range" min={1.4} max={2} step={0.02} value={typography.readingLeading ?? BASE_LEADING} onChange={(event) => setTypography({ readingLeading: Number(event.target.value) === BASE_LEADING ? undefined : Number(event.target.value) })} />
+              <span>{(typography.readingLeading ?? BASE_LEADING).toFixed(2)}</span>
             </span>
           </div>
           <label className="plus-appearance-row plus-check-row">

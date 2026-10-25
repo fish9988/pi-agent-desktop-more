@@ -35,6 +35,9 @@ import type { GalleryTheme } from "@/lib/plus-theme-gallery-opencode";
 
 type Translate = (key: string, params?: Record<string, string | number>) => string;
 
+/** The clean theme to return to when the base goes from native back to Plus. */
+const LAST_CLEAN_THEME_KEY = "plus-last-clean-theme";
+
 function themeName(theme: BuiltinTheme, locale: string): string {
   if (locale === "zh-TW") return theme.name.tw ?? theme.name.zh;
   return locale.startsWith("zh") ? theme.name.zh : theme.name.en;
@@ -328,16 +331,36 @@ export function PlusAppearanceSettings() {
     }
   };
 
-  const builtinCards = BUILTIN_THEMES.filter((theme) => !theme.hidden || settings.theme === theme.id).map((theme) => {
+  // Plus 1.9: the base (Plus or native) comes first; a theme only stacks on its own base,
+  // so cards for the other base are greyed out until the base is switched.
+  const activeUser = userThemes.find((item) => `${USER_THEME_PREFIX}${item.id}` === settings.theme);
+  const activeBase: ThemeBase = findBuiltinTheme(settings.theme)?.base ?? activeUser?.base ?? "clean";
+  const chooseBase = (base: ThemeBase) => {
+    if (base === activeBase) return;
+    if (base === "native") {
+      try { localStorage.setItem(LAST_CLEAN_THEME_KEY, settings.theme); } catch { /* private mode */ }
+      update({ theme: "native" });
+      return;
+    }
+    let last: string | null = null;
+    try { last = localStorage.getItem(LAST_CLEAN_THEME_KEY); } catch { /* private mode */ }
+    const lastOk = last !== null && (findBuiltinTheme(last)?.base === "clean"
+      || userThemes.some((item) => item.base === "clean" && `${USER_THEME_PREFIX}${item.id}` === last));
+    update({ theme: lastOk && last ? last : DEFAULT_THEME_ID });
+  };
+
+  const builtinCards = BUILTIN_THEMES.filter((theme) => theme.base === "clean" && (!theme.hidden || settings.theme === theme.id)).map((theme) => {
     const selected = settings.theme === theme.id;
+    const off = activeBase !== theme.base;
     return (
-      <div key={theme.id} className={`plus-theme-card${selected ? " is-selected" : ""}`}>
-        <button type="button" role="radio" aria-checked={selected} className="plus-theme-card-main" title={theme.description ? (locale.startsWith("zh") ? theme.description.zh : theme.description.en) : undefined} onClick={() => update({ theme: theme.id })}>
+      <div key={theme.id} className={`plus-theme-card${selected ? " is-selected" : ""}${off ? " is-off" : ""}`}>
+        <button type="button" role="radio" aria-checked={selected} disabled={off} className="plus-theme-card-main" title={theme.description ? (locale.startsWith("zh") ? theme.description.zh : theme.description.en) : undefined} onClick={() => update({ theme: theme.id })}>
           <Swatch
             light={theme.light ? { bg: theme.light.workbench, panel: theme.light.panel, accent: theme.light.accent, text: theme.light.text } : { bg: "#ffffff", panel: "#f2f2f4", accent: "#1d1d1f", text: "#1d1d1f" }}
             dark={theme.dark ? { bg: theme.dark.workbench, panel: theme.dark.panel, accent: theme.dark.accent } : { bg: "#1c1c1e", panel: "#242426", accent: "#f5f5f7" }}
           />
           <span className="plus-theme-card-name">{themeName(theme, locale)}</span>
+          {theme.id === DEFAULT_THEME_ID && <span className="plus-theme-card-badge">{t("plus.themeBadgeDefault")}</span>}
         </button>
         <button type="button" className="plus-theme-card-action" title={t("plus.themeDuplicate")} aria-label={t("plus.themeDuplicate")} disabled={busy} onClick={() => void duplicateBuiltin(theme)}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
@@ -349,9 +372,10 @@ export function PlusAppearanceSettings() {
   const userCards = userThemes.map((theme) => {
     const value = `${USER_THEME_PREFIX}${theme.id}`;
     const selected = settings.theme === value;
+    const off = activeBase !== theme.base;
     return (
-      <div key={theme.id} className={`plus-theme-card is-user${selected ? " is-selected" : ""}`}>
-        <button type="button" role="radio" aria-checked={selected} className="plus-theme-card-main" onClick={() => update({ theme: value })} title={theme.name}>
+      <div key={theme.id} className={`plus-theme-card is-user${selected ? " is-selected" : ""}${off ? " is-off" : ""}`}>
+        <button type="button" role="radio" aria-checked={selected} disabled={off} className="plus-theme-card-main" onClick={() => update({ theme: value })} title={theme.name}>
           <Swatch light={theme.swatch} dark={theme.swatchDark} />
           <span className="plus-theme-card-name">{theme.name}</span>
           <span className="plus-theme-card-badge">{t(theme.hasPalette ? "plus.themeBadgePalette" : theme.base === "clean" ? "plus.themeBadgeCssClean" : "plus.themeBadgeCss")}</span>
@@ -380,6 +404,24 @@ export function PlusAppearanceSettings() {
 
   return (
     <div className="plus-appearance">
+      <div className="plus-appearance-heading">
+        <span>{t("plus.themeBaseTitle")}</span>
+      </div>
+      <div className="settings-choice-group plus-theme-base" role="radiogroup" aria-label={t("plus.themeBaseTitle")}>
+        {(["clean", "native"] as const).map((base) => (
+          <button
+            key={base}
+            type="button"
+            role="radio"
+            aria-checked={activeBase === base}
+            className={`config-button config-button-small ${activeBase === base ? "config-button-primary" : "config-button-secondary"}`}
+            onClick={() => chooseBase(base)}
+          >
+            {t(base === "clean" ? "plus.themeBasePlus" : "plus.themeBaseNative")}
+          </button>
+        ))}
+      </div>
+      <p className="settings-option-hint plus-theme-hint">{t(activeBase === "clean" ? "plus.themeBasePlusHint" : "plus.themeBaseNativeHint")}</p>
       <div className="plus-appearance-heading">
         <span>{t("plus.themes")}</span>
         <span className="plus-appearance-heading-actions">

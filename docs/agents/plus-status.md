@@ -3,16 +3,25 @@
 > 每次工作结束（或上下文快满、要换会话时）更新本文件。长期知识写在 [plus.md](plus.md)。
 > 新会话接手的顺序：`AGENTS.md` 开头的 Plus 部分 → `plus.md` → 本文件 → `git log --oneline -10` → `CHANGELOG-PLUS.md` 的最新条目。
 
-_最后更新：2026-10-25_
+_最后更新：2026-10-26_
 
 ## 当前状态
 
 - 上一版 v1.6.1：修复文件树下载按钮无反应、「在资源管理器中显示」打开错目录（正斜杠路径 + Rust 引号问题，改用 `raw_arg`）。v1.6.0 是上游周报 #1 的移植。
 - 用户的正式版 `D:\Pi Agent Plus` 是 **1.5.0**，用户会自己点「更新」升级到 1.6.0。
 - 测试版 `D:\Pi Agent Plus Test` 是 1.7.0-test.23（`plus-prefs.test.json` 里主题选了「Plus 分层」、深色），没在运行。
-- **最新发布：v1.8.0**（2026-10-25）：设置参考 PI-Desktop 重做，见下方「设置整页（1.8.0）」。上一版 v1.7.1（2026-10-22，6dbc3ce5）：补齐效果图（见下方「补齐效果图」）；测试版 1.7.1-test.27 已装到测试目录验证。上一版 v1.7.0（a7b505a8）：界面重设计第一批，Release 带签名的 `latest.json`；测试版 1.7.0-test.23 已装到 `D:\Pi Agent Plus Test` 并验证过。第二批（侧栏细调、11px→12px）和补齐效果图的 1.7.1 已提交，见下方。
+- **最新发布：v1.9.0**（2026-10-26）：Plus 成为默认底层、主题只改颜色和字体，见下方「主题分层（1.9.0）」。上一版 v1.8.0（2026-10-25）：设置参考 PI-Desktop 重做，见下方「设置整页（1.8.0）」。上一版 v1.7.1（2026-10-22，6dbc3ce5）：补齐效果图（见下方「补齐效果图」）；测试版 1.7.1-test.27 已装到测试目录验证。上一版 v1.7.0（a7b505a8）：界面重设计第一批，Release 带签名的 `latest.json`；测试版 1.7.0-test.23 已装到 `D:\Pi Agent Plus Test` 并验证过。第二批（侧栏细调、11px→12px）和补齐效果图的 1.7.1 已提交，见下方。
 - 上游周报 #1 已处理并标记为已看（`.github/upstream-reviewed.json` 指向 pi-web `7c0778a8`、abcwyc `d414e9db`）。
 
+## 主题分层（1.9.0，2026-10-26）
+
+- 用户定的规则写在 `plus.md` §6：Plus 是底层，主题只改颜色和字体；“换主题时它该不该变”决定样式归底层还是变量。
+- 实现：`lib/plus-theme-catalog.ts` 的 `BASE_THEME`、`mergePalette`、`layeredPalette`、`resolveThemeDefinition`；`compileThemeCss` 先解析再编译；`builtinThemesCss` 先输出底层（`BASE_LIGHT_SELECTOR`），native 底层的主题不输出。内置主题去掉了 radius。
+- 外观页：`PlusAppearanceSettings.tsx` 的「底层」分段（`chooseBase`，localStorage `plus-last-clean-theme` 记住切回 Plus 时用的主题），另一底层的卡片 `is-off` 变灰。
+- 侧栏：`SessionSidebar.tsx` 的 `SessionFamilyItem`，只有子 Agent 的会话初始折叠，只有选中子 Agent 时展开（运行中不再自动展开）。
+- 棘轮：`lib/plus-theme-layering.test.mjs`（plus CSS 写死颜色 14、写死字体 46，组件行内写死颜色 16；CSS 里不许出现 `data-plus-theme=`；所有主题的层次与文字对比度）。组件里的状态色已批量换成 `var(--danger/--warning/--success)`（脚本 `C:\pi-project\plus-shots\tokenize-colors.mjs`）；`TerminalPanel` 的 xterm 配色必须是真实色值，故意没换。
+- 截图：`C:\pi-project\plus-shots\theme-stack-shots.mjs`（GitHub 浅色、Claude、Aura 深色、Carbonfox 深色、外观页；主题库主题在页面里注入，不写 ~/.pi）。
+- 没做：主题字段在编辑器里仍然要填全（合并逻辑支持只写差异，但调色板编辑器、文件校验还要求完整配色）；写死字体 46 处、CSS 写死颜色 14 处还没清。
 ## 设置整页（1.8.0，2026-10-25）
 
 - 用户要求“PI-Desktop 基本可以借鉴，直接全部改完发版”。参考图在 `C:\pi-project\research\PI-Desktop\docs\image\readme\`（plugins_zh.png、addmodel_zh.png）。
@@ -35,6 +44,7 @@ _最后更新：2026-10-25_
 | 1.4.1 | 用来验证应用内升级的版本；版本号显示完整的 vX.Y.Z |
 | 1.5.0 | 工作时间线、外观独立成页并带实时预览、粗体与标题字体、输入框下扩展标签、只显示费用的用量行、轻动效、移植 pi-web 0.12 性能、测试版打包 |
 | 1.6.1 | 文件树下载按钮、在资源管理器中显示 |
+| 1.9.0 | Plus 默认底层 + 主题叠加（颜色/字体）、层次兜底、外观页「底层」、只有子 Agent 的会话默认折叠、状态色跟随主题 |
 | 1.8.0 | 设置整页（返回、搜索、分组导航、页头）、插件卡片与能力标签、插件「发现」页（npm pi-package）、模型页标题/图标/中文说明、代码字体中文被拉开的修复 |
 | 1.7.0 | 界面重设计第一批：默认主题「Plus 分层」、两层外壳、输入框收进一张卡片、运行中的引导/后续消息/停止、改动卡目录、扩展面板外框、设计阶梯 |
 | 1.6.0 | 上游周报 #1：子目录→根目录会话不再被关、在此提问光标、页内锚点、模型改动对已开会话生效、标题搜索、.agents/skills 分组、diff 省略行；Claude 自适应思考、单模型 Base URL、按服务商搜模型、内联音视频、终端字号跟随；状态轮询不带系统提示词 |

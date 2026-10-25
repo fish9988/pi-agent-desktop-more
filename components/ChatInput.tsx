@@ -721,7 +721,7 @@ export function WorkspaceUnavailableBanner({ workspace, onRecheck }: { workspace
             style={{
               flexShrink: 0,
               padding: "2px 8px",
-              border: "var(--hairline) solid rgba(239,68,68,0.45)",
+              border: "var(--hairline) solid color-mix(in srgb, var(--danger) 45%, transparent)",
               borderRadius: 5,
               background: "transparent",
               color: "inherit",
@@ -794,7 +794,7 @@ export function ModelScopeWarningBanner({
           style={{
             flexShrink: 0,
             padding: "2px 8px",
-            border: `1px solid rgba(234,179,8,0.45)`,
+            border: `1px solid color-mix(in srgb, var(--warning) 45%, transparent)`,
             borderRadius: 5,
             background: "transparent",
             color: "inherit",
@@ -2287,8 +2287,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         {retryInfo && (
           <div style={{
             marginBottom: 8, padding: "5px 10px",
-            background: "rgba(234,179,8,0.08)", border: "var(--hairline) solid rgba(234,179,8,0.25)",
-            borderRadius: 6, fontSize: 12, color: "rgba(180,130,0,0.9)",
+            background: "color-mix(in srgb, var(--warning) 8%, transparent)", border: "var(--hairline) solid color-mix(in srgb, var(--warning) 25%, transparent)",
+            borderRadius: 6, fontSize: 12, color: "var(--warning)",
             display: "flex", alignItems: "center", gap: 6,
           }}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
@@ -2335,8 +2335,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         {compactResultText && (
           <div style={{
             marginBottom: 8, padding: "5px 10px",
-            background: "rgba(16,185,129,0.08)", border: "var(--hairline) solid rgba(16,185,129,0.24)",
-            borderRadius: 6, fontSize: 12, color: "rgba(5,150,105,0.95)",
+            background: "color-mix(in srgb, var(--success) 8%, transparent)", border: "var(--hairline) solid color-mix(in srgb, var(--success) 24%, transparent)",
+            borderRadius: 6, fontSize: 12, color: "var(--success)",
             display: "flex", alignItems: "center", gap: 6,
           }}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
@@ -2366,10 +2366,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             style={{
               marginBottom: 8,
               padding: "7px 10px",
-              background: "rgba(239,68,68,0.07)",
-              border: "var(--hairline) solid rgba(239,68,68,0.3)",
+              background: "color-mix(in srgb, var(--danger) 7%, transparent)",
+              border: "var(--hairline) solid color-mix(in srgb, var(--danger) 30%, transparent)",
               borderRadius: 6,
-              color: "#ef4444",
+              color: "var(--danger)",
               fontFamily: "var(--font-mono)",
               fontSize: 12,
               lineHeight: 1.5,

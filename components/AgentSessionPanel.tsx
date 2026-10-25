@@ -32,9 +32,9 @@ function formatRelativeTime(value: string, locale: string): string {
 
 function statusColor(status: SubagentSessionStatus): string {
   if (status === "running" || status === "starting") return "var(--accent)";
-  if (status === "completed") return "#16a34a";
-  if (status === "failed") return "#dc2626";
-  if (status === "aborted") return "#d97706";
+  if (status === "completed") return "var(--success)";
+  if (status === "failed") return "var(--danger)";
+  if (status === "aborted") return "var(--warning)";
   return "var(--text-dim)";
 }
 
@@ -199,7 +199,7 @@ function AgentRow({
                 event.stopPropagation();
                 onStop();
               }}
-              style={{ display: "inline-grid", placeItems: "center", width: 22, height: 22, border: "var(--hairline) solid rgba(239,68,68,0.4)", borderRadius: 5, background: "var(--bg)", color: "#ef4444", cursor: actionPending ? "default" : "pointer", padding: 0 }}
+              style={{ display: "inline-grid", placeItems: "center", width: 22, height: 22, border: "var(--hairline) solid color-mix(in srgb, var(--danger) 40%, transparent)", borderRadius: 5, background: "var(--bg)", color: "var(--danger)", cursor: actionPending ? "default" : "pointer", padding: 0 }}
             >
               <StopIcon />
             </button>
@@ -293,7 +293,7 @@ export function AgentSessionPanel({ rootSession, subagents, selectedSessionId, r
           )}
         </div>
         {controlError && (
-          <div role="alert" style={{ padding: "6px 12px", background: "rgba(239,68,68,0.07)", color: "#ef4444", fontSize: 12, borderBottom: "var(--hairline) solid var(--border)" }}>
+          <div role="alert" style={{ padding: "6px 12px", background: "color-mix(in srgb, var(--danger) 7%, transparent)", color: "var(--danger)", fontSize: 12, borderBottom: "var(--hairline) solid var(--border)" }}>
             {controlError}
           </div>
         )}

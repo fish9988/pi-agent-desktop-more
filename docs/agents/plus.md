@@ -114,11 +114,20 @@ npx eslint components lib hooks app scripts --quiet
 
 - **Plus 的 CSS 只写在 `app/plus.css` 和 `app/plus-theme.css`。** 它们在 `layout.tsx` 里最后引入。
 - `globals.css` 和 `settings.css` 必须与上游**逐字节一致**，`scripts/upstream-css-baseline.test.mjs` 会检查。`native-theme.css` 属于 abcwyc 那一层，尽量也别动。
-- 主题负责整个外观：
-  - 调色板主题一律基于 `clean`。
-  - 引擎规则写在 `plus-theme.css` 里，用 `:where(html[data-plus-style="clean"])`。
-  - 语法高亮颜色映射到 `--plus-syn-*`。
-  - custom.css 只是可选的叠加层（`customCssOverlay`，默认关闭）。
+- **主题分层（1.9 起，用户定的规则）：Plus 是底层，主题叠在上面，只改颜色和字体。**
+  - 判断一个样式归谁，只问一句：**“换一个主题时，它应不应该跟着变？”** 应该变 → 写成变量（Plus 给默认值，主题可覆盖）；不该变 → 写在底层，或用阶梯变量。
+  - **底层**（主题碰不到）：布局（两层外壳、侧栏、标题栏、输入框卡片、整页设置、插件卡片…）、间距、界面字号阶梯、**圆角**、控件高度、层次关系（哪块是窗口底色/内容面板/卡片）、阴影形状、动效、层级、图标、交互状态“变多少”。
+  - **主题**（只能写这些）：颜色（`ThemePalette` 的字段：底色三层、文字三档、强调/按钮色、边框、用户气泡、代码块、行内代码、状态色、代码高亮）和字体（`ThemeTypography`：正文/标题/粗体字体、正文字号和行高、思考斜体）。主题没写的项一律用 Plus 的值（`lib/plus-theme-catalog.ts` 的 `resolveThemeDefinition`：`mergePalette` + 字体合并 + 圆角固定用底层的）。
+  - 层次兜底：`layeredPalette` 保证窗口底色和内容面板、内容面板和卡片之间至少一档色差（`LAYER_MIN_*`），只往黑或白推，内容面板永远是主题自己的阅读底色。
+  - 用户在外观页选的字体优先级最高。「原生」是另一种底层（上游原样），不叠加主题；纯 CSS 主题（custom.css 风格）是自负其责的出口，不受这些规则约束。
+- **写 CSS 的 6 条硬规则**（`lib/plus-theme-layering.test.mjs` 有只降不升的棘轮）：
+  1. 底层 CSS 不写死颜色：用 `var(--…)` 或 `color-mix(… var(--…) …)`；`var(--x, 兜底值)` 里的兜底、`transparent`、`currentColor` 允许。
+  2. 底层 CSS 不写死字体名：只用 `--font-ui`、`--font-mono`、`--plus-reading-font`、`--plus-heading-font`、`--plus-bold-font`。
+  3. 尺寸用阶梯变量 `--plus-fs-*`、`--plus-r-*`、`--plus-s*`（`plus-design-scale.test.mjs`）。
+  4. 主题不写选择器：主题是一张“变量 = 值”的表。想让某样东西能被主题改，先在底层加变量（Plus 给默认值），再让主题能填它。
+  5. 布局规则只挂 `html[data-plus-style="clean"]`，**永远不按主题名写选择器**（`data-plus-theme=` 在 CSS 文件里必须是 0 处）。底层的值在 `BASE_LIGHT_SELECTOR`（`html[data-plus-style="clean"]:root`），主题在其后、同优先级，自然覆盖，不用 `!important`。
+  6. 组件行内样式不写颜色和字体；状态色用 `var(--danger)` / `var(--success)` / `var(--warning)`。例外：xterm 这类要真实色值的第三方配置（`TerminalPanel`）。
+- 其他主题细节：语法高亮颜色映射到 `--plus-syn-*`；custom.css 只是可选的叠加层（`customCssOverlay`，默认关闭）。
 - **设计阶梯（1.7 起）**：字号 12/13/14/16/20、圆角 4/8/12、间距 4 的倍数，CSS 用 `--plus-fs-*`、`--plus-r-*`、`--plus-s*`，组件行内样式用 `lib/plus-design-scale.ts` 的 `scaleVar()`。`lib/plus-design-scale.test.mjs` 是只降不升的棘轮：新代码不要再写阶梯外的字号和圆角；迁移一批后把基线调低。
 - **重设计层**：`plus-theme.css` 末尾的 "Redesign layer" 按步骤分组（外壳、消息、输入框、运行、扩展面板），覆盖前面的引擎规则。外壳只在 ≥769px 生效；新元素（改动卡目录、运行中按钮、扩展面板外框、ANSI 色）的基础样式在 `plus.css`，对所有主题生效。
 - 弹层统一使用 zIndex 2400，否则会被设置窗口挡住。
