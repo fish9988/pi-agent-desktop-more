@@ -353,7 +353,7 @@ test("Save applies a provider name typed without pressing Rename", () => {
   assert.match(save, /collectModelRenames\(draft,/);
 });
 
-test("model discovery is not gated on a configured base URL", () => {
+test("model discovery is not gated on a configured base URL", async () => {
   const providerDetail = source.slice(
     source.indexOf("function ProviderDetail"),
     source.indexOf("// ── ThinkingLevelMap editor"),
@@ -363,7 +363,9 @@ test("model discovery is not gated on a configured base URL", () => {
   assert.match(providerDetail, /if \(discoveryState\.phase === "loading"\) return;/);
   assert.match(providerDetail, /disabled=\{discoveryState\.phase === "loading"\}/);
   assert.doesNotMatch(providerDetail, /!provider\.baseUrl\?\.trim\(\)/);
-  assert.match(providerDetail, /Leave empty for a built-in provider to use the endpoint pi ships/);
+  // Plus 1.8: the hint moved to the locale files (plus.models.baseUrlHint).
+  assert.match(providerDetail, /t\("plus\.models\.baseUrlHint"\)/);
+  assert.match(await readFile(new URL("../lib/i18n/messages/en.ts", import.meta.url), "utf8"), /"plus\.models\.baseUrlHint": "Leave empty for a built-in provider to use the endpoint pi ships"/);
 });
 
 test("reads modelOverrides spec values for a model id (#131)", () => {

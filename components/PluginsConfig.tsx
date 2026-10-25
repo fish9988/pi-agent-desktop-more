@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
 import { sendAgentCommand } from "@/lib/agent-client";
 import type {
   PluginPackageInfo,
@@ -19,7 +19,6 @@ import {
 import {
   ConfigAddSourcePanel,
   ConfigButton,
-  ConfigDetail,
   ConfigDetailActions,
   ConfigDetailGrid,
   ConfigDetailGridRow,
@@ -30,24 +29,26 @@ import {
   ConfigEmptyState,
   ConfigFooter,
   ConfigFooterStatus,
-  ConfigListAction,
   ConfigPanelShell,
   ConfigSaveTarget,
   ConfigScopeTag,
-  ConfigSidebar,
   ConfigSidebarGroupLabel,
   ConfigSidebarGroupStatus,
   ConfigSidebarGroupSwitch,
-  ConfigSidebarItem,
-  ConfigSidebarList,
-  ConfigSidebarText,
   ConfigSectionTitle,
-  ConfigSplitView,
   ConfigStatusDot,
   ConfigSwitch,
   ConfigTrustNotice,
 } from "./SettingsUi";
 import { itemsToSwitch, projectTrustReloadKey } from "./settings-ui-helpers";
+import {
+  formatCount,
+  pluginDisplayName,
+  pluginHue,
+  pluginInitial,
+  pluginSourceKind,
+  type PluginCatalogEntry,
+} from "@/lib/plugin-catalog";
 
 type PluginScope = PluginPackageInfo["scope"];
 type PluginAction = "install" | "remove" | "update" | "disable" | "enable";
@@ -364,6 +365,11 @@ function PackageDetail({
       <div className="config-detail-heading">
         <ConfigDetailHeader className="is-top-aligned">
           <ConfigDetailHeaderInfo>
+            <PluginAvatar name={pluginDisplayName(pkg.source, pkg.packageName)} />
+            <span className="plus-plugin-detail-title">
+              <strong>{pluginDisplayName(pkg.source, pkg.packageName)}</strong>
+              <span title={pkg.source}>{pkg.source}</span>
+            </span>
             <ConfigScopeTag scope={pkg.scope}>{scopeLabel(pkg.scope, t)}</ConfigScopeTag>
             {pkg.disabled ? (
               <span
@@ -390,18 +396,6 @@ function PackageDetail({
                 {t("i18n.filtered")}
               </span>
             )}
-            <span
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: 12,
-                color: "var(--text)",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {pkg.source}
-            </span>
           </ConfigDetailHeaderInfo>
 
           <ConfigDetailActions>
@@ -563,6 +557,232 @@ function StandaloneExtensionDetail({ extension }: { extension: PluginStandaloneE
   );
 }
 
+function PluginAvatar({ name }: { name: string }) {
+  return (
+    <span
+      className="plus-plugin-avatar"
+      aria-hidden="true"
+      style={{ "--plugin-hue": pluginHue(name) } as CSSProperties}
+    >
+      {pluginInitial(name)}
+    </span>
+  );
+}
+
+/**
+ * What a plugin can do, PI-Desktop style: an extension runs code inside the
+ * agent (tools, commands, hooks), so it gets the warning tag; skills, prompts
+ * and themes only add text or styles.
+ */
+function PluginTags({ counts }: { counts: { extensions: number; skills: number; prompts: number; themes: number } }) {
+  const { t } = useI18n();
+  const tags: { key: string; label: string; warn?: boolean; hint?: string }[] = [];
+  if (counts.extensions) tags.push({ key: "code", label: t("plus.plugins.capCode"), warn: true, hint: t("plus.plugins.capCodeHint") });
+  if (counts.extensions > 1) tags.push({ key: "ext", label: t("i18n.resourceCount", { count: counts.extensions, label: t("i18n.extensionShort") }) });
+  if (counts.skills) tags.push({ key: "skills", label: t("i18n.resourceCount", { count: counts.skills, label: t("i18n.skillShort") }) });
+  if (counts.prompts) tags.push({ key: "prompts", label: t("i18n.resourceCount", { count: counts.prompts, label: t("i18n.promptShort") }) });
+  if (counts.themes) tags.push({ key: "themes", label: t("i18n.resourceCount", { count: counts.themes, label: t("i18n.themeShort") }) });
+  if (tags.length === 0) return null;
+  return (
+    <span className="plus-plugin-tags">
+      {tags.map((tag) => (
+        <span key={tag.key} className={`plus-plugin-tag${tag.warn ? " is-warn" : ""}`} title={tag.hint}>{tag.label}</span>
+      ))}
+    </span>
+  );
+}
+
+function InstalledPluginCard({
+  pkg,
+  busy,
+  updateAvailable,
+  onOpen,
+  onToggle,
+}: {
+  pkg: PluginPackageInfo;
+  busy: boolean;
+  updateAvailable: boolean;
+  onOpen: () => void;
+  onToggle: () => void;
+}) {
+  const { t } = useI18n();
+  const name = pluginDisplayName(pkg.source, pkg.packageName);
+  const meta = [
+    t(`plus.plugins.kind.${pluginSourceKind(pkg.source)}`),
+    pkg.version ? `v${pkg.version}` : null,
+  ].filter(Boolean).join(" · ");
+  return (
+    <article className={`plus-plugin-card${pkg.disabled ? " is-disabled" : ""}`}>
+      <button type="button" className="plus-plugin-card-main" onClick={onOpen} title={pkg.source}>
+        <span className="plus-plugin-card-head">
+          <PluginAvatar name={name} />
+          <span className="plus-plugin-card-name">
+            <strong>{name}</strong>
+            <span>{meta}</span>
+          </span>
+        </span>
+        <span className="plus-plugin-card-desc">{pkg.description?.trim() || t("plus.plugins.noDescription")}</span>
+        {!pkg.disabled && <PluginTags counts={pkg.counts} />}
+      </button>
+      <div className="plus-plugin-card-foot">
+        <span className="plus-plugin-card-status">
+          <ConfigStatusDot active={!pkg.disabled} color={statusColor(pkg.status)} />
+          {statusLabel(pkg.status, t)}
+        </span>
+        {updateAvailable && <span className="plus-plugin-card-update">{t("i18n.updateAvailable")}</span>}
+        <ConfigSwitch
+          size="small"
+          checked={!pkg.disabled}
+          loading={busy}
+          onChange={onToggle}
+          label={pkg.disabled ? t("i18n.enablePackage") : t("i18n.disablePackage")}
+        />
+      </div>
+    </article>
+  );
+}
+
+function StandaloneExtensionCard({ extension, onOpen }: { extension: PluginStandaloneExtensionInfo; onOpen: () => void }) {
+  const { t } = useI18n();
+  return (
+    <article className={`plus-plugin-card${extension.enabled ? "" : " is-disabled"}`}>
+      <button type="button" className="plus-plugin-card-main" onClick={onOpen} title={extension.path}>
+        <span className="plus-plugin-card-head">
+          <PluginAvatar name={extension.name} />
+          <span className="plus-plugin-card-name">
+            <strong>{extension.name}</strong>
+            <span>{t("plus.plugins.kind.local")} · {scopeLabel(extension.scope, t)}</span>
+          </span>
+        </span>
+        <span className="plus-plugin-card-desc">{shortenPath(extension.path)}</span>
+        <PluginTags counts={{ extensions: 1, skills: 0, prompts: 0, themes: 0 }} />
+      </button>
+      <div className="plus-plugin-card-foot">
+        <span className="plus-plugin-card-status">
+          <ConfigStatusDot active={extension.enabled} />
+          {statusLabel(extension.enabled ? "loaded" : "disabled", t)}
+        </span>
+      </div>
+    </article>
+  );
+}
+
+type CatalogState =
+  | { phase: "loading" }
+  | { phase: "error"; message: string }
+  | { phase: "ready"; packages: PluginCatalogEntry[]; total: number };
+
+/**
+ * Settings › Plugins › Discover: pi packages from npm (the list pi.dev shows),
+ * most downloaded first. Installing asks once more, since a package runs
+ * third-party code; it installs globally, like `pi install`.
+ */
+function DiscoverPanel({
+  query,
+  installedNames,
+  installingName,
+  onInstall,
+}: {
+  query: string;
+  installedNames: ReadonlySet<string>;
+  installingName: string | null;
+  onInstall: (name: string) => void;
+}) {
+  const { t } = useI18n();
+  const [state, setState] = useState<CatalogState>({ phase: "loading" });
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      setState({ phase: "loading" });
+      try {
+        const res = await fetch(`/api/plugins/catalog?q=${encodeURIComponent(query.trim())}`, { signal: controller.signal });
+        const data = await res.json() as { packages?: PluginCatalogEntry[]; total?: number; error?: string };
+        if (!res.ok || data.error) throw new Error(data.error ?? `HTTP ${res.status}`);
+        setState({ phase: "ready", packages: data.packages ?? [], total: data.total ?? 0 });
+      } catch (err) {
+        if (!controller.signal.aborted) setState({ phase: "error", message: err instanceof Error ? err.message : String(err) });
+      }
+    }, query.trim() ? 400 : 0);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [query, attempt]);
+
+  if (state.phase === "loading") return <ConfigEmptyState>{t("i18n.loading")}</ConfigEmptyState>;
+  if (state.phase === "error") {
+    return (
+      <ConfigEmptyState>
+        <span className="plus-plugins-catalog-error">{t("plus.plugins.catalogError", { error: state.message })}</span>
+        <ConfigButton size="small" onClick={() => setAttempt((value) => value + 1)}>{t("plus.plugins.retry")}</ConfigButton>
+      </ConfigEmptyState>
+    );
+  }
+  return (
+    <section className="plus-plugins-group">
+      <div className="plus-plugins-catalog-head">
+        <span>{query.trim()
+          ? t("plus.plugins.catalogSearchSummary", { total: state.total.toLocaleString(), shown: state.packages.length })
+          : t("plus.plugins.catalogSummary", { total: state.total.toLocaleString(), shown: state.packages.length })}</span>
+        <a href="https://pi.dev/packages" target="_blank" rel="noreferrer">pi.dev/packages ↗</a>
+      </div>
+      {state.packages.length === 0 ? (
+        <ConfigEmptyState>{t("plus.plugins.catalogEmpty")}</ConfigEmptyState>
+      ) : (
+        <div className="plus-plugins-grid">
+          {state.packages.map((entry) => {
+            const installed = installedNames.has(entry.name);
+            const installing = installingName === entry.name;
+            const meta = [
+              entry.publisher,
+              entry.version ? `v${entry.version}` : null,
+              t("plus.plugins.weeklyDownloads", { count: formatCount(entry.weeklyDownloads) }),
+            ].filter(Boolean).join(" · ");
+            return (
+              <article key={entry.name} className="plus-plugin-card">
+                <div className="plus-plugin-card-main">
+                  <span className="plus-plugin-card-head">
+                    <PluginAvatar name={entry.name} />
+                    <span className="plus-plugin-card-name">
+                      <strong title={entry.name}>{entry.name}</strong>
+                      <span>{meta}</span>
+                    </span>
+                  </span>
+                  <span className="plus-plugin-card-desc">{entry.description || t("plus.plugins.noDescription")}</span>
+                </div>
+                <div className="plus-plugin-card-foot">
+                  {confirming === entry.name && !installed ? (
+                    <span className="plus-plugin-card-confirm">{t("plus.plugins.installConfirm")}</span>
+                  ) : (
+                    <a className="plus-plugin-card-link" href={entry.repoUrl || entry.npmUrl} target="_blank" rel="noreferrer">
+                      {entry.repoUrl ? t("plus.plugins.repo") : "npm"} ↗
+                    </a>
+                  )}
+                  {installed ? (
+                    <span className="plus-plugin-card-installed">✓ {t("plus.plugins.installedTag")}</span>
+                  ) : confirming === entry.name ? (
+                    <span className="plus-plugin-card-actions">
+                      <ConfigButton size="small" variant="ghost" disabled={installing} onClick={() => setConfirming(null)}>{t("i18n.cancel")}</ConfigButton>
+                      <ConfigButton size="small" variant="primary" disabled={installingName !== null} onClick={() => onInstall(entry.name)}>
+                        {installing ? t("i18n.installing") : t("plus.plugins.installConfirmButton")}
+                      </ConfigButton>
+                    </span>
+                  ) : (
+                    <ConfigButton size="small" disabled={installingName !== null} onClick={() => setConfirming(entry.name)}>{t("i18n.install")}</ConfigButton>
+                  )}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function PluginsConfig({
   cwd,
   sessionId,
@@ -597,6 +817,10 @@ export function PluginsConfig({
   const [checkingAll, setCheckingAll] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [updatingAll, setUpdatingAll] = useState(false);
+  // Plus 1.8: cards with a detail view, and a Discover tab (after PI-Desktop).
+  const [view, setView] = useState<"installed" | "discover">("installed");
+  const [filter, setFilter] = useState("");
+  const [showDetail, setShowDetail] = useState(false);
 
   const packages = useMemo(() => data?.packages ?? [], [data?.packages]);
   const standaloneExtensions = useMemo(() => data?.standaloneExtensions ?? [], [data?.standaloneExtensions]);
@@ -834,11 +1058,14 @@ export function PluginsConfig({
     }
   }, [cwd, sessionId, t]);
 
-  const installPlugin = useCallback(async () => {
-    const source = normalizePluginSourceInput(installSource).trim();
+  const installPlugin = useCallback(async (catalogSource?: string) => {
+    const fromCatalog = catalogSource !== undefined;
+    const source = normalizePluginSourceInput(catalogSource ?? installSource).trim();
     if (!source) return;
-    setInstallSource(source);
-    const key = `${installScope}\0${source}`;
+    if (!fromCatalog) setInstallSource(source);
+    // Discover installs globally, as `pi install` does.
+    const targetScope = fromCatalog ? "global" : installScope;
+    const key = `${targetScope}\0${source}`;
     setBusyKey(`install:${key}`);
     setActionError(null);
     setActionMessage(null);
@@ -847,22 +1074,27 @@ export function PluginsConfig({
       const res = await fetch("/api/plugins", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "install", source, scope: installScope, cwd }),
+        body: JSON.stringify({ action: "install", source, scope: targetScope, cwd }),
       });
       const next = (await res.json()) as PluginsResponse & { error?: string };
       if (!res.ok || next.error) throw new Error(next.error ?? `HTTP ${res.status}`);
       setData(next);
-      const installed = findInstalledPackage(next.packages, source, installScope);
+      const installed = findInstalledPackage(next.packages, source, targetScope);
       setSelected(installed ? packageKey(installed) : key);
-      setAddMode(false);
-      setInstallSource("");
-      setActionMessage(t("i18n.packageInstalled"));
+      if (!fromCatalog) {
+        setAddMode(false);
+        setShowDetail(true);
+        setInstallSource("");
+      }
+      setActionMessage(sessionId
+        ? `${t("i18n.packageInstalled")} ${t("agents.reloadRequired")}`
+        : t("i18n.packageInstalled"));
     } catch (err) {
       setActionError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusyKey(null);
     }
-  }, [cwd, installScope, installSource, t]);
+  }, [cwd, installScope, installSource, sessionId, t]);
 
   const reloadSession = useCallback(async () => {
     if (!sessionId) return;
@@ -888,161 +1120,221 @@ export function PluginsConfig({
   ).length;
   const hasCheckablePackages = packages.some((pkg) => pkg.canCheckForUpdates);
   const footerBusy = loading || busyKey !== null || checkingUpdates.size > 0 || updatingAll;
+  const installedCount = packages.length + standaloneExtensions.length;
+  // Discover marks what is already here: npm names, by package name or by `npm:` source.
+  const installedNames = useMemo(() => new Set(packages.flatMap((pkg) => [
+    pkg.packageName ?? "",
+    pkg.source.startsWith("npm:") ? pkg.source.slice(4).replace(/@[^@/]+$/, "") : "",
+  ].filter(Boolean))), [packages]);
+  const catalogInstalling = busyKey?.startsWith("install:global\0npm:") ? busyKey.slice("install:global\0npm:".length) : null;
+  const filterWords = view === "installed" ? filter.trim().toLowerCase() : "";
+  const matchesFilter = (...fields: (string | null | undefined)[]) => !filterWords
+    || fields.some((field) => field?.toLowerCase().includes(filterWords));
+  const shownExtensions = standaloneExtensions.filter((extension) => matchesFilter(extension.name, extension.path));
+  const detailOpen = view === "installed" && !addMode && showDetail && Boolean(selectedPackage || selectedExtension);
+  const openCard = (key: string) => {
+    setSelected(key);
+    setShowDetail(true);
+    setAddMode(false);
+    setActionError(null);
+    setActionMessage(null);
+  };
+  const backToList = () => {
+    setShowDetail(false);
+    setAddMode(false);
+    setActionError(null);
+  };
+  const backLink = (
+    <button type="button" className="plus-plugins-back" onClick={backToList}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+      {t("plus.plugins.backToList")}
+    </button>
+  );
 
   return (
     <ConfigPanelShell embedded={embedded} title={t("common.plugins")} subtitle={shortenPath(cwd)} closeLabel={t("i18n.close")} onClose={onClose}>
 
         {!projectResourcesLoaded && <ConfigTrustNotice message={t("trust.pluginsNotLoaded")} />}
 
-        <ConfigSplitView>
-          <ConfigSidebar>
-            <ConfigSidebarList>
-              {loading ? (
-                <div className="config-sidebar-message">
-                  {t("i18n.loading")}
-                </div>
-              ) : error ? (
-                <div className="config-sidebar-message is-error">
-                  {error}
-                </div>
-              ) : packages.length === 0 && standaloneExtensions.length === 0 ? (
-                <div className="config-sidebar-message is-empty">
-                  {t("i18n.noPlugins")}
-                </div>
-              ) : (
-                <>
-                  {standaloneExtensions.length > 0 && (
-                    <div className="config-sidebar-group">
-                      <ConfigSidebarGroupLabel>{t("i18n.extensions")}</ConfigSidebarGroupLabel>
-                      {standaloneExtensions.map((extension) => {
-                        const key = extensionKey(extension);
-                        return (
-                          <ConfigSidebarItem
-                            key={key}
-                            active={!addMode && selected === key}
-                            title={extension.path}
-                            onClick={() => {
-                              setSelected(key);
-                              setAddMode(false);
-                              setActionError(null);
-                              setActionMessage(null);
-                            }}
-                          >
-                            <ConfigStatusDot active={extension.enabled} />
-                            <ConfigSidebarText className={`is-grow${extension.enabled ? "" : " is-muted"}`}>
-                              {extension.name}
-                            </ConfigSidebarText>
-                          </ConfigSidebarItem>
-                        );
-                      })}
+        <div className="plus-plugins">
+          <div className="plus-plugins-toolbar">
+            <div className="plus-plugins-tabs" role="tablist" aria-label={t("common.plugins")}>
+              {(["installed", "discover"] as const).map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  role="tab"
+                  data-plugins-tab={tab}
+                  aria-selected={view === tab && !addMode}
+                  className="plus-plugins-tab"
+                  onClick={() => {
+                    setView(tab);
+                    setAddMode(false);
+                    setShowDetail(false);
+                    setFilter("");
+                    setActionError(null);
+                    setActionMessage(null);
+                  }}
+                >
+                  {t(tab === "installed" ? "plus.plugins.installed" : "plus.plugins.discover")}
+                  {tab === "installed" && <span className="plus-plugins-tab-count">{installedCount}</span>}
+                </button>
+              ))}
+            </div>
+            {!addMode && !detailOpen && (
+              <label className="plus-plugins-search">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+                <input
+                  type="search"
+                  value={filter}
+                  onChange={(event) => setFilter(event.target.value)}
+                  placeholder={t(view === "discover" ? "plus.plugins.searchCatalog" : "plus.plugins.searchInstalled")}
+                  aria-label={t(view === "discover" ? "plus.plugins.searchCatalog" : "plus.plugins.searchInstalled")}
+                />
+              </label>
+            )}
+            <ConfigButton
+              size="small"
+              variant={addMode ? "primary" : "secondary"}
+              className="plus-plugins-add"
+              onClick={() => {
+                setAddMode(true);
+                setShowDetail(false);
+                setActionError(null);
+                setActionMessage(null);
+              }}
+            >
+              + {t("plus.plugins.addFromSource")}
+            </ConfigButton>
+          </div>
+
+          {!detailOpen && !addMode && (actionMessage || actionError) && (
+            <div className={`plus-plugins-notice${actionError ? " is-error" : ""}`} role="status">
+              {actionError ?? actionMessage}
+            </div>
+          )}
+
+          <div className="plus-plugins-body">
+            {addMode ? (
+              <ConfigDetailStack className="plus-plugins-detail">
+                {backLink}
+                <AddPluginPanel
+                  cwd={cwd}
+                  source={installSource}
+                  scope={installScope}
+                  projectResourcesLoaded={projectResourcesLoaded}
+                  busy={addBusy}
+                  actionError={actionError}
+                  onSourceChange={setInstallSource}
+                  onScopeChange={setInstallScope}
+                  onInstall={() => void installPlugin()}
+                />
+              </ConfigDetailStack>
+            ) : view === "discover" ? (
+              <DiscoverPanel
+                query={filter}
+                installedNames={installedNames}
+                installingName={catalogInstalling}
+                onInstall={(name) => void installPlugin(`npm:${name}`)}
+              />
+            ) : detailOpen ? (
+              <ConfigDetailStack className="plus-plugins-detail">
+                {backLink}
+                {selectedExtension ? (
+                  <StandaloneExtensionDetail extension={selectedExtension} />
+                ) : selectedPackage && (
+                  <PackageDetail
+                    key={packageKey(selectedPackage)}
+                    pkg={selectedPackage}
+                    cwd={cwd}
+                    busyKey={busyKey}
+                    actionError={actionError}
+                    actionMessage={actionMessage}
+                    sessionId={sessionId}
+                    updateStatus={updateStatuses[packageKey(selectedPackage)]}
+                    checkingUpdate={checkingUpdates.has(packageKey(selectedPackage))}
+                    updateError={updateError}
+                    onAction={runAction}
+                    onCheckUpdate={() => void checkForUpdates(selectedPackage)}
+                    onReloadSession={reloadSession}
+                  />
+                )}
+              </ConfigDetailStack>
+            ) : loading ? (
+              <ConfigEmptyState>{t("i18n.loading")}</ConfigEmptyState>
+            ) : error ? (
+              <ConfigEmptyState><span className="plus-plugins-catalog-error">{error}</span></ConfigEmptyState>
+            ) : installedCount === 0 ? (
+              <ConfigEmptyState>{t("i18n.noPlugins")}</ConfigEmptyState>
+            ) : (
+              <>
+                {shownExtensions.length > 0 && (
+                  <section className="plus-plugins-group">
+                    <ConfigSidebarGroupLabel>{t("i18n.extensions")}</ConfigSidebarGroupLabel>
+                    <div className="plus-plugins-grid">
+                      {shownExtensions.map((extension) => (
+                        <StandaloneExtensionCard
+                          key={extensionKey(extension)}
+                          extension={extension}
+                          onOpen={() => openCard(extensionKey(extension))}
+                        />
+                      ))}
                     </div>
-                  )}
-                  {groupedPackages.map((group) => {
-                    const enabledCount = group.packages.filter((pkg) => !pkg.disabled).length;
-                    const allEnabled = enabledCount === group.packages.length;
-                    return (
-                      <div key={group.scope} className="config-sidebar-group">
-                        <ConfigSidebarGroupLabel
-                          aside={
-                            <ConfigSidebarGroupSwitch
-                              enabled={enabledCount}
-                              total={group.packages.length}
-                              disabled={footerBusy}
-                              loading={busyKey === `bulk:${group.scope}`}
-                              label={t(allEnabled ? "plugins.groupSwitchOn" : "plugins.groupSwitchOff", { group: scopeLabel(group.scope, t) })}
-                              onChange={(enabled) => void setGroupPackages(group.scope, group.packages, enabled)}
-                            />
-                          }
-                        >
-                          {scopeLabel(group.scope, t)}
-                        </ConfigSidebarGroupLabel>
-                        {groupStatus?.scope === group.scope && (
-                          <ConfigSidebarGroupStatus error={groupStatus.error} note={groupStatus.note} />
-                        )}
-                        {group.packages.map((pkg) => {
+                  </section>
+                )}
+                {groupedPackages.map((group) => {
+                  const enabledCount = group.packages.filter((pkg) => !pkg.disabled).length;
+                  const allEnabled = enabledCount === group.packages.length;
+                  const shown = group.packages.filter((pkg) => matchesFilter(
+                    pluginDisplayName(pkg.source, pkg.packageName),
+                    pkg.source,
+                    pkg.description,
+                  ));
+                  if (shown.length === 0 && filterWords) return null;
+                  return (
+                    <section key={group.scope} className="plus-plugins-group">
+                      <ConfigSidebarGroupLabel
+                        aside={
+                          <ConfigSidebarGroupSwitch
+                            enabled={enabledCount}
+                            total={group.packages.length}
+                            disabled={footerBusy}
+                            loading={busyKey === `bulk:${group.scope}`}
+                            label={t(allEnabled ? "plugins.groupSwitchOn" : "plugins.groupSwitchOff", { group: scopeLabel(group.scope, t) })}
+                            onChange={(enabled) => void setGroupPackages(group.scope, group.packages, enabled)}
+                          />
+                        }
+                      >
+                        {scopeLabel(group.scope, t)}
+                      </ConfigSidebarGroupLabel>
+                      {groupStatus?.scope === group.scope && (
+                        <ConfigSidebarGroupStatus error={groupStatus.error} note={groupStatus.note} />
+                      )}
+                      <div className="plus-plugins-grid">
+                        {shown.map((pkg) => {
                           const key = packageKey(pkg);
-                          const isSelected = !addMode && selected === key;
                           return (
-                            <ConfigSidebarItem
+                            <InstalledPluginCard
                               key={key}
-                              active={isSelected}
-                              title={pkg.description ?? pkg.source}
-                              onClick={() => {
-                                setSelected(key);
-                                setAddMode(false);
-                                setActionError(null);
-                                setActionMessage(null);
-                              }}
-                            >
-                              <ConfigStatusDot active={!pkg.disabled} color={statusColor(pkg.status)} />
-                              <ConfigSidebarText className={`is-grow${pkg.disabled ? " is-muted" : ""}`}>
-                                {pkg.source}
-                              </ConfigSidebarText>
-                              {updateStatuses[packageKey(pkg)]?.state === "update-available" && (
-                                <span title={t("i18n.updateAvailable")} className="skill-update-indicator">
-                                  ↑
-                                </span>
-                              )}
-                            </ConfigSidebarItem>
+                              pkg={pkg}
+                              busy={Boolean(busyKey?.endsWith(key) || busyKey?.startsWith("bulk:"))}
+                              updateAvailable={updateStatuses[key]?.state === "update-available"}
+                              onOpen={() => openCard(key)}
+                              onToggle={() => void runAction(pkg.disabled ? "enable" : "disable", pkg)}
+                            />
                           );
                         })}
                       </div>
-                    );
-                  })}
-                </>
-              )}
-            </ConfigSidebarList>
-            <ConfigListAction
-                active={addMode}
-                onClick={() => {
-                  setAddMode(true);
-                  setActionError(null);
-                  setActionMessage(null);
-                }}
-              >
-                 {t("i18n.addPlugin")}
-            </ConfigListAction>
-          </ConfigSidebar>
-
-          <ConfigDetail>
-            <ConfigDetailStack className="is-fill">
-              {addMode ? (
-              <AddPluginPanel
-                cwd={cwd}
-                source={installSource}
-                scope={installScope}
-                projectResourcesLoaded={projectResourcesLoaded}
-                busy={addBusy}
-                actionError={actionError}
-                onSourceChange={setInstallSource}
-                onScopeChange={setInstallScope}
-                onInstall={installPlugin}
-              />
-            ) : loading ? null : selectedExtension ? (
-              <StandaloneExtensionDetail extension={selectedExtension} />
-            ) : selectedPackage ? (
-              <PackageDetail
-                key={packageKey(selectedPackage)}
-                pkg={selectedPackage}
-                cwd={cwd}
-                busyKey={busyKey}
-                actionError={actionError}
-                actionMessage={actionMessage}
-                sessionId={sessionId}
-                updateStatus={updateStatuses[packageKey(selectedPackage)]}
-                checkingUpdate={checkingUpdates.has(packageKey(selectedPackage))}
-                updateError={updateError}
-                onAction={runAction}
-                onCheckUpdate={() => void checkForUpdates(selectedPackage)}
-                onReloadSession={reloadSession}
-              />
-              ) : (
-                <ConfigEmptyState>{t("i18n.selectPackage")}</ConfigEmptyState>
-              )}
-            </ConfigDetailStack>
-          </ConfigDetail>
-        </ConfigSplitView>
-
+                    </section>
+                  );
+                })}
+                {filterWords && shownExtensions.length === 0 && groupedPackages.every((group) => !group.packages.some((pkg) => matchesFilter(pluginDisplayName(pkg.source, pkg.packageName), pkg.source, pkg.description))) && (
+                  <ConfigEmptyState>{t("plus.plugins.noMatch")}</ConfigEmptyState>
+                )}
+              </>
+            )}
+          </div>
+        </div>
         <ConfigFooter status={
             availableUpdateCount > 0 ? (
               <span style={{ fontSize: 12, color: "var(--accent)" }}>

@@ -205,7 +205,9 @@ test("groups chat display controls together without row backgrounds", () => {
 test("keeps General free of divider rows", () => {
   assert.match(panelSource, /className="settings-dialog-header"/);
   assert.match(cssSource, /\.settings-dialog-header \{[\s\S]*?display: flex[\s\S]*?align-items: center[\s\S]*?min-height: 50px/);
-  assert.doesNotMatch(panelSource, /sections\.find\(\(item\) => item\.id === section\)/);
+  // Plus 1.8: the full-page layout names the open section in its page header (currentLabel);
+  // the divider rows this guarded against stay out of General.
+  assert.doesNotMatch(panelSource.replace(/const currentLabel = sections\.find\(\(item\) => item\.id === section\)/, ""), /sections\.find\(\(item\) => item\.id === section\)/);
   assert.doesNotMatch(panelSource, /<section style=\{\{[^}]*borderBottom/);
   assert.doesNotMatch(panelSource, /borderLeft: index > 0/);
 });

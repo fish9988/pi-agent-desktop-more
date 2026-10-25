@@ -416,7 +416,10 @@ function ProviderDetail({ name, editingName, provider, onChange, onEditingNameCh
       <div className="config-detail-heading">
         <ConfigDetailHeader>
           <ConfigDetailHeaderInfo>
-            <SectionTitle>{t("i18n.provider")}</SectionTitle>
+            <span className="plus-models-detail-title">
+              <strong>{name}</strong>
+              <span>{t("i18n.provider")} · {t("plus.models.modelCount", { count: provider.models?.length ?? 0 })}</span>
+            </span>
           </ConfigDetailHeaderInfo>
           <ConfigDetailActions>
             <EnabledModelsProviderSwitch providerId={name} controller={enabledModels} noteId={switchNoteId} />
@@ -440,15 +443,15 @@ function ProviderDetail({ name, editingName, provider, onChange, onEditingNameCh
         <TextInput value={provider.baseUrl ?? ""} onChange={(v) => set("baseUrl", v || undefined)}
           placeholder="https://api.example.com/v1" mono />
         <span style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>
-          Leave empty for a built-in provider to use the endpoint pi ships
+          {t("plus.models.baseUrlHint")}
         </span>
       </Field>
 
       <Field label="API Key">
         <SecretTextInput value={provider.apiKey ?? ""} onChange={(v) => set("apiKey", v || undefined)}
-          placeholder="ENV_VAR_NAME, !shell-command, or literal key" mono />
+          placeholder={t("plus.models.apiKeyPlaceholder")} mono />
         <span style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>
-          Prefix with <code style={{ fontFamily: "var(--font-mono)" }}>!</code> to run a shell command, or use an env var name
+          {t("plus.models.apiKeyHint")}
         </span>
       </Field>
 
@@ -462,7 +465,7 @@ function ProviderDetail({ name, editingName, provider, onChange, onEditingNameCh
           onChange={(headers) => set("headers", headers)}
         />
         <span style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>
-          Added to every request from this provider (e.g. User-Agent). Useful for gateways with bot detection.
+          {t("plus.models.headersHint")}
         </span>
       </Field>
 
@@ -916,10 +919,13 @@ function ModelDetail({
         <NumInput value={draftValue !== undefined ? String(draftValue) : ""}
           onChange={(v) => set(field, v ? parseInt(v) : undefined)}
           placeholder={overrideValue !== undefined ? overrideValue.toLocaleString() : t("models.specNotSet")} />
-        <span className="models-spec-hint" data-source={hint.kind}>
-          {hintText}
-          {unsaved && hint.kind !== "own" && <span className="models-spec-unsaved">{t("models.specUnsavedTag")}</span>}
-        </span>
+        {/* Plus 1.8: a saved value of this entry needs no note under every field. */}
+        {(hint.kind !== "own" || unsaved) && (
+          <span className="models-spec-hint" data-source={hint.kind}>
+            {hintText}
+            {unsaved && hint.kind !== "own" && <span className="models-spec-unsaved">{t("models.specUnsavedTag")}</span>}
+          </span>
+        )}
       </Field>
     );
   };
@@ -1120,7 +1126,10 @@ function ModelDetail({
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <ConfigDetailHeader>
         <ConfigDetailHeaderInfo>
-          <SectionTitle>{t("i18n.model")}</SectionTitle>
+          <span className="plus-models-detail-title">
+            <strong>{model.name?.trim() || model.id.trim() || t("i18n.newModel")}</strong>
+            <span>{t("i18n.model")} · {providerName}</span>
+          </span>
         </ConfigDetailHeaderInfo>
         <ConfigDetailActions>
           {testSummary && (
@@ -1166,25 +1175,19 @@ function ModelDetail({
       </ConfigDetailHeader>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <Field label="ID *"><TextInput value={model.id} onChange={(v) => set("id", v)} placeholder="model-id" mono /></Field>
-        <Field label="Name"><TextInput value={model.name ?? ""} onChange={(v) => set("name", v || undefined)} placeholder="Display name" /></Field>
+        <Field label={`${t("plus.models.fieldId")} *`}><TextInput value={model.id} onChange={(v) => set("id", v)} placeholder="model-id" mono /></Field>
+        <Field label={t("plus.models.fieldName")}><TextInput value={model.name ?? ""} onChange={(v) => set("name", v || undefined)} placeholder={t("plus.models.fieldNamePlaceholder")} /></Field>
       </div>
 
       <div style={{ padding: "2px 0" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <button
+          <ConfigButton
+            size="small"
             onClick={() => void handleCatalogFill()}
             disabled={!model.id.trim() || catalogState.phase === "loading"}
-            style={{
-              height: 28, padding: "0 10px", border: "var(--hairline) solid var(--border)", borderRadius: 5,
-              background: "var(--bg-panel)",
-              color: !model.id.trim() || catalogState.phase === "loading" ? "var(--text-dim)" : "var(--text-muted)",
-              cursor: !model.id.trim() || catalogState.phase === "loading" ? "not-allowed" : "pointer",
-              fontSize: 12,
-            }}
           >
             {catalogState.phase === "loading" ? t("models.catalogFilling") : t("models.catalogFill")}
-          </button>
+          </ConfigButton>
           <a
             href="https://github.com/anomalyco/models.dev"
             target="_blank"
@@ -1278,7 +1281,7 @@ function ModelDetail({
                 return (
                   <div key={key} style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 10, color: "var(--text-dim)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</div>
-                    <div style={{ marginTop: 3, color: missing ? "var(--text-dim)" : "var(--text)", fontSize: 12, fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
+                    <div style={{ marginTop: 3, color: missing ? "var(--text-dim)" : "var(--text)", fontSize: 12, fontFamily: missing ? undefined : "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
                       {formatCost(key)}
                     </div>
                   </div>
@@ -2309,7 +2312,7 @@ export function ModelsConfig({ onClose, embedded = false, cwd = null, onOpenMcp 
                       <ConfigSidebarText className="is-grow">
                         {pName}
                       </ConfigSidebarText>
-                      {scopeBadge(pName)}
+                      {scopeBadge(pName) ?? <span className="plus-models-count" title={t("plus.models.modelCount", { count: models.length })}>{models.length}</span>}
                     </ConfigSidebarItem>
 
                     {/* Model rows */}
@@ -2325,8 +2328,16 @@ export function ModelsConfig({ onClose, embedded = false, cwd = null, onOpenMcp 
                           <ConfigSidebarText className="is-grow" style={{ color: m.id ? "var(--text-muted)" : "var(--text-dim)" }}>
                              {m.id || t("i18n.newModel")}
                           </ConfigSidebarText>
+                          {/* Plus 1.8: capability icons with names, instead of a bare "T". */}
+                          {m.input?.includes("image") && (
+                            <span className="plus-models-cap" title={t("models.imageInput")} aria-label={t("models.imageInput")}>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21" /></svg>
+                            </span>
+                          )}
                           {m.reasoning && (
-                            <span style={{ fontSize: 10, padding: "1px 4px", background: "rgba(99,102,241,0.12)", color: "rgba(99,102,241,0.8)", borderRadius: 3, flexShrink: 0 }}>T</span>
+                            <span className="plus-models-cap" title={t("models.reasoning")} aria-label={t("models.reasoning")}>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2Z" /></svg>
+                            </span>
                           )}
                           {overriddenIds.has(m.id.trim()) && (
                             <span className="models-sidebar-override-badge" title={t("models.overrideBadgeTitle")}>{t("models.overrideBadge")}</span>

@@ -17,6 +17,8 @@ import {
   type SettingsSection,
 } from "@/lib/settings-navigation";
 import { focusModalPanel, listenForPanelEscape } from "@/lib/stacked-dialog";
+import { usePlusStyle } from "@/hooks/usePlusStyle";
+import { SETTINGS_NAV_GROUPS, matchSettingsSections } from "@/lib/plus-settings-search";
 import { applyUiPlatform } from "@/lib/ui-platform";
 import {
   isThinkingExpandedByDefault,
@@ -27,7 +29,7 @@ import { SkillsConfig } from "./SkillsConfig";
 import { AgentsConfig } from "./AgentsConfig";
 import { PluginsConfig } from "./PluginsConfig";
 import { AppUpdatesSection } from "./AppUpdatesSection";
-import { DesktopAppSection } from "./desktop";
+import { DesktopAppSection, WindowControls, useWindowDrag } from "./desktop";
 import { McpConfig } from "./McpConfig";
 import { ConfigButton, ConfigSwitch } from "./SettingsUi";
 import { AppearanceSettingsPage } from "./AppearanceSettingsPage";
@@ -394,6 +396,16 @@ export function SettingsPanel({
     requiresProject: settingsSectionRequiresProject(item.id),
   }));
   const sectionRequiresProject = settingsSectionRequiresProject(section);
+  // Plus 1.8: under the clean engine Settings is a full page (after PI-Desktop): a
+  // back button, a search box and grouped sections on the left, a page header on top.
+  const pageLayout = usePlusStyle() === "clean";
+  // The page covers the app's top bar, so it carries the window's drag strip and buttons.
+  const windowDrag = useWindowDrag();
+  const [query, setQuery] = useState("");
+  const visibleSections = pageLayout
+    ? matchSettingsSections(sections.map((item) => ({ ...item, description: t(`plus.settings.desc.${item.id}`) })), query)
+    : sections;
+  const currentLabel = sections.find((item) => item.id === section)?.label ?? "";
   // A signed desktop update installs and relaunches the app; the dialog must not
   // be dismissible from under it (the Version & Updates block reports the phase).
   const [busy, setBusy] = useState(false);
@@ -431,6 +443,26 @@ export function SettingsPanel({
     setLastSettingsSection(nextSection);
   };
 
+  const renderTab = (item: (typeof sections)[number]) => {
+    const selected = section === item.id;
+    const disabled = item.requiresProject && !cwd;
+    return (
+      <button
+        key={item.id}
+        type="button"
+        className="settings-section-tab"
+        data-section={item.id}
+        disabled={disabled}
+        title={disabled ? t("settings.projectRequired") : item.label}
+        aria-current={selected ? "page" : undefined}
+        onClick={() => activateSection(item.id)}
+      >
+        <SettingsSectionIcon section={item.id} />
+        <span>{item.label}</span>
+      </button>
+    );
+  };
+
   const sectionHost = (id: SettingsSection, content: ReactNode) => mountedSections.has(id) ? (
     <div
       key={id}
@@ -449,7 +481,7 @@ export function SettingsPanel({
       aria-label={t("settings.title")}
       tabIndex={-1}
       onClick={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}
-      className="settings-dialog-backdrop"
+      className={`settings-dialog-backdrop${pageLayout ? " is-plus-page" : ""}`}
     >
       <div className="settings-dialog-surface">
         <div className="settings-dialog-header">
@@ -461,30 +493,71 @@ export function SettingsPanel({
             className="settings-mobile-section-picker"
             options={sections.map((item) => ({ value: item.id, label: item.label, disabled: item.requiresProject && !cwd }))}
           />
+          {pageLayout && (
+            <label className="plus-settings-search">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+              <input
+                type="search"
+                value={query}
+                placeholder={t("plus.settings.search")}
+                aria-label={t("plus.settings.search")}
+                onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    const first = visibleSections.find((item) => !(item.requiresProject && !cwd));
+                    if (first) activateSection(first.id);
+                  } else if (event.key === "Escape" && query) {
+                    // The first Escape clears the search; the next one leaves Settings
+                    // (listenForPanelEscape skips a handled, default-prevented key).
+                    event.preventDefault();
+                    setQuery("");
+                  }
+                }}
+              />
+            </label>
+          )}
           <nav aria-label={t("settings.title")} className="settings-section-tabs">
-            {sections.map((item) => {
-              const selected = section === item.id;
-              const disabled = item.requiresProject && !cwd;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  className="settings-section-tab"
-                  disabled={disabled}
-                  title={disabled ? t("settings.projectRequired") : item.label}
-                  aria-current={selected ? "page" : undefined}
-                  onClick={() => activateSection(item.id)}
-                >
-                  <SettingsSectionIcon section={item.id} />
-                  <span>{item.label}</span>
-                </button>
-              );
-            })}
+            {pageLayout
+              ? SETTINGS_NAV_GROUPS.map((group) => {
+                const items = visibleSections.filter((item) => group.sections.includes(item.id));
+                if (items.length === 0) return null;
+                return (
+                  <div key={group.id} className="plus-settings-nav-group">
+                    <div className="plus-settings-nav-label">{t(`plus.settings.group.${group.id}`)}</div>
+                    {items.map(renderTab)}
+                  </div>
+                );
+              })
+              : sections.map(renderTab)}
+            {pageLayout && visibleSections.length === 0 && (
+              <div className="plus-settings-nav-empty">{t("plus.settings.noMatch")}</div>
+            )}
           </nav>
-          <button type="button" onClick={onClose} title={t("i18n.close")} aria-label={t("i18n.close")} className="config-close-button settings-dialog-close">×</button>
+          <button type="button" onClick={onClose} title={t("i18n.close")} aria-label={t("i18n.close")} className="config-close-button settings-dialog-close">
+            {pageLayout ? (
+              <>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+                <span>{t("plus.settings.back")}</span>
+              </>
+            ) : "×"}
+          </button>
+          {pageLayout && (
+            <div className="plus-settings-titlebar" data-tauri-drag-region {...windowDrag}>
+              <WindowControls />
+            </div>
+          )}
         </div>
 
         <main className="settings-dialog-main">
+          {pageLayout && (
+            <header className="plus-settings-page-header">
+              <span className="plus-settings-page-icon"><SettingsSectionIcon section={section} size={18} /></span>
+              <span className="plus-settings-page-text">
+                <h1>{currentLabel}</h1>
+                <span>{t(`plus.settings.desc.${section}`)}</span>
+              </span>
+            </header>
+          )}
           {sectionHost("general", <GeneralSettings sessionId={sessionId} onSessionReloaded={onSessionReloaded} quoteSelectionEnabled={quoteSelectionEnabled} onQuoteSelectionChange={onQuoteSelectionChange} soundEnabled={soundEnabled} onSoundToggle={onSoundToggle} onBusyChange={setBusy} />)}
           {sectionHost("appearance", <AppearanceSettingsPage />)}
           {sectionHost("models", <ModelsConfig embedded cwd={cwd} onClose={onClose} onOpenMcp={() => activateSection("mcp")} />)}

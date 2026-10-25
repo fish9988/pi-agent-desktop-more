@@ -3,16 +3,26 @@
 > 每次工作结束（或上下文快满、要换会话时）更新本文件。长期知识写在 [plus.md](plus.md)。
 > 新会话接手的顺序：`AGENTS.md` 开头的 Plus 部分 → `plus.md` → 本文件 → `git log --oneline -10` → `CHANGELOG-PLUS.md` 的最新条目。
 
-_最后更新：2026-10-22_
+_最后更新：2026-10-25_
 
 ## 当前状态
 
 - 上一版 v1.6.1：修复文件树下载按钮无反应、「在资源管理器中显示」打开错目录（正斜杠路径 + Rust 引号问题，改用 `raw_arg`）。v1.6.0 是上游周报 #1 的移植。
 - 用户的正式版 `D:\Pi Agent Plus` 是 **1.5.0**，用户会自己点「更新」升级到 1.6.0。
 - 测试版 `D:\Pi Agent Plus Test` 是 1.7.0-test.23（`plus-prefs.test.json` 里主题选了「Plus 分层」、深色），没在运行。
-- **最新发布：v1.7.1**（2026-10-22，6dbc3ce5）：补齐效果图（见下方「补齐效果图」）；测试版 1.7.1-test.27 已装到测试目录验证。上一版 v1.7.0（a7b505a8）：界面重设计第一批，Release 带签名的 `latest.json`；测试版 1.7.0-test.23 已装到 `D:\Pi Agent Plus Test` 并验证过。第二批（侧栏细调、11px→12px）和补齐效果图的 1.7.1 已提交，见下方。
+- **最新发布：v1.8.0**（2026-10-25）：设置参考 PI-Desktop 重做，见下方「设置整页（1.8.0）」。上一版 v1.7.1（2026-10-22，6dbc3ce5）：补齐效果图（见下方「补齐效果图」）；测试版 1.7.1-test.27 已装到测试目录验证。上一版 v1.7.0（a7b505a8）：界面重设计第一批，Release 带签名的 `latest.json`；测试版 1.7.0-test.23 已装到 `D:\Pi Agent Plus Test` 并验证过。第二批（侧栏细调、11px→12px）和补齐效果图的 1.7.1 已提交，见下方。
 - 上游周报 #1 已处理并标记为已看（`.github/upstream-reviewed.json` 指向 pi-web `7c0778a8`、abcwyc `d414e9db`）。
 
+## 设置整页（1.8.0，2026-10-25）
+
+- 用户要求“PI-Desktop 基本可以借鉴，直接全部改完发版”。参考图在 `C:\pi-project\research\PI-Desktop\docs\image\readme\`（plugins_zh.png、addmodel_zh.png）。
+- **滚动位置**：用户试过“点会话跳到最新消息”后决定**保留上游的“记住每个会话滚动位置”**，那个改动已撤回，不要再做。
+- 外壳：`SettingsPanel.tsx` 在 clean 风格下（`usePlusStyle() === "clean"`）给遮罩加 `.is-plus-page`，并多渲染搜索框、分组标题、页头、`.plus-settings-titlebar`（拖动区 + `WindowControls`，因为整页盖住了应用标题栏）。样式在 `plus-theme.css` 末尾「step 7」，只在 ≥769px 生效；native 风格仍是原弹窗。分组和搜索词表在 `lib/plus-settings-search.ts`，新增分区要加进 `SETTINGS_NAV_GROUPS`，否则导航里看不到（`plus-features.test.mjs` 会报）。
+- 插件：`PluginsConfig.tsx` 改成卡片（`InstalledPluginCard`、`StandaloneExtensionCard`）+ 详情视图（返回「全部插件」）+ `DiscoverPanel`；样式在 `plus.css`（对所有主题生效）。发现页走 `/api/plugins/catalog`（`lib/plugin-catalog.ts`，npm search `keywords:pi-package`，无查询按周下载排序、有查询保持相关度），安装固定装到全局，需二次确认。相关源码断言测试（SettingsUi / SettingsPanel / ModelsConfig）已按新结构改写并留注释。
+- 模型：详情标题、服务商模型数、能力图标、`plus.models.*` 文案；`models-spec-hint` 在值已保存时不显示。
+- 根因记录：用户的代码字体是 Maple Mono NF CN，CJK 按两列宽排，所以等宽字体里的中文看起来被拉开。中文提示不要用 `var(--font-mono)`。
+- 验证：开发服务器 + Playwright 截图（`C:\pi-project\plus-shots\settings-shots.mjs`、`settings-flows.mjs`、`settings-variants.mjs`，后者拦截了所有写插件/模型的请求）。没在打包后的桌面程序里点过窗口按钮和拖动区；手机宽度没截到图。
+- 测试：相关 130 个测试文件 1252 过，7 个失败都是改动前就有的（FileViewer 4、FileTreeResizer、artifacts 哨兵、restored-wiring 第 5 项）。
 ## 版本历史速览（详见 CHANGELOG-PLUS.md）
 
 | 版本 | 要点 |
@@ -25,6 +35,7 @@ _最后更新：2026-10-22_
 | 1.4.1 | 用来验证应用内升级的版本；版本号显示完整的 vX.Y.Z |
 | 1.5.0 | 工作时间线、外观独立成页并带实时预览、粗体与标题字体、输入框下扩展标签、只显示费用的用量行、轻动效、移植 pi-web 0.12 性能、测试版打包 |
 | 1.6.1 | 文件树下载按钮、在资源管理器中显示 |
+| 1.8.0 | 设置整页（返回、搜索、分组导航、页头）、插件卡片与能力标签、插件「发现」页（npm pi-package）、模型页标题/图标/中文说明、代码字体中文被拉开的修复 |
 | 1.7.0 | 界面重设计第一批：默认主题「Plus 分层」、两层外壳、输入框收进一张卡片、运行中的引导/后续消息/停止、改动卡目录、扩展面板外框、设计阶梯 |
 | 1.6.0 | 上游周报 #1：子目录→根目录会话不再被关、在此提问光标、页内锚点、模型改动对已开会话生效、标题搜索、.agents/skills 分组、diff 省略行；Claude 自适应思考、单模型 Base URL、按服务商搜模型、内联音视频、终端字号跟随；状态轮询不带系统提示词 |
 

@@ -72,17 +72,28 @@ test("loads settings presentation from its dedicated stylesheet", () => {
 
 test("every settings section uses the shared list-detail layout", () => {
   for (const [name, source] of configSources) {
-    for (const primitive of ["ConfigPanelShell", "ConfigSplitView", "ConfigSidebar", "ConfigDetail", "ConfigFooter"]) {
+    // Plus 1.8: Plugins became a card grid with a detail view (after PI-Desktop); it keeps
+    // the shared shell, detail stack and footer, checked below, but has no list column.
+    const primitives = name === "PluginsConfig"
+      ? ["ConfigPanelShell", "ConfigDetailStack", "ConfigFooter"]
+      : ["ConfigPanelShell", "ConfigSplitView", "ConfigSidebar", "ConfigDetail", "ConfigFooter"];
+    for (const primitive of primitives) {
       assert.match(source, new RegExp(`<${primitive}`), `${name} should use ${primitive}`);
     }
   }
+  const plugins = Object.fromEntries(configSources).PluginsConfig;
+  assert.match(plugins, /className="plus-plugins-grid"/);
+  assert.match(plugins, /<InstalledPluginCard/);
+  assert.match(plugins, /<DiscoverPanel/);
 });
 
 test("all subpanel sidebars share one typography scale", () => {
   const sources = Object.fromEntries(configSources);
   assert.match(cssSource, /\.config-sidebar-text \{[\s\S]*?font-family: inherit[\s\S]*?font-size: 12px/);
   assert.match(cssSource, /\.config-sidebar-group-label \{[\s\S]*?font-family: inherit[\s\S]*?font-size: 10px/);
-  for (const source of Object.values(sources)) {
+  for (const [name, source] of Object.entries(sources)) {
+    // Plus 1.8: Plugins has no sidebar list any more (cards); its group headings still share the label below.
+    if (name === "PluginsConfig") continue;
     assert.match(source, /<ConfigSidebarText/);
   }
   for (const name of ["SkillsConfig", "AgentsConfig", "PluginsConfig", "McpConfig"]) {
@@ -92,9 +103,11 @@ test("all subpanel sidebars share one typography scale", () => {
 
 test("skills and sub-agents share interactive sidebar rows", () => {
   const sources = Object.fromEntries(configSources);
-  for (const name of ["SkillsConfig", "AgentsConfig", "PluginsConfig"]) {
+  for (const name of ["SkillsConfig", "AgentsConfig"]) {
     assert.match(sources[name], /<ConfigSidebarItem/);
   }
+  // Plus 1.8: a plugin card opens its detail from one real button, the switch stays outside it.
+  assert.match(sources.PluginsConfig, /<button type="button" className="plus-plugin-card-main" onClick=\{onOpen\}/);
   assert.match(templateSource, /export function ConfigSidebarItem[\s\S]*?className=\{\["config-sidebar-item"/);
   assert.match(cssSource, /\.config-sidebar-item:not\(:disabled\):hover,[\s\S]*?background: var\(--bg-hover\)/);
   assert.match(cssSource, /\.config-sidebar-item:focus-visible \{[\s\S]*?outline: 2px solid var\(--accent\)/);
@@ -107,12 +120,15 @@ test("all shared config sidebar items use a fixed 30px height", () => {
   assert.match(cssSource, /\.config-list-action-button \{[\s\S]*?height: 30px[\s\S]*?min-height: 30px/);
 });
 
-test("plugin sidebar rows omit detail metadata", () => {
+test("plugin cards name the package and leave the details to the detail view", () => {
+  // Plus 1.8: the sidebar rows (raw source strings) became cards titled with a readable name;
+  // the full source stays one hover away and in the detail header.
   const pluginSource = Object.fromEntries(configSources).PluginsConfig;
-  const sidebarSource = pluginSource.match(/<ConfigSidebarList>[\s\S]*?<\/ConfigSidebarList>/)?.[0] ?? "";
-  assert.match(sidebarSource, /<ConfigSidebarItem/);
-  assert.match(sidebarSource, /<ConfigSidebarText[\s\S]*?\{pkg\.source\}/);
-  assert.doesNotMatch(sidebarSource, /resourceSummary\(pkg|versionSummary\(pkg/);
+  const cardSource = pluginSource.match(/function InstalledPluginCard[\s\S]*?\n\}\n/)?.[0] ?? "";
+  assert.match(cardSource, /const name = pluginDisplayName\(pkg\.source, pkg\.packageName\)/);
+  assert.match(cardSource, /<strong>\{name\}<\/strong>/);
+  assert.match(cardSource, /title=\{pkg\.source\}/);
+  assert.doesNotMatch(cardSource, /resourceSummary\(pkg|versionSummary\(pkg/);
 });
 
 test("skill scope group labels are localized", () => {
@@ -310,7 +326,10 @@ test("the MCP panel's words come from the locale files, and its reasons are visi
 test("skills and plugins switch whole groups from the group heading, not from a bar", () => {
   const sources = Object.fromEntries(configSources);
   for (const name of ["SkillsConfig", "PluginsConfig"]) {
-    const sidebar = sources[name].match(/<ConfigSidebar>[\s\S]*?<\/ConfigSidebar>/)?.[0] ?? "";
+    // Plus 1.8: Plugins' scope groups head its card grid instead of a sidebar list.
+    const sidebar = name === "PluginsConfig"
+      ? sources[name].match(/\{groupedPackages\.map\(\(group\) => \{[\s\S]*?<\/section>/)?.[0] ?? ""
+      : sources[name].match(/<ConfigSidebar>[\s\S]*?<\/ConfigSidebar>/)?.[0] ?? "";
     // The switch sits in the heading row, so the list keeps all of its height.
     assert.match(sidebar, /<ConfigSidebarGroupLabel\s+aside=\{\s*<ConfigSidebarGroupSwitch/, name);
     assert.match(sidebar, /<ConfigSidebarGroupStatus /, name);

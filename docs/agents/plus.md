@@ -106,6 +106,8 @@ npx eslint components lib hooks app scripts --quiet
 | 对话内搜索（Ctrl+F） | `components/ChatFindBar.tsx` |
 | 文件树的增删改 | `components/FileTreeOps.tsx`、`lib/file-ops.ts`、`/api/file-ops`（删除进回收站） |
 | 回复底部的用量 | `MessageView.tsx` 里的 `formatUsageCompact`，鼠标悬停时显示完整明细 |
+| 设置整页（1.8） | `components/SettingsPanel.tsx`（clean 风格下 `.is-plus-page`：返回、搜索、分组、页头、窗口按钮）、`lib/plus-settings-search.ts`（分组和搜索词）、`app/plus-theme.css` 的「step 7」 |
+| 插件卡片与发现页（1.8） | `components/PluginsConfig.tsx`、`lib/plugin-catalog.ts`、`app/api/plugins/catalog/route.ts`、`app/plus.css` 的 `.plus-plugin*` |
 | 上游跟进 | `scripts/upstream-report.mjs`、`scripts/upstream-reviewed.mjs`、`.github/upstream-reviewed.json`、`.github/workflows/upstream-watch.yml` |
 
 ## 6. 样式与界面规则
