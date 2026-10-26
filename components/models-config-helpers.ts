@@ -109,16 +109,17 @@ export function trackAddedModels(slots: Map<string, (string | null)[]>, provider
  * `from` keeps the provider id the settings file still spells, so the server
  * can rewrite the entry before it applies the provider renames.
  */
+/** The provider id on disk that currently lives at `name` in the draft. */
+function savedProviderOf(providerRenames: ReadonlyMap<string, string>, name: string): string {
+  for (const [from, to] of providerRenames) if (to === name) return from;
+  return name;
+}
+
 export function collectModelRenames(
   config: ModelsConfigDraft,
   slots: Map<string, (string | null)[]>,
   providerRenames: Map<string, string>,
 ): { from: string; to: string }[] {
-  const originalProvider = (name: string) => {
-    for (const [from, to] of providerRenames) if (to === name) return from;
-    return name;
-  };
-
   const renames: { from: string; to: string }[] = [];
   for (const [name, provider] of Object.entries(config.providers ?? {})) {
     const saved = slots.get(name);
@@ -126,7 +127,7 @@ export function collectModelRenames(
     (provider.models ?? []).forEach((model, index) => {
       const before = saved[index];
       if (!before || !model.id || before === model.id) return;
-      renames.push({ from: `${originalProvider(name)}/${before}`, to: `${name}/${model.id}` });
+      renames.push({ from: `${savedProviderOf(providerRenames, name)}/${before}`, to: `${name}/${model.id}` });
     });
   }
   return renames;
@@ -162,12 +163,7 @@ export function renameProviderEntry<T extends ModelsConfigDraft>(
   if (Object.hasOwn(providers, newName)) return null;
 
   const { renames, savedProviders, slots } = tracking;
-  let original = oldName;
-  for (const [from, to] of renames) {
-    if (to !== oldName) continue;
-    original = from;
-    break;
-  }
+  const original = savedProviderOf(renames, oldName);
   if (original === newName) renames.delete(original);
   else if (savedProviders.has(original)) renames.set(original, newName);
   const saved = slots.get(oldName);
@@ -180,6 +176,31 @@ export function renameProviderEntry<T extends ModelsConfigDraft>(
   const index = entries.findIndex(([name]) => name === oldName);
   entries[index] = [newName, entries[index][1]];
   return { ...config, providers: Object.fromEntries(entries) };
+}
+
+/**
+ * Deletes a provider from the draft and clears any rename or model-slot
+ * tracking for it (#1342).
+ *
+ * If the provider was renamed since the last save, the pending `original -> name`
+ * entry is removed: the provider is being deleted, not renamed, so saving must
+ * not rewrite its `enabledModels` entries to the deleted id (or onto another
+ * provider later given that id). Its original id stays in `savedProviders` in
+ * case another provider is later renamed into the freed slot.
+ */
+export function deleteProviderEntry<T extends ModelsConfigDraft>(
+  config: T,
+  tracking: ProviderRenameTracking,
+  name: string,
+): T {
+  const { renames, slots } = tracking;
+  slots.delete(name);
+  const original = savedProviderOf(renames, name);
+  if (original !== name) renames.delete(original);
+
+  const providers = { ...(config.providers ?? {}) };
+  delete providers[name];
+  return { ...config, providers };
 }
 
 /** Add provider's search: a provider matches by its id or its shown name, case-insensitive. */

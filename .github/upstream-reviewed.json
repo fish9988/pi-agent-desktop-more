@@ -4,12 +4,12 @@
     "pi-agent-desktop": {
       "repository": "abcwyc/pi-agent-desktop",
       "branch": "main",
-      "reviewed": "d414e9db0cc41e88d2cc4c243b728b4d28dd5ea9"
+      "reviewed": "56691c5a47189e2b803194e1755f345227b130eb"
     },
     "pi-web": {
       "repository": "agegr/pi-web",
       "branch": "main",
-      "reviewed": "7c0778a8bc7342f1ededc6f5fb190dc6f4e43044"
+      "reviewed": "e533d9b3975f8a74b378d5007c92fdf4d15d3fba"
     }
   }
 }

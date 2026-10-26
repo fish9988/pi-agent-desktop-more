@@ -43,30 +43,45 @@ export const CHAT_READ_TOOL_NAME = "read";
  * can carry file readers, computer control or sub-agents (which run with their own tools);
  * the user adds those by name in Settings › Chats.
  */
-export const CHAT_DEFAULT_TOOL_NAMES: readonly string[] = [
-  CHAT_READ_TOOL_NAME,
-  "codemode",
-  "tool_search",
-  SAVE_TO_DOWNLOADS_TOOL_NAME,
+/** Read-only web tools (such as pi-web-access) that should be eagerly active in a chat. */
+export const CHAT_WEB_TOOL_NAMES: readonly string[] = [
   "web_search",
   "fetch_content",
   "source_check",
   "get_search_content",
 ];
-const CHAT_ALLOWED_TOOL_NAMES: ReadonlySet<string> = new Set(CHAT_DEFAULT_TOOL_NAMES);
 
+export const CHAT_DEFAULT_TOOL_NAMES: readonly string[] = [
+  CHAT_READ_TOOL_NAME,
+  "codemode",
+  "tool_search",
+  SAVE_TO_DOWNLOADS_TOOL_NAME,
+  ...CHAT_WEB_TOOL_NAMES,
+  "web_enable",
+];
 /**
- * `extraAllowed` is the user's own list (Settings › Chats). It can add an extension tool
- * but never one of the blocked coding tools, which stay off whoever asks.
+ * Plus: a chat blocks the project coding/shell tools (`CHAT_BLOCKED_TOOL_NAMES`) and
+ * subagent delegation tools (`CHAT_DELEGATION_BLOCKED_TOOL_NAMES`), confines `read` to
+ * skill/saved/user-named files, and allows every installed plugin/extension and MCP tool
+ * by default so user-installed plugins (web search, memory, MCP adapter, etc.) work
+ * out of the box in Chats without creating per-chat project folders.
  */
+const CHAT_DELEGATION_BLOCKED_TOOL_NAMES: ReadonlySet<string> = new Set([
+  "Agent",
+  "get_subagent_result",
+  "steer_subagent",
+  "subagent",
+]);
+
 export function isChatToolAllowed(
   tool: { name: string; sourceInfo?: unknown },
   extraAllowed: ReadonlySet<string> = NO_EXTRA_TOOLS,
 ): boolean {
   if (CHAT_BLOCKED_TOOL_NAMES.has(tool.name)) return false;
-  return CHAT_ALLOWED_TOOL_NAMES.has(tool.name)
-    || extraAllowed.has(tool.name)
-    || isMcpTool({ name: tool.name, sourceInfo: tool.sourceInfo as never });
+  if (CHAT_DELEGATION_BLOCKED_TOOL_NAMES.has(tool.name) && !extraAllowed.has(tool.name)) {
+    return isMcpTool({ name: tool.name, sourceInfo: tool.sourceInfo as never });
+  }
+  return true;
 }
 
 const NO_EXTRA_TOOLS: ReadonlySet<string> = new Set();
@@ -225,6 +240,20 @@ export function createChatWorkspaceExtension(options: {
     name: CHAT_WORKSPACE_EXTENSION_NAME,
     hidden: true,
     factory: (pi) => {
+      // Extensions like pi-web-access default to dynamic activation and replace web_search /
+      // fetch_content with web_enable on session_start for empty sessions. Re-activate the
+      // read-only web tools in chats so web search works immediately on the first turn.
+      pi.on("session_start", () => {
+        if (typeof pi.getActiveTools !== "function" || typeof pi.setActiveTools !== "function") return;
+        const registered = new Map(pi.getAllTools().map((tool) => [tool.name, tool]));
+        const active = pi.getActiveTools();
+        const eagerWeb = CHAT_WEB_TOOL_NAMES.filter((name) => registered.has(name) && !active.includes(name));
+        const extra = new Set(options.getExtraTools?.() ?? []);
+        const next = [...active, ...eagerWeb].filter((name) => isChatToolAllowed(registered.get(name) ?? { name }, extra));
+        if (eagerWeb.length > 0 || next.length !== active.length) {
+          pi.setActiveTools(next);
+        }
+      });
       pi.on("before_agent_start", (event, ctx) => {
         if (options.grants) {
           // Only the user's own words name a readable file: not tool output, not the model.
@@ -235,9 +264,11 @@ export function createChatWorkspaceExtension(options: {
         // tool_search switched on cannot reach the model's declarations.
         const registered = new Map(pi.getAllTools().map((tool) => [tool.name, tool]));
         const selected = event.systemPromptOptions.selectedTools;
+        const eagerWeb = CHAT_WEB_TOOL_NAMES.filter((name) => registered.has(name) && !selected.includes(name));
+        const candidates = eagerWeb.length > 0 ? [...selected, ...eagerWeb] : selected;
         const extra = new Set(options.getExtraTools?.() ?? []);
-        const allowed = selected.filter((name) => isChatToolAllowed(registered.get(name) ?? { name }, extra));
-        if (allowed.length !== selected.length) event.systemPromptOptions.selectedTools = allowed;
+        const allowed = candidates.filter((name) => isChatToolAllowed(registered.get(name) ?? { name }, extra));
+        if (allowed.length !== selected.length || eagerWeb.length > 0) event.systemPromptOptions.selectedTools = allowed;
         event.systemPromptOptions.sections.date = chatDateSection();
         const instructions = options.getInstructions?.();
         if (instructions) event.systemPromptOptions.sections.instructions = instructions;

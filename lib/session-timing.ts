@@ -1,8 +1,22 @@
 interface TimingEntry {
+  id?: string;
   type: string;
   timestamp: string;
   message?: { role?: string };
 }
+
+interface TimingEntriesSource {
+  getEntries(): unknown[];
+}
+
+interface CachedSessionTiming {
+  length: number;
+  lastEntryId: string | undefined;
+  previousTimestamp: number | undefined;
+  totalActiveMs: number;
+}
+
+const activeMsBySession = new WeakMap<TimingEntriesSource, CachedSessionTiming>();
 
 /**
  * Estimate active wall-clock time from the append-only session log.
@@ -34,6 +48,65 @@ export function computeSessionTotalActiveMs(entries: readonly TimingEntry[]): nu
     previousTimestamp = timestamp;
   }
 
+  return totalActiveMs;
+}
+
+/**
+ * Incremental {@link computeSessionTotalActiveMs} for a live `SessionManager`.
+ *
+ * `get_state` runs on every status poll while a prompt streams; scanning only
+ * the entries appended since the last call keeps the poll O(new entries). Any
+ * non-append change (fewer entries or a replaced prefix) falls back to a full
+ * scan.
+ */
+export function computeLiveSessionTotalActiveMs(manager: TimingEntriesSource): number {
+  if (typeof manager?.getEntries !== "function") return 0;
+  const entries = manager.getEntries() as readonly TimingEntry[];
+  const cached = activeMsBySession.get(manager);
+  if (
+    cached
+    && entries.length >= cached.length
+    && (cached.length === 0 || entries[cached.length - 1]?.id === cached.lastEntryId)
+  ) {
+    let { previousTimestamp, totalActiveMs } = cached;
+    for (let i = cached.length; i < entries.length; i++) {
+      const entry = entries[i];
+      if (!isTimingEntry(entry.type)) continue;
+      const timestamp = Date.parse(entry.timestamp);
+      if (!Number.isFinite(timestamp)) continue;
+      const role = entry.type === "message" ? entry.message?.role : undefined;
+      if (role !== "user" && role !== "bashExecution" && previousTimestamp !== undefined && timestamp > previousTimestamp) {
+        totalActiveMs += timestamp - previousTimestamp;
+      }
+      previousTimestamp = timestamp;
+    }
+    activeMsBySession.set(manager, {
+      length: entries.length,
+      lastEntryId: entries[entries.length - 1]?.id,
+      previousTimestamp,
+      totalActiveMs,
+    });
+    return totalActiveMs;
+  }
+
+  let totalActiveMs = 0;
+  let previousTimestamp: number | undefined;
+  for (const entry of entries) {
+    if (!isTimingEntry(entry.type)) continue;
+    const timestamp = Date.parse(entry.timestamp);
+    if (!Number.isFinite(timestamp)) continue;
+    const role = entry.type === "message" ? entry.message?.role : undefined;
+    if (role !== "user" && role !== "bashExecution" && previousTimestamp !== undefined && timestamp > previousTimestamp) {
+      totalActiveMs += timestamp - previousTimestamp;
+    }
+    previousTimestamp = timestamp;
+  }
+  activeMsBySession.set(manager, {
+    length: entries.length,
+    lastEntryId: entries[entries.length - 1]?.id,
+    previousTimestamp,
+    totalActiveMs,
+  });
   return totalActiveMs;
 }
 

@@ -107,6 +107,7 @@ interface LastAssistantTextResponse {
 type AgentStateResponse = {
   model?: { provider: string; id: string };
   contextUsage?: { percent: number | null; contextWindow: number; tokens: number | null } | null;
+  totalActiveMs?: number;
   systemPrompt?: string;
   thinkingLevel?: string;
   isStreaming?: boolean;
@@ -392,6 +393,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [liveThinkingLevel, setLiveThinkingLevel] = useState<ConcreteThinkingLevel | null>(null);
   const [retryInfo, setRetryInfo] = useState<{ attempt: number; maxAttempts: number; errorMessage?: string } | null>(null);
   const [contextUsage, setContextUsage] = useState<{ percent: number | null; contextWindow: number; tokens: number | null } | null>(null);
+  const [liveTotalActiveMs, setLiveTotalActiveMs] = useState<number | null>(null);
   const [systemPrompt, setSystemPrompt] = useState<string | null>(null);
   const [forkingEntryId, setForkingEntryId] = useState<string | null>(null);
   const [currentModelOverride, setCurrentModelOverride] = useState<{ provider: string; modelId: string } | null>(null);
@@ -612,6 +614,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setSummarizationRetry(null);
     setAgentPhase(null);
     setContextUsage(null);
+    setLiveTotalActiveMs(null);
     setSystemPrompt(null);
     setExtensionStatuses([]);
     setExtensionWidgets([]);
@@ -646,6 +649,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
     setRoutedModel(state?.routedModel ?? null);
     setCacheWarming(state?.cacheWarming ?? null);
+    // `get_state` carries the live totalActiveMs (#1340), so every state poll
+    // updates it along with the live model state.
+    if (typeof state?.totalActiveMs === "number") setLiveTotalActiveMs(state.totalActiveMs);
     syncAutomation(state);
   }, [syncAutomation]);
 
@@ -704,10 +710,21 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   const sessionStats = useMemo(() => {
     const selectedModelKey = currentModel ? `${currentModel.provider}/${currentModel.modelId}` : undefined;
+    // Both GET /api/sessions/[id] and get_state compute totalActiveMs from the
+    // append-only entry log (#1340); liveSessionActiveMs also covers streamed
+    // message_end arrivals before the next state poll lands (#1334).
+    const snapshotActiveMs = liveSessionActiveMs(
+      data?.totalActiveMs,
+      (data?.context.messages ?? []) as Array<{ role?: string; timestamp?: number }>,
+      messages as Array<{ role?: string; timestamp?: number }>,
+    );
+    const totalActiveMs = snapshotActiveMs !== undefined && liveTotalActiveMs !== null
+      ? Math.max(snapshotActiveMs, liveTotalActiveMs)
+      : (liveTotalActiveMs ?? snapshotActiveMs);
     if (sessionStatsOverride) {
       return {
         ...sessionStatsOverride,
-        totalActiveMs: data?.totalActiveMs,
+        totalActiveMs,
         ...(contextUsage ? { contextUsage } : {}),
         ...(selectedModelKey ? { selectedModelKey } : {}),
       };
@@ -720,13 +737,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       sessionId: sessionIdRef.current ?? session?.id ?? "",
       sessionName: session?.name,
       ...stats,
-      // Plus (pi-web #1334): grow with messages that arrived after the snapshot.
-      totalActiveMs: liveSessionActiveMs(data?.totalActiveMs, (data?.context.messages ?? []) as Array<{ role?: string; timestamp?: number }>, messages as Array<{ role?: string; timestamp?: number }>),
+      totalActiveMs,
       ...(contextUsage ? { contextUsage } : {}),
       ...(cacheWarming ? { cacheWarming } : {}),
       ...(selectedModelKey ? { selectedModelKey } : {}),
     } satisfies SessionStatsInfo;
-  }, [messages, sessionStatsOverride, contextUsage, cacheWarming, currentModel, data?.context.messages, data?.filePath, data?.totalActiveMs, data?.stats, session?.id, session?.name]);
+  }, [messages, sessionStatsOverride, contextUsage, cacheWarming, currentModel, data?.context.messages, data?.filePath, data?.totalActiveMs, data?.stats, liveTotalActiveMs, session?.id, session?.name]);
 
   // Re-connecting to a run already in flight (page refresh mid-stream, or a
   // session opened while the agent works): seed the streaming bubble from the

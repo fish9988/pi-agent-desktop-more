@@ -21,6 +21,7 @@ import {
   setCompatFlag,
   trackAddedModels,
   collectModelRenames,
+  deleteProviderEntry,
   listModelOverrides,
   modelOverrideSpecs,
   renameProviderEntry,
@@ -2061,17 +2062,16 @@ export function ModelsConfig({ onClose, embedded = false, cwd = null, onOpenMcp 
   }, [applyProviderRename, config, t]);
 
   const deleteProvider = useCallback((name: string) => {
-    savedModelIdsRef.current.delete(name);
     setProviderNameDraft((prev) => prev?.provider === name ? null : prev);
     setConfig((prev) => {
-      const providers = { ...(prev.providers ?? {}) };
-      delete providers[name];
-      return { ...prev, providers };
-    });
-    setConfig((prev) => {
-      const remaining = Object.keys(prev.providers ?? {});
+      const next = deleteProviderEntry(prev, {
+        savedProviders: savedProvidersRef.current,
+        renames: renamesRef.current,
+        slots: savedModelIdsRef.current,
+      }, name);
+      const remaining = Object.keys(next.providers ?? {});
       setSelection(remaining.length > 0 ? { type: "provider", name: remaining[0] } : null);
-      return prev;
+      return next;
     });
   }, []);
 

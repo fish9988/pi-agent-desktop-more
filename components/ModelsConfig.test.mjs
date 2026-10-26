@@ -6,6 +6,7 @@ import { createJiti } from "jiti";
 const jiti = createJiti(import.meta.url, { tsconfigPaths: true });
 const {
   collectModelRenames,
+  deleteProviderEntry,
   hasModelCostDraftValue,
   listModelOverrides,
   modelCostToDraft,
@@ -333,6 +334,44 @@ test("a provider added since the last save is renamed without a settings rewrite
   const renamed = renameProviderEntry(config, state, "new-provider", "house");
   assert.deepEqual(Object.keys(renamed.providers), ["house"]);
   assert.deepEqual([...state.renames], []);
+});
+
+test("deleting a renamed provider drops its pending rename (#1342)", () => {
+  const config = {
+    providers: {
+      stepfun: { models: [{ id: "aaa" }] },
+      other: { models: [{ id: "bbb" }] },
+    },
+  };
+  const state = tracking(config);
+  const renamed = renameProviderEntry(config, state, "stepfun", "temp");
+  const afterDelete = deleteProviderEntry(renamed, state, "temp");
+
+  assert.deepEqual(Object.keys(afterDelete.providers), ["other"]);
+  assert.deepEqual([...state.renames], []);
+  assert.equal(state.slots.has("temp"), false);
+
+  // Reuse the deleted target id for a new provider: stepfun's enabledModels
+  // entries must not be rewritten onto the unrelated provider on save.
+  const withReplacement = {
+    providers: { ...afterDelete.providers, temp: { models: [{ id: "ccc" }] } },
+  };
+  assert.deepEqual([...state.renames], []);
+  assert.deepEqual(collectModelRenames(withReplacement, state.slots, state.renames), []);
+
+  // Reuse the deleted provider's original on-disk id by renaming the remaining
+  // provider into it: that real rename is still tracked.
+  const reusedOriginal = renameProviderEntry(afterDelete, state, "other", "stepfun");
+  assert.deepEqual(Object.keys(reusedOriginal.providers), ["stepfun"]);
+  assert.deepEqual([...state.renames], [["other", "stepfun"]]);
+});
+
+test("deleteProvider goes through deleteProviderEntry (#1342)", () => {
+  const del = source.slice(
+    source.indexOf("const deleteProvider = useCallback"),
+    source.indexOf("const addModel = useCallback"),
+  );
+  assert.match(del, /deleteProviderEntry\(prev,/);
 });
 
 test("Save applies a provider name typed without pressing Rename", () => {

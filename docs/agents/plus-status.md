@@ -3,15 +3,31 @@
 > 每次工作结束（或上下文快满、要换会话时）更新本文件。长期知识写在 [plus.md](plus.md)。
 > 新会话接手的顺序：`AGENTS.md` 开头的 Plus 部分 → `plus.md` → 本文件 → `git log --oneline -10` → `CHANGELOG-PLUS.md` 的最新条目。
 
-_最后更新：2026-10-26_
+_最后更新：2026-10-27_
 
 ## 当前状态
 
 - 上一版 v1.6.1：修复文件树下载按钮无反应、「在资源管理器中显示」打开错目录（正斜杠路径 + Rust 引号问题，改用 `raw_arg`）。v1.6.0 是上游周报 #1 的移植。
 - 用户的正式版 `D:\Pi Agent Plus` 是 **1.5.0**，用户会自己点「更新」升级到 1.6.0。
 - 测试版 `D:\Pi Agent Plus Test` 是 1.7.0-test.23（`plus-prefs.test.json` 里主题选了「Plus 分层」、深色），没在运行。
-- **最新发布：v1.9.0**（2026-10-26）：Plus 成为默认底层、主题只改颜色和字体，见下方「主题分层（1.9.0）」。上一版 v1.8.0（2026-10-25）：设置参考 PI-Desktop 重做，见下方「设置整页（1.8.0）」。上一版 v1.7.1（2026-10-22，6dbc3ce5）：补齐效果图（见下方「补齐效果图」）；测试版 1.7.1-test.27 已装到测试目录验证。上一版 v1.7.0（a7b505a8）：界面重设计第一批，Release 带签名的 `latest.json`；测试版 1.7.0-test.23 已装到 `D:\Pi Agent Plus Test` 并验证过。第二批（侧栏细调、11px→12px）和补齐效果图的 1.7.1 已提交，见下方。
-- 上游周报 #1 已处理并标记为已看（`.github/upstream-reviewed.json` 指向 pi-web `7c0778a8`、abcwyc `d414e9db`）。
+- **最新发布：v1.9.1**（2026-10-27）：「对话」模式默认放开所有已安装插件工具、修复 `pi-web-access` 首轮联网检索，并移植上游周报 #2 的 8 项更新（Pi SDK 1.4.0、超大会话裁剪加载、Windows 启动超时 90s/180s 与失败弹窗、`write` 工具可读文本等），见下方「上游周报 #2 与对话插件权限放开（1.9.1）」。上一版 v1.9.0（2026-10-26）：Plus 成为默认底层、主题只改颜色和字体，见下方「主题分层（1.9.0）」。上一版 v1.8.0（2026-10-25）：设置参考 PI-Desktop 重做，见下方「设置整页（1.8.0）」。上一版 v1.7.1（2026-10-22，6dbc3ce5）：补齐效果图（见下方「补齐效果图」）；测试版 1.7.1-test.27 已装到测试目录验证。上一版 v1.7.0（a7b505a8）：界面重设计第一批，Release 带签名的 `latest.json`；测试版 1.7.0-test.23 已装到 `D:\Pi Agent Plus Test` 并验证过。第二批（侧栏细调、11px→12px）和补齐效果图的 1.7.1 已提交，见下方。
+- 上游周报 #2（2026-10-27）已移植并标记为已看（`.github/upstream-reviewed.json` 指向 pi-web `e533d9b3`、abcwyc `56691c5a`）。
+
+## 上游周报 #2 与对话插件权限放开（1.9.1，2026-10-27）
+
+- **非项目「对话（Chats）」默认放开所有已安装插件工具**（`lib/chat-workspace-policy.ts`、`lib/chat-workspace-policy.test.mjs`）：
+  1. `isChatToolAllowed` 改为**默认放行所有用户安装的插件（Extensions）与 MCP 工具**（例如 `pi-web-access` 联网搜索、`pi-supermemory-dsh` 的 `memory_search/save/forget`、`pi-mcp-adapter` 的 `mcpScript` 以及未来新装插件的工具），仅拦截项目专用的编码/终端工具（`bash`、`powershell`、`edit`、`write`、`grep`、`find`、`ls`）和子智能体委派工具（`Agent`、`get_subagent_result`、`steer_subagent`、`subagent`），无需再去「设置 › 常规 › 对话」手填工具名。
+  2. 针对 `pi-web-access` 默认动态激活（`session_start` 把 `web_search` 替换为 `web_enable`），在 `createChatWorkspaceExtension` 的 `session_start` 与 `before_agent_start` 中对已注册的 `CHAT_WEB_TOOL_NAMES` 主动保持激活，新建「对话」第一轮即可直接联网检索。
+- **上游周报 #2 移植（8 项）**：
+  1. 升级 `@earendil-works/pi-*` SDK 至 `1.4.0`（`de1fdb52`）：自动压缩与分支摘要不再受固定输出 token 限制，Codemode 支持并发排队。
+  2. 超大会话（≥16 MB）快速裁剪加载（`d5603b53`，`lib/session-slim-load.ts` + `lib/session-reader.ts`）：字节层跳过 UI 不使用的 `toolResult.details`。
+  3. Windows 启动超时放宽至 90s（开机自启 180s）、探测失败原因记录及启动失败弹窗提示且不再触发 Tauri panic（`7db02104`、`d5a779c3`，`src-tauri/src/lib.rs`）。
+  4. `write` 工具调用展开时直接渲染可读文件内容而非 JSON 转义串（`4fefc02e` / pi-web #1024，`components/MessageView.tsx`）。
+  5. worktree 项目缓存不再因 `git` 进程被杀或临时失败而写入假项目根（`0fcc497a` / #1339，`lib/worktree.ts`）。
+  6. 删除改名后的自定义服务商时同步清理挂起的重命名记录（`3edded3c` / #1342，`components/models-config-helpers.ts`、`components/ModelsConfig.tsx`）。
+  7. 保存 `models.json` 时通过 `realpathSync()` 穿透写入以保留符号链接（`f7f8f450` / #1336，`lib/models-config-store.ts`）。
+  8. `get_state` 增量计算会话活跃时间（`71ee20c5` / #1340，`lib/session-timing.ts`、`lib/rpc-manager.ts`、`hooks/useAgentSession.ts`）。
+- **周报 #2 跳过项**：`6e418d26` + `30fe5584`（给每个非项目对话建 `~/.pi/agent/chats/<id>` 文件夹及单聊开电脑权限开关，用户确认保持现有轻量对话模式）。
 
 ## 主题分层（1.9.0，2026-10-26）
 
@@ -44,6 +60,7 @@ _最后更新：2026-10-26_
 | 1.4.1 | 用来验证应用内升级的版本；版本号显示完整的 vX.Y.Z |
 | 1.5.0 | 工作时间线、外观独立成页并带实时预览、粗体与标题字体、输入框下扩展标签、只显示费用的用量行、轻动效、移植 pi-web 0.12 性能、测试版打包 |
 | 1.6.1 | 文件树下载按钮、在资源管理器中显示 |
+| 1.9.1 | 「对话」模式默认放开已安装插件工具、修复 `pi-web-access` 首轮联网检索；上游周报 #2（Pi SDK 1.4.0、超大会话裁剪加载、Windows 启动超时 90s/180s 与失败弹窗、write 工具可读文本、活跃时间增量计算、服务商重命名清理、models.json 软链接保留、worktree 缓存防污染） |
 | 1.9.0 | Plus 默认底层 + 主题叠加（颜色/字体）、层次兜底、外观页「底层」、只有子 Agent 的会话默认折叠、状态色跟随主题 |
 | 1.8.0 | 设置整页（返回、搜索、分组导航、页头）、插件卡片与能力标签、插件「发现」页（npm pi-package）、模型页标题/图标/中文说明、代码字体中文被拉开的修复 |
 | 1.7.0 | 界面重设计第一批：默认主题「Plus 分层」、两层外壳、输入框收进一张卡片、运行中的引导/后续消息/停止、改动卡目录、扩展面板外框、设计阶梯 |

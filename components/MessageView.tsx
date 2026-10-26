@@ -12,7 +12,7 @@ import { parseCompactionSummary } from "@/lib/compaction-summary";
 import { getAssistantErrorMessage, getThinkingPreview, hasAssistantAnswer, isAssistantTruncated, isEmptyThinkingBlock } from "@/lib/message-display";
 import { diffGapLabel, parseUnifiedPatch, type SplitDiffCell, type SplitDiffFile } from "@/lib/patch";
 import { applyPatchPreviewToFiles, applyPatchResultHasFailures, extractApplyPatchPaths, getApplyPatchInputText, parseApplyPatchInput } from "@/lib/apply-patch";
-import { isApplyPatchToolName, isEditToolName } from "@/lib/tool-names";
+import { isApplyPatchToolName, isEditToolName, isWriteToolName } from "@/lib/tool-names";
 import { isToolCallExpanded, setToolCallExpanded } from "@/lib/tool-call-expansion";
 import { isThinkingExpandedByDefault, THINKING_EXPANDED_EVENT } from "@/lib/thinking-expansion-preference";
 import { TurnWrittenFiles } from "./TurnWrittenFiles";
@@ -1152,7 +1152,7 @@ export function ToolCallBlock({ block, result, duration, aborted, defaultExpande
     setToolCallExpanded(block.toolCallId, next);
     setExpanded(next);
   };
-  const inputStr = getToolCallInputText(block);
+  const inputStr = getWrittenFileText(block) ?? getToolCallInputText(block);
   const isStreamingInput = block.rawInput !== undefined;
   const isEditTool = isEditToolName(block.toolName);
   const resultDiff = result && !result.isError ? getResultDiff(result) : null;
@@ -2140,6 +2140,26 @@ function safeJson(value: unknown): string {
 
 export function getToolCallInputText(block: ToolCallContent): string {
   return block.rawInput ?? JSON.stringify(block.input, null, 2);
+}
+
+const WRITE_VIEW_KEYS = new Set(["path", "file_path", "content"]);
+
+/**
+ * Completed write calls with only a short path and non-empty text content render
+ * the file text instead of JSON-escaped `{"path": ..., "content": "...\\n..."}`.
+ * Anything else (streaming rawInput, extra arguments, a path truncated in the
+ * header, empty or non-string content) falls back to the raw input view.
+ */
+function getWrittenFileText(block: ToolCallContent): string | null {
+  if (block.rawInput !== undefined || !isWriteToolName(block.toolName)) return null;
+  const input = block.input;
+  if (!isRecord(input)) return null;
+  const keys = Object.keys(input);
+  if (keys.length !== 2 || !keys.every((key) => WRITE_VIEW_KEYS.has(key))) return null;
+  const path = typeof input.path === "string" ? input.path : typeof input.file_path === "string" ? input.file_path : "";
+  const content = input.content;
+  if (!path || path.length > 120 || typeof content !== "string" || content.length === 0) return null;
+  return content;
 }
 
 function formatCustomType(type: string): string {
