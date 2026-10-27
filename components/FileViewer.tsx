@@ -747,9 +747,7 @@ function ImageViewer({ filePath, cwd, sourceSessionId, watchEnabled = true }: Pr
             return;
           }
           if (typeof next.size === "number") setSize(next.size);
-          setNaturalSize(null);
           setError(null);
-          setBust((value) => value + 1);
         })
         .catch((nextError) => {
           if (active && requestId === syncRequestRef.current) setError(String(nextError));

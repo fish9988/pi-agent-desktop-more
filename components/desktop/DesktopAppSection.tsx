@@ -4,6 +4,12 @@ import { useEffect, useState } from "react";
 
 import { APP_PREF_KEYS, getPrefBool, setPrefBool } from "@/lib/app-prefs";
 import {
+  applyGpuAcceleration,
+  desktopNotifyAlwaysEnabled,
+  gpuAccelerationEnabled,
+  notifyDesktop,
+} from "@/lib/desktop-notify";
+import {
   clearAppCacheNative,
   isAutostartEnabledNative,
   openLogDirNative,
@@ -38,6 +44,36 @@ export function DesktopAppSection() {
   const [notifyOnComplete, setNotifyOnComplete] = useState(
     () => getPrefBool(APP_PREF_KEYS.notifyOnComplete, true),
   );
+  const [notifyAlways, setNotifyAlways] = useState(() => desktopNotifyAlwaysEnabled());
+  const [gpuEnabled, setGpuEnabled] = useState(() => gpuAccelerationEnabled());
+
+  const testNotificationAndSound = () => {
+    try {
+      const ctx = new AudioContext();
+      const now = ctx.currentTime;
+      [523.25, 659.25].forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = "sine";
+        osc.frequency.value = freq;
+        const start = now + i * 0.18;
+        gain.gain.setValueAtTime(0, start);
+        gain.gain.linearRampToValueAtTime(0.18, start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.45);
+        osc.start(start);
+        osc.stop(start + 0.45);
+      });
+    } catch {
+      // ignore audio errors
+    }
+    void notifyDesktop({
+      title: "Pi Atelier · 纸枢",
+      body: "系统通知与提示音测试成功！任务完成时将立即弹出此通知。",
+      force: true,
+    });
+  };
 
   // The OS entry is the source of truth, so this is read back, not persisted.
   // null = not read yet (switch disabled so a click cannot race the read).
@@ -115,6 +151,23 @@ export function DesktopAppSection() {
         </div>
         <div className="settings-option">
           <span className="settings-option-text">
+            <span className="settings-option-title">GPU 硬件合成加速与极速目录预加载</span>
+            <span className="settings-option-hint">
+              开启 GPU 复合层渲染加速（提升滚动与面板缩放帧率），并在鼠标悬停右侧文件树目录时自动预加载内容以实现秒开
+            </span>
+          </span>
+          <ConfigSwitch
+            checked={gpuEnabled}
+            label="GPU 硬件合成加速与极速目录预加载"
+            onChange={(next) => {
+              setGpuEnabled(next);
+              setPrefBool(APP_PREF_KEYS.gpuAcceleration, next);
+              applyGpuAcceleration(next);
+            }}
+          />
+        </div>
+        <div className="settings-option">
+          <span className="settings-option-text">
             <span className="settings-option-title">{t("appSettings.notifyOnComplete")}</span>
             <span className="settings-option-hint">{t("appSettings.notifyOnCompleteHint")}</span>
           </span>
@@ -126,6 +179,28 @@ export function DesktopAppSection() {
               setPrefBool(APP_PREF_KEYS.notifyOnComplete, next);
             }}
           />
+        </div>
+        <div className="settings-option">
+          <span className="settings-option-text">
+            <span className="settings-option-title">窗口聚焦时也弹出系统通知（免失焦通知）</span>
+            <span className="settings-option-hint">
+              开启后，无需将窗口切到后台，当前对话或后台任务完成时均立即发送 Windows 系统横幅通知并伴随提示音；关闭则仅在窗口失焦时通知
+            </span>
+          </span>
+          <div className="settings-choice-group">
+            <ConfigButton size="small" variant="secondary" onClick={testNotificationAndSound}>
+              测试通知与提示音
+            </ConfigButton>
+            <ConfigSwitch
+              checked={notifyAlways}
+              disabled={!notifyOnComplete}
+              label="窗口聚焦时也弹出系统通知"
+              onChange={(next) => {
+                setNotifyAlways(next);
+                setPrefBool(APP_PREF_KEYS.notifyAlways, next);
+              }}
+            />
+          </div>
         </div>
         <div className="settings-option">
           <span className="settings-option-text">

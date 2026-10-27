@@ -2859,7 +2859,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 ? t(chatOnly ? "chat.composerHintChatOnly" : "plus.composerPlaceholder")
                 : t("chat.messagePlaceholder")
             }
-            rows={1}
+            rows={compact ? 4 : 3}
             style={{
               flex: compact ? "none" : 1,
               minWidth: 0,
@@ -2872,8 +2872,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               fontSize: "var(--chat-content-font-size, 14px)",
               lineHeight: 1.6,
               fontFamily: "inherit",
-              minHeight: compact ? 96 : 24,
-              maxHeight: 200,
+              minHeight: compact ? 96 : 68,
+              maxHeight: 240,
               overflow: "auto",
             }}
           />

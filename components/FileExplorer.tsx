@@ -110,21 +110,41 @@ async function responseError(res: Response, fallback: string): Promise<Error> {
   return new Error(message);
 }
 
-async function fetchEntries(dirPath: string): Promise<FileNode[]> {
-  const encoded = encodeFilePathForApi(dirPath);
-  const res = await fetch(`/api/files/${encoded}?type=list`);
-  if (!res.ok) throw await responseError(res, "Failed to load files");
-  const data = await res.json() as { entries?: FileEntry[] };
-  return (data.entries ?? []).map((e) => ({
-    name: e.name,
-    fullPath: joinFilePath(dirPath, e.name),
-    isDir: e.isDir,
-    size: e.size,
-    children: e.isDir ? [] : undefined,
-    loaded: !e.isDir,
-    outsideLinkTarget: e.outsideLinkTarget,
-    outsideLinkEncloses: e.outsideLinkEncloses,
-  }));
+const DIR_CACHE_TTL_MS = 15_000;
+const dirEntriesCache = new Map<string, { entries: FileNode[]; expiresAt: number }>();
+const dirInFlight = new Map<string, Promise<FileNode[]>>();
+
+async function fetchEntries(dirPath: string, force = false): Promise<FileNode[]> {
+  if (!force) {
+    const cached = dirEntriesCache.get(dirPath);
+    if (cached && cached.expiresAt > Date.now()) return cached.entries;
+    const inflight = dirInFlight.get(dirPath);
+    if (inflight) return inflight;
+  }
+  const promise = (async () => {
+    const encoded = encodeFilePathForApi(dirPath);
+    const res = await fetch(`/api/files/${encoded}?type=list`);
+    if (!res.ok) throw await responseError(res, "Failed to load files");
+    const data = await res.json() as { entries?: FileEntry[] };
+    const entries = (data.entries ?? []).map((e) => ({
+      name: e.name,
+      fullPath: joinFilePath(dirPath, e.name),
+      isDir: e.isDir,
+      size: e.size,
+      children: e.isDir ? [] : undefined,
+      loaded: !e.isDir,
+      outsideLinkTarget: e.outsideLinkTarget,
+      outsideLinkEncloses: e.outsideLinkEncloses,
+    }));
+    dirEntriesCache.set(dirPath, { entries, expiresAt: Date.now() + DIR_CACHE_TTL_MS });
+    return entries;
+  })();
+  dirInFlight.set(dirPath, promise);
+  try {
+    return await promise;
+  } finally {
+    if (dirInFlight.get(dirPath) === promise) dirInFlight.delete(dirPath);
+  }
 }
 
 // Sends the target the operator was shown, so a link pointed elsewhere since
@@ -274,8 +294,9 @@ export function TreeNode({
   const containsGitChanges = node.isDir && (
     gitStatus !== undefined || changedDirectoryPaths.has(normalizedPath)
   );
-  const [children, setChildren] = useState<FileNode[]>(node.children ?? []);
-  const [loaded, setLoaded] = useState(node.loaded ?? false);
+  const cachedDir = node.isDir ? dirEntriesCache.get(node.fullPath) : undefined;
+  const [children, setChildren] = useState<FileNode[]>(() => cachedDir?.entries ?? node.children ?? []);
+  const [loaded, setLoaded] = useState(() => Boolean(cachedDir) || (node.loaded ?? false));
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [hovered, setHovered] = useState(false);
@@ -307,7 +328,7 @@ export function TreeNode({
     setLoading(true);
     setLoadError(null);
     try {
-      const entries = await fetchEntries(node.fullPath);
+      const entries = await fetchEntries(node.fullPath, force);
       setChildren(entries);
       setLoaded(true);
     } catch (error) {
@@ -391,7 +412,15 @@ export function TreeNode({
           event.preventDefault();
           handleClick();
         }}
-        onMouseEnter={() => setHovered(true)}
+        onMouseEnter={() => {
+          setHovered(true);
+          if (node.isDir && !loaded && !pendingLinkTarget) {
+            void fetchEntries(node.fullPath).then((entries) => {
+              setChildren((curr) => (curr.length > 0 ? curr : entries));
+              setLoaded(true);
+            }).catch(() => {});
+          }
+        }}
         onMouseLeave={() => setHovered(false)}
         style={{
           position: "relative",

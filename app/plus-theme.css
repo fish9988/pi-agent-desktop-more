@@ -127,6 +127,7 @@ html[data-plus-code-font] .cm-editor .cm-content {
   --plus-glass-blur: 0px;
   --plus-glass-saturation: 100%;
   --plus-surface-alpha: 0%;
+  --plus-composer-min-height: 68px;
 }
 
 /* ---- global ------------------------------------------------------------- */
@@ -174,6 +175,11 @@ html[data-plus-style="clean"] .chat-window {
 }
 html[data-plus-style="clean"] :is(.session-sidebar, .app-topbar, .chat-composer-frame, .message-user-bubble, .turn-files-card) {
   backdrop-filter: blur(var(--plus-glass-blur)) saturate(var(--plus-glass-saturation));
+}
+html[data-plus-gpu="1"] :is(.session-sidebar, .chat-messages-scroll, .right-panel-container, .file-viewer-shell) {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  will-change: transform;
 }
 
 /* ---- sidebar ------------------------------------------------------------ */
@@ -1227,6 +1233,9 @@ html[data-plus-style="clean"] .turn-files-row:hover .turn-files-row-chevron { op
     box-shadow: none !important;
     padding-bottom: var(--plus-s1);
   }
+  html[data-plus-style="clean"] .chat-composer-frame .chat-input-textarea {
+    min-height: var(--plus-composer-min-height) !important;
+  }
   html[data-plus-style="clean"] .chat-composer-frame > .chat-composer-controls {
     margin-top: 0 !important;
     padding: var(--plus-s2) var(--plus-s3) !important;
@@ -1351,7 +1360,13 @@ html[data-plus-style="clean"] .session-sidebar .session-tree-item[data-current] 
   html[data-plus-style="clean"] :is(.sidebar-chats-title, .sidebar-project-tree-header) .sidebar-project-tree-title {
     color: var(--text-dim) !important;
     font-size: var(--plus-fs-1) !important;
-    font-weight: 500 !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.04em;
+  }
+  html[data-plus-style="clean"] .sidebar-project-tree-header:not(.sidebar-chats-header) {
+    margin-top: var(--plus-s2);
+    padding-top: var(--plus-s3) !important;
+    border-top: 1px solid var(--plus-stroke);
   }
   html[data-plus-style="clean"] .sidebar-project-tree-count {
     display: inline-flex;
@@ -1363,33 +1378,62 @@ html[data-plus-style="clean"] .session-sidebar .session-tree-item[data-current] 
     padding: 0 6px;
     border-radius: 999px;
     background: color-mix(in srgb, var(--text) 6%, transparent);
-    color: var(--text-muted);
+    color: var(--text-dim);
     font-size: var(--plus-fs-1);
     font-weight: 500;
     font-variant-numeric: tabular-nums;
+    transition: opacity var(--plus-dur-1) ease;
   }
-  html[data-plus-style="clean"] .sidebar-project-tree-row-main { gap: 10px; }
+  /* Hide the session count pill on hover / open menu so the + and ··· action
+     buttons occupy that trailing slot cleanly without overlapping the number. */
+  html[data-plus-style="clean"] .sidebar-project-tree-row:is(:hover, :focus-within, .is-menu-open) :is(.sidebar-project-tree-count, .sidebar-project-tree-meta) {
+    opacity: 0;
+    pointer-events: none;
+  }
+  html[data-plus-style="clean"] .sidebar-project-tree-row-actions {
+    gap: 2px;
+    padding: 2px;
+    border-radius: var(--plus-r-ctl);
+    background: color-mix(in srgb, var(--surface) 92%, transparent);
+    box-shadow: var(--shadow-control);
+  }
+  html[data-plus-style="clean"] .sidebar-project-tree-row-main {
+    gap: 10px;
+    min-height: 32px;
+    padding: 0 8px;
+    border-radius: var(--plus-r-card) !important;
+  }
   html[data-plus-style="clean"] .sidebar-project-tree-folder {
     display: inline-grid;
     place-items: center;
-    width: 22px;
-    height: 22px;
+    width: 24px;
+    height: 24px;
+    flex: none;
     border-radius: var(--plus-r-ctl);
-    border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
-    background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+    border: 1px solid var(--plus-stroke);
+    background: color-mix(in srgb, var(--text) 4.5%, var(--surface));
+    color: var(--text-muted) !important;
+    transition: background var(--plus-dur-1) ease, color var(--plus-dur-1) ease, border-color var(--plus-dur-1) ease;
+  }
+  html[data-plus-style="clean"] .sidebar-project-tree-row:hover .sidebar-project-tree-folder {
+    border-color: var(--accent-border);
+    background: var(--accent-soft);
     color: var(--accent) !important;
-    transition: background var(--plus-dur-1) ease, color var(--plus-dur-1) ease;
   }
   html[data-plus-style="clean"] .sidebar-project-tree-group.is-active .sidebar-project-tree-folder {
     border-color: var(--accent);
     background: var(--accent);
     color: var(--accent-contrast) !important;
+    box-shadow: var(--shadow-control);
   }
-  html[data-plus-style="clean"] .sidebar-project-tree-group:not(.is-collapsed) {
-    padding: 2px;
-    border: 1px solid var(--plus-stroke);
-    border-radius: var(--plus-r-card);
-    background: color-mix(in srgb, var(--surface) 50%, transparent);
+  html[data-plus-style="clean"] .sidebar-project-tree-group.is-active > .sidebar-project-tree-row .sidebar-project-tree-row-main {
+    background: color-mix(in srgb, var(--surface) 75%, transparent);
+    box-shadow: inset 0 0 0 1px var(--plus-stroke);
+  }
+  html[data-plus-style="clean"] .sidebar-project-tree-group > .sidebar-project-tree-children {
+    margin: 2px 0 6px 19px;
+    padding-left: 8px;
+    border-left: 1px solid var(--plus-stroke-strong);
   }
   html[data-plus-style="clean"] .sidebar-project-tree-name { font-weight: 500; }
   /* Project rows carry no leading glyph (the folder above already says what

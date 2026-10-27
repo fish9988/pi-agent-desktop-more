@@ -24,6 +24,19 @@ const HIDDEN_SUFFIXES = [".pyc"];
 // Never worth listing, whatever a repository says about them.
 const ALWAYS_HIDDEN_NAMES = new Set([".git", ".DS_Store"]);
 
+// Standard heavy dependency/cache folders that are never force-tracked in practice;
+// skipping `git ls-files` on these avoids a second git process on every folder click.
+const NEVER_TRACKED_HEAVY_DIRS = new Set([
+  "node_modules", ".next", ".next-desktop", ".turbo", ".cache",
+  "__pycache__", ".pytest_cache", ".mypy_cache", "target",
+]);
+
+declare global {
+  var __piGitVisibilityCache: Map<string, { ignored: Set<string> | null; expiresAt: number }> | undefined;
+}
+
+const VISIBILITY_CACHE_TTL_MS = 20_000;
+
 // The listing waits on git, so a slow one degrades to the name list rather
 // than stalling the tree.
 const GIT_TIMEOUT_MS = 5_000;
@@ -123,6 +136,15 @@ export async function readGitIgnoredNames(
   directory: string,
   names: readonly string[],
 ): Promise<Set<string> | null> {
+  const useCache = !process.env.GIT_CEILING_DIRECTORIES;
+  const cacheKey = useCache ? `${directory}\0${names.join("\0")}` : "";
+  if (useCache) {
+    const cached = globalThis.__piGitVisibilityCache?.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.ignored ? new Set(cached.ignored) : null;
+    }
+  }
+
   // `./` keeps a name such as `:(glob)x` from parsing as pathspec magic, which
   // check-ignore rejects for the whole batch. `.` asks about `directory`.
   const input = [".", ...names.map((name) => `./${name}`)]
@@ -138,11 +160,28 @@ export async function readGitIgnoredNames(
     if (record === ".") directoryIgnored = true;
     else if (record.startsWith("./")) matched.push(record.slice(2));
   }
-  if (matched.length === 0) return directoryIgnored ? null : new Set();
+  if (matched.length === 0) {
+    const result = directoryIgnored ? null : new Set<string>();
+    if (useCache) {
+      if (!globalThis.__piGitVisibilityCache) globalThis.__piGitVisibilityCache = new Map();
+      globalThis.__piGitVisibilityCache.set(cacheKey, { ignored: result, expiresAt: Date.now() + VISIBILITY_CACHE_TTL_MS });
+    }
+    return result;
+  }
 
-  const tracked = await readTrackedNames(directory, matched);
+  const candidatesForTrackedCheck = directoryIgnored
+    ? matched
+    : matched.filter((name) => !NEVER_TRACKED_HEAVY_DIRS.has(name));
+  const tracked = candidatesForTrackedCheck.length > 0
+    ? await readTrackedNames(directory, candidatesForTrackedCheck)
+    : new Set<string>();
   if (tracked === null || (directoryIgnored && tracked.size === 0)) return null;
-  return new Set(matched.filter((name) => !tracked.has(name)));
+  const result = new Set(matched.filter((name) => !tracked.has(name)));
+  if (useCache) {
+    if (!globalThis.__piGitVisibilityCache) globalThis.__piGitVisibilityCache = new Map();
+    globalThis.__piGitVisibilityCache.set(cacheKey, { ignored: result, expiresAt: Date.now() + VISIBILITY_CACHE_TTL_MS });
+  }
+  return result;
 }
 
 /** Build the visibility test for one listing of `directory`. */

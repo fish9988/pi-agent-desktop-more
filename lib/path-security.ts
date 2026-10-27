@@ -22,8 +22,12 @@ export function isPathWithinRoots(target: string, roots: Set<string>): boolean {
   return false;
 }
 
+const realRootsCache = new WeakMap<Set<string>, Set<string>>();
+
 /** The roots after resolving symbolic links, for comparing canonical paths. */
 export function resolveRealRoots(roots: Set<string>): Set<string> {
+  const cached = realRootsCache.get(roots);
+  if (cached) return cached;
   const realRoots = new Set<string>();
   for (const root of roots) {
     try {
@@ -32,6 +36,7 @@ export function resolveRealRoots(roots: Set<string>): Set<string> {
       // Ignore stale roots derived from removed sessions or worktrees.
     }
   }
+  realRootsCache.set(roots, realRoots);
   return realRoots;
 }
 

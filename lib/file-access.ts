@@ -15,7 +15,7 @@ declare global {
   var __piAllowedRootsCache: { roots: Set<string>; expiresAt: number } | undefined;
 }
 
-const ALLOWED_ROOTS_TTL_MS = 5_000;
+const ALLOWED_ROOTS_TTL_MS = 30_000;
 
 export async function getAllowedFileRoots(): Promise<Set<string>> {
   const now = Date.now();

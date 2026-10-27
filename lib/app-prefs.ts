@@ -31,6 +31,8 @@ export const APP_PREF_KEYS = {
   updateSnooze: "pi-web:update-snooze",
   closeQuits: "pi-desktop-close-quits",
   notifyOnComplete: "pi-desktop-notify-on-complete",
+  notifyAlways: "pi-plus-notify-always",
+  gpuAcceleration: "pi-plus-gpu-acceleration",
   chatDrafts: "pi-chat-drafts-v1",
   diffViewMode: "pi-diff-view-mode",
   /** Last open session / cwd / file tabs for desktop cold-start restore. */

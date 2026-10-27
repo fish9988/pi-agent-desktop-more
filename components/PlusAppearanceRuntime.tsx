@@ -9,6 +9,7 @@ import {
   USER_THEME_PREFIX,
   writeUserThemeCache,
 } from "@/lib/plus-theme";
+import { applyGpuAcceleration } from "@/lib/desktop-notify";
 import type { ThemeBase } from "@/lib/plus-theme-catalog";
 
 const POLL_MS = 1000;
@@ -53,6 +54,7 @@ export function PlusAppearanceRuntime() {
 
   useEffect(() => {
     applyPlusTheme(settings);
+    applyGpuAcceleration();
   }, [settings]);
 
   // Fade colours when the theme, accent or light/dark mode changes (not on

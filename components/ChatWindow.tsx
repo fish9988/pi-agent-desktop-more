@@ -38,6 +38,8 @@ import { importDroppedProjectFiles, partitionChatDroppedFiles } from "@/lib/chat
 import { formatAttachmentSize } from "@/lib/chat-attachments";
 import type { ToolEntry } from "@/lib/tool-presets";
 import type { SettingsSection } from "@/lib/settings-navigation";
+import { desktopNotifyAlwaysEnabled, notifyDesktop } from "@/lib/desktop-notify";
+import { BRAND_DISPLAY_NAME } from "@/lib/branding";
 import { findChatScrollAnchor, type ChatScrollPosition } from "@/lib/chat-scroll-position";
 import {
   captureScrollDistance,
@@ -241,9 +243,17 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
   const soundEnabledRef = useRef(soundEnabled);
   soundEnabledRef.current = soundEnabled;
   const extensionDialogShownRef = useRef(false);
+  const sessionTitleRef = useRef("");
+  sessionTitleRef.current = session?.name || session?.firstMessage || "";
   const wrappedOnAgentEnd = useCallback(() => {
     if (completionNotificationsEnabled && soundEnabledRef.current) {
       playDoneSoundRef.current();
+    }
+    if (completionNotificationsEnabled && desktopNotifyAlwaysEnabled()) {
+      void notifyDesktop({
+        title: `${BRAND_DISPLAY_NAME} · 任务完成`,
+        body: sessionTitleRef.current || "当前对话回合已执行完毕",
+      });
     }
     onAgentEnd?.();
   }, [completionNotificationsEnabled, onAgentEnd]);
