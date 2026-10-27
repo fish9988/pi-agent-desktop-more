@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback, useMemo, type CSSProperties, type MouseEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import {
   createElement as renderSyntaxNode,
   type SyntaxHighlighterProps,
@@ -545,12 +546,172 @@ function DiffView({ patch }: { patch: string }) {
   );
 }
 
+function ImageLightbox({
+  src,
+  title,
+  metadata,
+  filePath,
+  onClose,
+}: {
+  src: string;
+  title: string;
+  metadata?: string | null;
+  filePath?: string;
+  onClose: () => void;
+}) {
+  const [scale, setScale] = useState(1);
+  const [rotate, setRotate] = useState(0);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        onClose();
+      } else if (event.key === "+" || event.key === "=") {
+        setScale((s) => Math.min(5, +(s + 0.25).toFixed(2)));
+      } else if (event.key === "-") {
+        setScale((s) => Math.max(0.25, +(s - 0.25).toFixed(2)));
+      } else if (event.key === "0") {
+        setScale(1);
+        setRotate(0);
+        setOffset({ x: 0, y: 0 });
+      }
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [onClose]);
+
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
+    <div
+      className="plus-image-lightbox"
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+      onWheel={(event) => {
+        event.preventDefault();
+        const delta = event.deltaY < 0 ? 0.2 : -0.2;
+        setScale((s) => Math.min(5, Math.max(0.25, +(s + delta).toFixed(2))));
+      }}
+    >
+      <div className="plus-image-lightbox-toolbar" onClick={(e) => e.stopPropagation()}>
+        <div className="plus-image-lightbox-meta">
+          <strong className="plus-image-lightbox-title" title={filePath ?? title}>{title}</strong>
+          {metadata && <span className="plus-image-lightbox-sub">{metadata}</span>}
+        </div>
+        <div className="plus-image-lightbox-actions">
+          <button
+            type="button"
+            className="plus-image-lightbox-btn"
+            title="缩小 (-)"
+            aria-label="缩小"
+            onClick={() => setScale((s) => Math.max(0.25, +(s - 0.25).toFixed(2)))}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12" /></svg>
+          </button>
+          <button
+            type="button"
+            className="plus-image-lightbox-btn is-readout"
+            title="重置缩放 (0)"
+            onClick={() => {
+              setScale(1);
+              setRotate(0);
+              setOffset({ x: 0, y: 0 });
+            }}
+          >
+            {Math.round(scale * 100)}%
+          </button>
+          <button
+            type="button"
+            className="plus-image-lightbox-btn"
+            title="放大 (+)"
+            aria-label="放大"
+            onClick={() => setScale((s) => Math.min(5, +(s + 0.25).toFixed(2)))}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+          </button>
+          <button
+            type="button"
+            className="plus-image-lightbox-btn"
+            title="顺时针旋转 90°"
+            aria-label="旋转"
+            onClick={() => setRotate((r) => (r + 90) % 360)}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /></svg>
+          </button>
+          {filePath && (
+            <button
+              type="button"
+              className="plus-image-lightbox-btn"
+              title="使用系统默认看图软件打开"
+              aria-label="系统打开"
+              onClick={() => {
+                void import("@/lib/desktop-native").then(({ openPathNative }) => openPathNative(filePath));
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>
+            </button>
+          )}
+          <button
+            type="button"
+            className="plus-image-lightbox-btn is-close"
+            title="关闭 (Esc)"
+            aria-label="关闭"
+            onClick={onClose}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+          </button>
+        </div>
+      </div>
+      <div
+        className="plus-image-lightbox-stage"
+        onClick={(event) => {
+          if (event.target === event.currentTarget) onClose();
+        }}
+        onMouseDown={(event) => {
+          if (event.button !== 0) return;
+          dragRef.current = { startX: event.clientX, startY: event.clientY, origX: offset.x, origY: offset.y };
+        }}
+        onMouseMove={(event) => {
+          if (!dragRef.current) return;
+          setOffset({
+            x: dragRef.current.origX + (event.clientX - dragRef.current.startX),
+            y: dragRef.current.origY + (event.clientY - dragRef.current.startY),
+          });
+        }}
+        onMouseUp={() => { dragRef.current = null; }}
+        onMouseLeave={() => { dragRef.current = null; }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={src}
+          alt={title}
+          draggable={false}
+          className="plus-image-lightbox-img"
+          style={{
+            transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale}) rotate(${rotate}deg)`,
+          }}
+        />
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 function ImageViewer({ filePath, cwd, sourceSessionId, watchEnabled = true }: Props) {
   const [watching, setWatching] = useState(false);
   const [bust, setBust] = useState(0);
   const [size, setSize] = useState<number | null>(null);
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const esRef = useRef<EventSource | null>(null);
   const syncRequestRef = useRef(0);
 
@@ -642,7 +803,24 @@ function ImageViewer({ filePath, cwd, sourceSessionId, watchEnabled = true }: Pr
         metadata={metadata}
         watching={watching}
         sourceSessionId={sourceSessionId}
-      />
+      >
+        {!error && (
+          <button
+            type="button"
+            className="file-viewer-icon-button plus-image-zoom-btn"
+            title="全屏放大预览"
+            aria-label="全屏放大预览"
+            onClick={() => setLightboxOpen(true)}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="15 3 21 3 21 9" />
+              <polyline points="9 21 3 21 3 15" />
+              <line x1="21" y1="3" x2="14" y2="10" />
+              <line x1="3" y1="21" x2="10" y2="14" />
+            </svg>
+          </button>
+        )}
+      </FileViewerToolbar>
       <div
         className="file-viewer-image-stage"
       >
@@ -653,6 +831,8 @@ function ImageViewer({ filePath, cwd, sourceSessionId, watchEnabled = true }: Pr
           <img
             src={src}
             alt={filePath}
+            title="点击全屏放大查看"
+            onClick={() => setLightboxOpen(true)}
             onLoad={(e) => {
               const img = e.currentTarget;
               setNaturalSize({ w: img.naturalWidth, h: img.naturalHeight });
@@ -662,11 +842,21 @@ function ImageViewer({ filePath, cwd, sourceSessionId, watchEnabled = true }: Pr
               maxWidth: "100%",
               maxHeight: "100%",
               objectFit: "contain",
+              cursor: "zoom-in",
               boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
             }}
           />
         )}
       </div>
+      {lightboxOpen && (
+        <ImageLightbox
+          src={src}
+          title={getFileName(filePath)}
+          metadata={metadata}
+          filePath={filePath}
+          onClose={() => setLightboxOpen(false)}
+        />
+      )}
     </div>
   );
 }

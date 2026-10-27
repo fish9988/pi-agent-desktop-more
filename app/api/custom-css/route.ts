@@ -34,21 +34,20 @@ export async function GET() {
 }
 
 /** Starter content written when custom.css is first created. */
-const STARTER_CSS = `/* Pi Agent custom stylesheet.
- * Loaded last, so these rules win the cascade.
- * Reload the window (Ctrl+R / Cmd+R) to apply edits.
+const STARTER_CSS = `/* Pi Atelier · 纸枢 (Pi Agent Plus) 自定义样式表
+ * 保存文件后应用将自动热重载，无需重启或按 Ctrl+R。
+ * 完整变量表与选择器指南请参见项目内的 docs/CUSTOM-CSS.md。
  *
- * Font variables used by the app:
- *   --font-ui       chat and interface text
- *   --font-display  headings
- *   --font-mono     code blocks and tool output
- *
- * Example:
- * :root {
- *   --font-ui: "Inter", "Segoe UI", -apple-system, sans-serif;
- *   --font-mono: "Cascadia Code", "JetBrains Mono", monospace;
+ * 常用变量示例（取消注释即可生效）：
+ * html[data-plus-theme]:root {
+ *   --accent: #c44d36;
+ *   --plus-inline-code: #7a2716;
+ *   --plus-inline-code-bg: color-mix(in srgb, #c44d36 13%, var(--surface));
+ *   --plus-marker: #c44d36;
+ *   --plus-heading-color: var(--accent);
+ *   --plus-glass-blur: 18px;
+ *   --plus-surface-alpha: 24%;
  * }
- * .markdown-body { font-size: 15px; }
  */
 `;
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme } from "@/hooks/useTheme";
 import { THEME_OPTIONS } from "@/lib/theme";
@@ -56,6 +56,19 @@ export function AppearanceSettingsPage() {
   const desktop = isTauriDesktop();
   const [customCssBusy, setCustomCssBusy] = useState(false);
   const [customCssError, setCustomCssError] = useState<string | null>(null);
+  const [livePreviewMode, setLivePreviewMode] = useState(false);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (livePreviewMode) {
+      root.dataset.plusLivePreview = "1";
+    } else {
+      delete root.dataset.plusLivePreview;
+    }
+    return () => {
+      delete root.dataset.plusLivePreview;
+    };
+  }, [livePreviewMode]);
 
   const openCustomCss = async () => {
     setCustomCssBusy(true);
@@ -100,7 +113,10 @@ export function AppearanceSettingsPage() {
           </section>
 
           <section className="settings-general-section">
-            <PlusAppearanceSettings />
+            <PlusAppearanceSettings
+              livePreviewMode={livePreviewMode}
+              onToggleLivePreview={() => setLivePreviewMode((v) => !v)}
+            />
           </section>
 
           <section className="settings-general-section">

@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { usePlusTheme } from "@/hooks/usePlusTheme";
 import {
-  applyPlusTheme,
   isUserTheme,
   PLUS_ACCENT_PRESETS,
   setCustomCssEnabled,
@@ -35,8 +34,114 @@ import type { GalleryTheme } from "@/lib/plus-theme-gallery-opencode";
 
 type Translate = (key: string, params?: Record<string, string | number>) => string;
 
-/** The clean theme to return to when the base goes from native back to Plus. */
-const LAST_CLEAN_THEME_KEY = "plus-last-clean-theme";
+interface CssPreset {
+  id: string;
+  label: string;
+  desc: string;
+  css: string;
+}
+
+const CSS_STUDIO_PRESETS: readonly CssPreset[] = [
+  {
+    id: "vermilion-code",
+    label: "朱砂墨韵代码",
+    desc: "将行内代码胶囊与列表标记改为温润朱砂墨色",
+    css: `/* 朱砂墨韵：自定义行内代码颜色、背景与列表圆点 */
+html[data-plus-theme]:root {
+  --plus-inline-code: #7a2716;
+  --plus-inline-code-bg: color-mix(in srgb, #c44d36 13%, var(--surface));
+  --plus-inline-code-border: color-mix(in srgb, #c44d36 26%, transparent);
+  --plus-marker: #c44d36;
+  --plus-user-bar-color: #c44d36;
+}
+html.dark[data-plus-theme]:root {
+  --plus-inline-code: #ffb4a2;
+  --plus-inline-code-bg: color-mix(in srgb, #ed6f5c 18%, var(--surface));
+  --plus-inline-code-border: color-mix(in srgb, #ed6f5c 32%, transparent);
+  --plus-marker: #ed6f5c;
+}`,
+  },
+  {
+    id: "emerald-code",
+    label: "翡翠松林代码",
+    desc: "将强调色、行内代码与题签竖条切换为松石翡翠绿",
+    css: `/* 翡翠松林：自定义全局强调色与行内代码配色 */
+html[data-plus-theme]:root {
+  --accent: #2d6a4f;
+  --plus-fill: #2d6a4f;
+  --plus-inline-code: #1b4332;
+  --plus-inline-code-bg: color-mix(in srgb, #2d6a4f 12%, var(--surface));
+  --plus-inline-code-border: color-mix(in srgb, #2d6a4f 25%, transparent);
+  --plus-marker: #2d6a4f;
+  --plus-user-bar-color: #2d6a4f;
+}
+html.dark[data-plus-theme]:root {
+  --accent: #74c69d;
+  --plus-fill: #74c69d;
+  --plus-inline-code: #b7e4c7;
+  --plus-inline-code-bg: color-mix(in srgb, #74c69d 16%, var(--surface));
+}`,
+  },
+  {
+    id: "editorial-headings",
+    label: "杂志大标题排版",
+    desc: "定制 H1-H3 标题色彩、字重与章节装饰底线",
+    css: `/* 杂志刊头排版：定制标题颜色与章节分割线 */
+html[data-plus-theme]:root {
+  --plus-heading-color: var(--accent);
+}
+.markdown-body h1,
+.markdown-body h2 {
+  padding-bottom: 6px;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  letter-spacing: -0.01em;
+}
+.markdown-body blockquote {
+  border-left: 3px solid var(--accent) !important;
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+  padding: 8px 14px;
+  border-radius: var(--plus-r-card);
+}`,
+  },
+  {
+    id: "frosted-glass",
+    label: "亚克力毛玻璃",
+    desc: "开启侧边栏、顶栏、卡片与输入舱半透明毛玻璃特效",
+    css: `/* 亚克力毛玻璃特效（Frosted Glass） */
+html[data-plus-theme]:root {
+  --plus-glass-blur: 20px;
+  --plus-glass-saturation: 160%;
+  --plus-surface-alpha: 26%;
+}`,
+  },
+  {
+    id: "aurora-wallpaper",
+    label: "流光壁纸 + 毛玻璃",
+    desc: "注入暖金霞光渐变壁纸并开启全界面毛玻璃悬浮感",
+    css: `/* 流光壁纸 + 全界面毛玻璃悬浮层次 */
+html[data-plus-theme]:root {
+  --plus-bg-image:
+    radial-gradient(circle at 15% 18%, rgba(196, 77, 54, 0.22), transparent 45%),
+    radial-gradient(circle at 85% 22%, rgba(233, 185, 74, 0.24), transparent 48%),
+    radial-gradient(circle at 52% 88%, rgba(82, 102, 44, 0.18), transparent 52%);
+  --plus-glass-blur: 22px;
+  --plus-glass-saturation: 165%;
+  --plus-surface-alpha: 32%;
+}`,
+  },
+  {
+    id: "widescreen-clean",
+    label: "宽屏沉浸布局",
+    desc: "扩展对话阅读区版心至 980px 并增大圆角",
+    css: `/* 宽屏沉浸布局与柔和圆角 */
+html[data-plus-theme]:root {
+  --chat-content-max-width: 980px !important;
+  --plus-r-ctl: 6px;
+  --plus-r-card: 12px;
+  --plus-r-overlay: 16px;
+}`,
+  },
+];
 
 function themeName(theme: BuiltinTheme, locale: string): string {
   if (locale === "zh-TW") return theme.name.tw ?? theme.name.zh;
@@ -45,12 +150,12 @@ function themeName(theme: BuiltinTheme, locale: string): string {
 
 function Swatch({ light, dark }: { light: { panel?: string; bg?: string; accent?: string; text?: string }; dark?: { panel?: string; bg?: string; accent?: string } }) {
   const half = (p: { panel?: string; bg?: string; accent?: string; text?: string }, key: string) => (
-    <span key={key} className="plus-theme-swatch-half" style={{ background: p.bg ?? "#ffffff" }}>
-      <span style={{ background: p.panel ?? p.bg ?? "#f4f4f5" }} />
+    <span key={key} className="plus-theme-swatch-half" style={{ background: p.bg }}>
+      <span style={{ background: p.panel ?? p.bg }} />
       <span>
         <i style={{ background: p.text ?? "currentColor", opacity: 0.55 }} />
         <i style={{ background: p.text ?? "currentColor", opacity: 0.3 }} />
-        <b style={{ background: p.accent ?? "#5b4fe0" }} />
+        <b style={{ background: p.accent }} />
       </span>
     </span>
   );
@@ -95,7 +200,7 @@ function CssEditor({
 
   useEffect(() => {
     if (timer.current !== null) window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => previewRef.current(css === saved ? null : css), 120);
+    timer.current = window.setTimeout(() => previewRef.current(css === saved ? null : css), 100);
     return () => { if (timer.current !== null) window.clearTimeout(timer.current); };
   }, [css, saved]);
 
@@ -123,7 +228,7 @@ function CssEditor({
       <textarea
         value={css}
         spellCheck={false}
-        placeholder=":root { --accent: #5b4fe0; }"
+        placeholder="html[data-plus-theme]:root { --accent: #c44d36; }"
         aria-label={title}
         onChange={(event) => setCss(event.target.value)}
         onKeyDown={(event) => {
@@ -158,20 +263,41 @@ function CssEditor({
   );
 }
 
-type Editing =
-  | { kind: "custom-css"; css: string }
-  | { kind: "theme"; id: string; name: string; base: ThemeBase; css: string; definition?: ThemeDefinition };
+type EditingTheme = {
+  id: string;
+  name: string;
+  base: ThemeBase;
+  css: string;
+  definition?: ThemeDefinition;
+};
 
-/** Plus: theme manager, accent, fonts and custom.css. */
-export function PlusAppearanceSettings() {
+/**
+ * Plus 1.10: Modern minimal Appearance Studio (Apple / Google grouped cards),
+ * 5 curated themes on the single Plus layered base, built-in live Custom CSS
+ * studio with one-click presets, and a floating Global Window Preview mode.
+ */
+export function PlusAppearanceSettings({
+  livePreviewMode = false,
+  onToggleLivePreview,
+}: {
+  livePreviewMode?: boolean;
+  onToggleLivePreview?: () => void;
+}) {
   const { t, locale } = useI18n();
   const { settings, update, reset } = usePlusTheme();
   const [userThemes, setUserThemes] = useState<UserThemeMeta[]>([]);
-  const [editing, setEditing] = useState<Editing | null>(null);
+  const [editingTheme, setEditingTheme] = useState<EditingTheme | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Built-in Custom CSS Studio state (always ready in the Custom CSS card)
+  const [customCss, setCustomCss] = useState("");
+  const [savedCustomCss, setSavedCustomCss] = useState("");
+  const [cssStatus, setCssStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [cssError, setCssError] = useState<string | null>(null);
+  const [showCssGuide, setShowCssGuide] = useState(false);
 
   const refreshThemes = useCallback(async () => {
     try {
@@ -186,13 +312,88 @@ export function PlusAppearanceSettings() {
   useEffect(() => { void refreshThemes(); }, [refreshThemes]);
   useEffect(() => { void loadSystemFonts(); }, []);
 
+  // Load existing custom.css on mount
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/custom-css", { cache: "no-store" })
+      .then((res) => (res.ok ? res.text() : ""))
+      .then((text) => {
+        if (!active) return;
+        setCustomCss(text);
+        setSavedCustomCss(text);
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
+
+  // Live-inject customCss edits into <style id="plus-custom-css-preview">
+  useEffect(() => {
+    const dirty = customCss !== savedCustomCss;
+    let style = document.getElementById(CUSTOM_CSS_PREVIEW_ID) as HTMLStyleElement | null;
+    if (!dirty) {
+      style?.remove();
+      setCustomCssEnabled(settings.customCssOverlay);
+      return;
+    }
+    if (!style) {
+      style = document.createElement("style");
+      style.id = CUSTOM_CSS_PREVIEW_ID;
+    }
+    // Append at the end of <head> so live edits override built-in theme tokens
+    document.head.appendChild(style);
+    style.textContent = customCss;
+    setCustomCssEnabled(false);
+  }, [customCss, savedCustomCss, settings.customCssOverlay]);
+
+  useEffect(() => () => {
+    document.getElementById(CUSTOM_CSS_PREVIEW_ID)?.remove();
+  }, []);
+
+  const saveCustomCss = async (nextCss = customCss) => {
+    setCssStatus("saving");
+    setCssError(null);
+    try {
+      const response = await fetch("/api/custom-css", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ css: nextCss }),
+      });
+      if (!response.ok) throw new Error(await readError(response));
+      setSavedCustomCss(nextCss);
+      document.getElementById(CUSTOM_CSS_PREVIEW_ID)?.remove();
+      const shouldEnable = Boolean(nextCss.trim());
+      if (settings.customCssOverlay !== shouldEnable) {
+        update({ customCssOverlay: shouldEnable });
+      }
+      setCustomCssEnabled(shouldEnable);
+      reloadCustomCssLink(String(Date.now()));
+      setCssStatus("saved");
+      window.setTimeout(() => setCssStatus((value) => (value === "saved" ? "idle" : value)), 1600);
+    } catch (err) {
+      setCssStatus("error");
+      setCssError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const applyPresetSnippet = (preset: CssPreset) => {
+    const next = customCss.includes(preset.css)
+      ? customCss
+      : customCss.trim()
+        ? `${customCss.trim()}\n\n${preset.css}\n`
+        : `${preset.css}\n`;
+    setCustomCss(next);
+    if (!settings.customCssOverlay) {
+      update({ customCssOverlay: true });
+    }
+  };
+
   const notifyError = (error: unknown) => appNotify.error({ message: error instanceof Error ? error.message : String(error) });
 
   const createTheme = async (name: string, base: ThemeBase, css: string, apply = true, definition?: ThemeDefinition) => {
     const response = await fetch("/api/plus-themes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, base, css, definition }),
+      body: JSON.stringify({ name, base: "clean", css, definition }),
     });
     if (!response.ok) throw new Error(await readError(response));
     const { theme } = (await response.json()) as { theme: UserThemeMeta };
@@ -209,7 +410,6 @@ export function PlusAppearanceSettings() {
       for (const file of Array.from(files)) {
         const text = await file.text();
         if (/\.jsonc?$/i.test(file.name)) {
-          // VS Code colour theme (the JSON inside a theme extension).
           const converted = definitionFromVsCodeTheme(text);
           await createTheme(converted.name || file.name.replace(/\.jsonc?$/i, "").replace(/-color-theme$/i, ""), "clean", CUSTOM_THEME_CSS_HINT, !applied, converted.definition);
           applied = true;
@@ -217,19 +417,17 @@ export function PlusAppearanceSettings() {
         }
         const header = /^\/\*\s*plus-theme:\s*(\{.*?\})\s*\*\/\r?\n?/.exec(text);
         let name = file.name.replace(/\.css$/i, "");
-        let base: ThemeBase = "native";
         let css = text;
         if (header) {
           try {
-            const meta = JSON.parse(header[1]) as { name?: string; base?: string };
+            const meta = JSON.parse(header[1]) as { name?: string };
             if (meta.name) name = meta.name;
-            base = meta.base === "clean" ? "clean" : "native";
             css = text.slice(header[0].length);
           } catch {
             // treat as plain CSS
           }
         }
-        await createTheme(name, base, css, !applied);
+        await createTheme(name, "clean", css, !applied);
         applied = true;
       }
       appNotify.success({ message: t("plus.themeImported", { count: files.length }) });
@@ -241,26 +439,8 @@ export function PlusAppearanceSettings() {
     }
   };
 
-  const importCustomCss = async () => {
-    setBusy(true);
-    try {
-      const response = await fetch("/api/custom-css", { cache: "no-store" });
-      const css = response.ok ? await response.text() : "";
-      if (!css.trim()) throw new Error(t("plus.customCssEmpty"));
-      await createTheme(t("plus.customCssThemeName"), "native", css);
-      // The theme now carries these styles; keep them from applying twice.
-      update({ customCssOverlay: false });
-      appNotify.success({ message: t("plus.customCssImported") });
-    } catch (error) {
-      notifyError(error);
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const duplicateBuiltin = (theme: BuiltinTheme) => duplicateBuiltinAs(theme, `${themeName(theme, locale)} ${t("plus.themeCopySuffix")}`);
 
-  /** New palette theme, starting from the active built-in theme. */
   const newTheme = async () => {
     const start = findBuiltinTheme(settings.theme);
     await duplicateBuiltinAs(start?.light ? start : findBuiltinTheme(DEFAULT_THEME_ID)!, t("plus.newThemeName"));
@@ -284,7 +464,7 @@ export function PlusAppearanceSettings() {
       if (!response.ok) throw new Error(await readError(response));
       const { theme } = (await response.json()) as { theme: { id: string; name: string; base: ThemeBase; css: string; definition?: ThemeDefinition } };
       update({ theme: `${USER_THEME_PREFIX}${theme.id}` });
-      setEditing({ kind: "theme", id: theme.id, name: theme.name, base: theme.base, css: theme.css, definition: theme.definition });
+      setEditingTheme({ id: theme.id, name: theme.name, base: "clean", css: theme.css, definition: theme.definition });
     } catch (error) {
       notifyError(error);
     }
@@ -297,9 +477,9 @@ export function PlusAppearanceSettings() {
       if (settings.theme === `${USER_THEME_PREFIX}${id}`) {
         writeUserThemeCache(null);
         setUserThemeCss(null);
-        update({ theme: "clean" });
+        update({ theme: DEFAULT_THEME_ID });
       }
-      if (editing?.kind === "theme" && editing.id === id) setEditing(null);
+      if (editingTheme?.id === id) setEditingTheme(null);
       await refreshThemes();
     } catch (error) {
       notifyError(error);
@@ -331,38 +511,33 @@ export function PlusAppearanceSettings() {
     }
   };
 
-  // Plus 1.9: the base (Plus or native) comes first; a theme only stacks on its own base,
-  // so cards for the other base are greyed out until the base is switched.
-  const activeUser = userThemes.find((item) => `${USER_THEME_PREFIX}${item.id}` === settings.theme);
-  const activeBase: ThemeBase = findBuiltinTheme(settings.theme)?.base ?? activeUser?.base ?? "clean";
-  const chooseBase = (base: ThemeBase) => {
-    if (base === activeBase) return;
-    if (base === "native") {
-      try { localStorage.setItem(LAST_CLEAN_THEME_KEY, settings.theme); } catch { /* private mode */ }
-      update({ theme: "native" });
-      return;
-    }
-    let last: string | null = null;
-    try { last = localStorage.getItem(LAST_CLEAN_THEME_KEY); } catch { /* private mode */ }
-    const lastOk = last !== null && (findBuiltinTheme(last)?.base === "clean"
-      || userThemes.some((item) => item.base === "clean" && `${USER_THEME_PREFIX}${item.id}` === last));
-    update({ theme: lastOk && last ? last : DEFAULT_THEME_ID });
-  };
-
-  const builtinCards = BUILTIN_THEMES.filter((theme) => theme.base === "clean" && (!theme.hidden || settings.theme === theme.id)).map((theme) => {
+  const builtinCards = BUILTIN_THEMES.map((theme) => {
     const selected = settings.theme === theme.id;
-    const off = activeBase !== theme.base;
     return (
-      <div key={theme.id} className={`plus-theme-card${selected ? " is-selected" : ""}${off ? " is-off" : ""}`}>
-        <button type="button" role="radio" aria-checked={selected} disabled={off} className="plus-theme-card-main" title={theme.description ? (locale.startsWith("zh") ? theme.description.zh : theme.description.en) : undefined} onClick={() => update({ theme: theme.id })}>
+      <div key={theme.id} className={`plus-theme-card${selected ? " is-selected" : ""}`}>
+        <button
+          type="button"
+          role="radio"
+          aria-checked={selected}
+          className="plus-theme-card-main"
+          title={theme.description ? (locale.startsWith("zh") ? theme.description.zh : theme.description.en) : undefined}
+          onClick={() => update({ theme: theme.id, accent: "" })}
+        >
           <Swatch
-            light={theme.light ? { bg: theme.light.workbench, panel: theme.light.panel, accent: theme.light.accent, text: theme.light.text } : { bg: "#ffffff", panel: "#f2f2f4", accent: "#1d1d1f", text: "#1d1d1f" }}
-            dark={theme.dark ? { bg: theme.dark.workbench, panel: theme.dark.panel, accent: theme.dark.accent } : { bg: "#1c1c1e", panel: "#242426", accent: "#f5f5f7" }}
+            light={{ bg: theme.light?.workbench, panel: theme.light?.panel, accent: theme.light?.accent, text: theme.light?.text }}
+            dark={{ bg: theme.dark?.workbench, panel: theme.dark?.panel, accent: theme.dark?.accent }}
           />
           <span className="plus-theme-card-name">{themeName(theme, locale)}</span>
           {theme.id === DEFAULT_THEME_ID && <span className="plus-theme-card-badge">{t("plus.themeBadgeDefault")}</span>}
         </button>
-        <button type="button" className="plus-theme-card-action" title={t("plus.themeDuplicate")} aria-label={t("plus.themeDuplicate")} disabled={busy} onClick={() => void duplicateBuiltin(theme)}>
+        <button
+          type="button"
+          className="plus-theme-card-action"
+          title={t("plus.themeDuplicate")}
+          aria-label={t("plus.themeDuplicate")}
+          disabled={busy}
+          onClick={() => void duplicateBuiltin(theme)}
+        >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
         </button>
       </div>
@@ -372,13 +547,12 @@ export function PlusAppearanceSettings() {
   const userCards = userThemes.map((theme) => {
     const value = `${USER_THEME_PREFIX}${theme.id}`;
     const selected = settings.theme === value;
-    const off = activeBase !== theme.base;
     return (
-      <div key={theme.id} className={`plus-theme-card is-user${selected ? " is-selected" : ""}${off ? " is-off" : ""}`}>
-        <button type="button" role="radio" aria-checked={selected} disabled={off} className="plus-theme-card-main" onClick={() => update({ theme: value })} title={theme.name}>
+      <div key={theme.id} className={`plus-theme-card is-user${selected ? " is-selected" : ""}`}>
+        <button type="button" role="radio" aria-checked={selected} className="plus-theme-card-main" onClick={() => update({ theme: value, accent: "" })} title={theme.name}>
           <Swatch light={theme.swatch} dark={theme.swatchDark} />
           <span className="plus-theme-card-name">{theme.name}</span>
-          <span className="plus-theme-card-badge">{t(theme.hasPalette ? "plus.themeBadgePalette" : theme.base === "clean" ? "plus.themeBadgeCssClean" : "plus.themeBadgeCss")}</span>
+          <span className="plus-theme-card-badge">{t(theme.hasPalette ? "plus.themeBadgePalette" : "plus.themeBadgeCssClean")}</span>
         </button>
         {confirmDelete === theme.id ? (
           <span className="plus-theme-card-confirm">
@@ -402,296 +576,349 @@ export function PlusAppearanceSettings() {
     );
   });
 
+  const cssDirty = customCss !== savedCustomCss;
+
   return (
     <div className="plus-appearance">
-      <div className="plus-appearance-heading">
-        <span>{t("plus.themeBaseTitle")}</span>
-      </div>
-      <div className="settings-choice-group plus-theme-base" role="radiogroup" aria-label={t("plus.themeBaseTitle")}>
-        {(["clean", "native"] as const).map((base) => (
-          <button
-            key={base}
-            type="button"
-            role="radio"
-            aria-checked={activeBase === base}
-            className={`config-button config-button-small ${activeBase === base ? "config-button-primary" : "config-button-secondary"}`}
-            onClick={() => chooseBase(base)}
-          >
-            {t(base === "clean" ? "plus.themeBasePlus" : "plus.themeBaseNative")}
-          </button>
-        ))}
-      </div>
-      <p className="settings-option-hint plus-theme-hint">{t(activeBase === "clean" ? "plus.themeBasePlusHint" : "plus.themeBaseNativeHint")}</p>
-      <div className="plus-appearance-heading">
-        <span>{t("plus.themes")}</span>
-        <span className="plus-appearance-heading-actions">
-          <input ref={fileInputRef} type="file" accept=".css,text/css,.json,.jsonc,application/json" multiple hidden onChange={(event) => void importFiles(event.target.files)} />
-          <button type="button" className="config-button config-button-small config-button-primary" disabled={busy} onClick={() => void newTheme()}>
-            {t("plus.themeNew")}
-          </button>
-          <button type="button" className={`config-button config-button-small ${galleryOpen ? "config-button-primary" : "config-button-secondary"}`} aria-pressed={galleryOpen} onClick={() => setGalleryOpen((open) => !open)}>
-            {t("plus.themeGallery")}
-          </button>
-          <button type="button" className="config-button config-button-small config-button-secondary" disabled={busy} onClick={() => fileInputRef.current?.click()} title={t("plus.themeImportHint")}>
-            {t("plus.themeImport")}
-          </button>
-          <button type="button" className="config-button config-button-small config-button-secondary" disabled={busy} onClick={() => void importCustomCss()} title={t("plus.themeFromCustomCssHint")}>
-            {t("plus.themeFromCustomCss")}
-          </button>
-        </span>
-      </div>
-      <div className="plus-theme-grid" role="radiogroup" aria-label={t("plus.themes")}>
-        {builtinCards}
-        {userCards}
-      </div>
-      <p className="settings-option-hint plus-theme-hint">{t("plus.themeHint")}</p>
+      {/* Card 1: 5 Curated Themes & Accent Colour */}
+      <div className="plus-studio-card">
+        <div className="plus-appearance-heading">
+          <span>
+            <strong>{t("plus.themes")}</strong>
+            <span className="plus-studio-subtitle">基于 Plus 唯一分层底层 · 5 款精选主题与自定义扩展</span>
+          </span>
+          <span className="plus-appearance-heading-actions">
+            <input ref={fileInputRef} type="file" accept=".css,text/css,.json,.jsonc,application/json" multiple hidden onChange={(event) => void importFiles(event.target.files)} />
+            {onToggleLivePreview && (
+              <button
+                type="button"
+                className={`config-button config-button-small ${livePreviewMode ? "config-button-primary" : "config-button-secondary"}`}
+                onClick={onToggleLivePreview}
+                title="将设置窗口收起为右下角浮窗，直接观察整个主界面的实时预览效果"
+              >
+                {livePreviewMode ? "退出全局界面预览" : "全局界面实时预览"}
+              </button>
+            )}
+            <button type="button" className="config-button config-button-small config-button-secondary" disabled={busy} onClick={() => void newTheme()}>
+              {t("plus.themeNew")}
+            </button>
+            <button type="button" className={`config-button config-button-small ${galleryOpen ? "config-button-primary" : "config-button-secondary"}`} aria-pressed={galleryOpen} onClick={() => setGalleryOpen((open) => !open)}>
+              {t("plus.themeGallery")}
+            </button>
+            <button type="button" className="config-button config-button-small config-button-secondary" disabled={busy} onClick={() => fileInputRef.current?.click()} title={t("plus.themeImportHint")}>
+              {t("plus.themeImport")}
+            </button>
+          </span>
+        </div>
 
-      {galleryOpen && (
-        <PlusThemeGallery
-          t={t}
-          busy={busy}
-          installedNames={new Set(userThemes.filter((item) => item.hasPalette).map((item) => item.name))}
-          onApply={(theme) => void applyGalleryTheme(theme)}
-          onClose={() => setGalleryOpen(false)}
-        />
+        <div className="plus-theme-grid" role="radiogroup" aria-label={t("plus.themes")}>
+          {builtinCards}
+          {userCards}
+        </div>
+
+        {galleryOpen && (
+          <PlusThemeGallery
+            t={t}
+            busy={busy}
+            installedNames={new Set(userThemes.filter((item) => item.hasPalette).map((item) => item.name))}
+            onApply={(theme) => void applyGalleryTheme(theme)}
+            onClose={() => setGalleryOpen(false)}
+          />
+        )}
+
+        {editingTheme && editingTheme.definition && (
+          <PaletteThemeEditor
+            key={`palette-${editingTheme.id}`}
+            t={t}
+            id={editingTheme.id}
+            name={editingTheme.name}
+            definition={editingTheme.definition}
+            css={editingTheme.css}
+            onSave={async ({ name, definition, css, compiled }) => {
+              const response = await fetch(`/api/plus-themes/${encodeURIComponent(editingTheme.id)}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name, definition, css }),
+              });
+              if (!response.ok) throw new Error(await readError(response));
+              writeUserThemeCache({ id: editingTheme.id, base: "clean", css: compiled });
+              await refreshThemes();
+            }}
+            onClose={() => {
+              void restoreActiveTheme();
+              setEditingTheme(null);
+            }}
+          />
+        )}
+
+        {editingTheme && !editingTheme.definition && (
+          <CssEditor
+            key={`theme-${editingTheme.id}`}
+            t={t}
+            initial={editingTheme.css}
+            title={t("plus.themeEditing", { name: editingTheme.name })}
+            extra={(
+              <div className="plus-theme-meta">
+                <button
+                  type="button"
+                  className="config-button config-button-small config-button-secondary"
+                  title={t("plus.convertToPaletteHint")}
+                  onClick={async () => {
+                    const fromTemplate = editingTheme.css.trimStart().startsWith("/* Based on the built-in");
+                    const definition = definitionFromCss(editingTheme.css);
+                    const css = fromTemplate ? CUSTOM_THEME_CSS_HINT : editingTheme.css;
+                    try {
+                      const response = await fetch(`/api/plus-themes/${encodeURIComponent(editingTheme.id)}`, {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ definition, css, base: "clean" }),
+                      });
+                      if (!response.ok) throw new Error(await readError(response));
+                      const loaded = await loadUserTheme(editingTheme.id);
+                      if (loaded) {
+                        writeUserThemeCache({ id: editingTheme.id, base: "clean", css: loaded.css });
+                        setUserThemeCss(loaded.css);
+                      }
+                      delete document.documentElement.dataset[THEME_PREVIEW_ATTR];
+                      document.documentElement.dataset.plusStyle = "clean";
+                      await refreshThemes();
+                      setEditingTheme({ ...editingTheme, base: "clean", definition, css });
+                    } catch (error) {
+                      notifyError(error);
+                    }
+                  }}
+                >
+                  {t("plus.convertToPalette")}
+                </button>
+                <input
+                  className="plus-theme-name-input"
+                  value={editingTheme.name}
+                  aria-label={t("plus.themeName")}
+                  onChange={(event) => setEditingTheme({ ...editingTheme, name: event.target.value })}
+                  onBlur={() => {
+                    void fetch(`/api/plus-themes/${encodeURIComponent(editingTheme.id)}`, {
+                      method: "PUT",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ name: editingTheme.name }),
+                    }).then(() => refreshThemes());
+                  }}
+                />
+              </div>
+            )}
+            onPreview={(css) => {
+              if (css === null) {
+                void restoreActiveTheme();
+                return;
+              }
+              document.documentElement.dataset[THEME_PREVIEW_ATTR] = "";
+              setUserThemeCss(css);
+            }}
+            onSave={async (css) => {
+              const response = await fetch(`/api/plus-themes/${encodeURIComponent(editingTheme.id)}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ css, name: editingTheme.name, base: "clean" }),
+              });
+              if (!response.ok) throw new Error(await readError(response));
+              writeUserThemeCache({ id: editingTheme.id, base: "clean", css });
+              delete document.documentElement.dataset[THEME_PREVIEW_ATTR];
+              setUserThemeCss(css);
+              await refreshThemes();
+            }}
+            onClose={() => {
+              void restoreActiveTheme();
+              setEditingTheme(null);
+            }}
+          />
+        )}
+
+        <div className="plus-appearance-row plus-accent-row">
+          <span>
+            <span>{t("plus.accent")}</span>
+            <span className="settings-option-hint">{t("plus.accentHint")}</span>
+          </span>
+          <div className="plus-accent-list" role="radiogroup" aria-label={t("plus.accent")}>
+            <button type="button" role="radio" aria-checked={settings.accent === ""} className="config-button config-button-small config-button-secondary" onClick={() => update({ accent: "" })}>
+              {t("plus.accentDefault")}
+            </button>
+            {PLUS_ACCENT_PRESETS.map((color) => (
+              <button key={color} type="button" role="radio" aria-checked={settings.accent === color} aria-label={color} title={color} className="plus-accent-swatch" style={{ background: color }} onClick={() => update({ accent: color })} />
+            ))}
+            <input type="color" className="plus-accent-custom" aria-label={t("plus.accentCustom")} title={t("plus.accentCustom")} value={settings.accent || "#c44d36"} onChange={(event) => update({ accent: event.target.value })} />
+          </div>
+        </div>
+      </div>
+
+      {/* Card 2: Typography & System Fonts */}
+      {!livePreviewMode && (
+        <div className="plus-studio-card">
+          <div className="plus-appearance-heading">
+            <span>
+              <strong>{t("plus.fonts")}</strong>
+              <span className="plus-studio-subtitle">独立配置界面、对话阅读、标题粗体与代码等宽字体</span>
+            </span>
+            <span className="plus-appearance-heading-actions">
+              <button type="button" className="config-button config-button-small config-button-secondary" onClick={() => void loadSystemFonts(true).then(() => appNotify.success({ message: t("plus.fontsRefreshed") }))}>
+                {t("plus.fontsRefresh")}
+              </button>
+              <button type="button" className="config-button config-button-small config-button-secondary" onClick={() => reset()}>
+                {t("plus.resetAppearance")}
+              </button>
+            </span>
+          </div>
+          {([
+            ["ui", "uiFont", "plus.fontUi", "plus.fontUiHint"],
+            ["chat", "chatFont", "plus.fontChat", "plus.fontChatHint"],
+            ["chatBold", "chatBoldFont", "plus.fontChatBold", "plus.fontChatBoldHint"],
+            ["code", "codeFont", "plus.fontCode", "plus.fontCodeHint"],
+          ] as const).map(([role, key, label, hint]) => (
+            <div key={role} className="plus-appearance-row">
+              <span>
+                <span>{t(label)}</span>
+                <span className="settings-option-hint">{t(hint)}</span>
+              </span>
+              <FontPicker role={role} label={t(label)} value={settings[key]} onChange={(value) => update({ [key]: value })} />
+            </div>
+          ))}
+        </div>
       )}
 
-      {editing?.kind === "theme" && editing.definition && (
-        <PaletteThemeEditor
-          key={`palette-${editing.id}`}
-          t={t}
-          id={editing.id}
-          name={editing.name}
-          definition={editing.definition}
-          css={editing.css}
-          onSave={async ({ name, definition, css, compiled }) => {
-            const response = await fetch(`/api/plus-themes/${encodeURIComponent(editing.id)}`, {
-              method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ name, definition, css }),
-            });
-            if (!response.ok) throw new Error(await readError(response));
-            writeUserThemeCache({ id: editing.id, base: "clean", css: compiled });
-            await refreshThemes();
-          }}
-          onClose={() => {
-            void restoreActiveTheme();
-            setEditing(null);
-          }}
-        />
-      )}
+      {/* Card 3: Custom CSS Studio with Live Global Preview & One-Click Presets */}
+      <div className="plus-studio-card plus-css-studio-card">
+        <div className="plus-appearance-heading">
+          <span>
+            <strong>自定义 CSS 工作台（Custom CSS Studio）</strong>
+            <span className="plus-studio-subtitle">
+              实时覆盖全局色彩、行内代码、标题样式、版心布局、背景壁纸与毛玻璃特效（自动同步至 ~/.pi/agent/desktop/custom.css）
+            </span>
+          </span>
+          <span className="plus-appearance-heading-actions">
+            {onToggleLivePreview && (
+              <button
+                type="button"
+                className={`config-button config-button-small ${livePreviewMode ? "config-button-primary" : "config-button-secondary"}`}
+                onClick={onToggleLivePreview}
+              >
+                {livePreviewMode ? "返回完整设置" : "开启全局界面预览"}
+              </button>
+            )}
+            <button
+              type="button"
+              className="config-button config-button-small config-button-secondary"
+              onClick={() => setShowCssGuide((v) => !v)}
+            >
+              {showCssGuide ? "收起接口速查" : "设计接口速查"}
+            </button>
+            <ConfigSwitch
+              checked={settings.customCssOverlay}
+              label={t("plus.customCss")}
+              onChange={(enabled) => update({ customCssOverlay: enabled })}
+            />
+          </span>
+        </div>
 
-      {editing?.kind === "theme" && !editing.definition && (
-        <CssEditor
-          key={`theme-${editing.id}`}
-          t={t}
-          initial={editing.css}
-          title={t("plus.themeEditing", { name: editing.name })}
-          extra={(
-            <div className="plus-theme-meta">
+        <div className="plus-css-presets" aria-label="一键风格与特效预设">
+          {CSS_STUDIO_PRESETS.map((preset) => (
+            <button
+              key={preset.id}
+              type="button"
+              className="plus-css-preset-chip"
+              title={preset.desc}
+              onClick={() => applyPresetSnippet(preset)}
+            >
+              <span className="plus-css-preset-dot" aria-hidden="true" />
+              <span>{preset.label}</span>
+            </button>
+          ))}
+        </div>
+
+        {showCssGuide && (
+          <div className="plus-css-guide-drawer">
+            <div className="plus-css-guide-grid">
+              <div>
+                <strong>色彩与行内代码接口（放在 <code>html[data-plus-theme]:root</code>）</strong>
+                <ul>
+                  <li><code>--accent</code> / <code>--plus-fill</code>：全局强调色与主按钮色</li>
+                  <li><code>--plus-inline-code</code> / <code>--plus-inline-code-bg</code> / <code>--plus-inline-code-border</code>：行内代码文字色、胶囊背景与边框色</li>
+                  <li><code>--plus-marker</code>：列表圆点与序号颜色</li>
+                  <li><code>--plus-heading-color</code> / <code>--plus-link-color</code>：标题与链接颜色</li>
+                  <li><code>--plus-user-bar-color</code>：用户提问卡左侧竖条颜色</li>
+                </ul>
+              </div>
+              <div>
+                <strong>壁纸、毛玻璃与布局接口（完整说明见 <code>docs/CUSTOM-CSS.md</code>）</strong>
+                <ul>
+                  <li><code>--plus-bg-image</code>：背景壁纸（如 <code>url(&quot;https://...&quot;)</code> 或渐变）</li>
+                  <li><code>--plus-glass-blur</code>：面板毛玻璃模糊度（如 <code>20px</code>）</li>
+                  <li><code>--plus-surface-alpha</code>：面板透明混合比例（如 <code>28%</code>）</li>
+                  <li><code>--chat-content-max-width</code>：对话版心最大宽度（如 <code>960px</code>）</li>
+                  <li><code>--plus-r-ctl</code> / <code>--plus-r-card</code> / <code>--plus-r-overlay</code>：三级圆角</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="plus-css-editor">
+          <textarea
+            value={customCss}
+            spellCheck={false}
+            placeholder={"/* 在此输入自定义 CSS，输入即刻全局实时预览 */\nhtml[data-plus-theme]:root {\n  --plus-inline-code: #7a2716;\n  --plus-inline-code-bg: rgba(196, 77, 54, 0.12);\n  --plus-glass-blur: 16px;\n}"}
+            aria-label="自定义 CSS 编辑器"
+            onChange={(event) => setCustomCss(event.target.value)}
+            onKeyDown={(event) => {
+              if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+                event.preventDefault();
+                void saveCustomCss();
+              } else if (event.key === "Tab") {
+                event.preventDefault();
+                const target = event.currentTarget;
+                const { selectionStart, selectionEnd } = target;
+                setCustomCss(`${customCss.slice(0, selectionStart)}  ${customCss.slice(selectionEnd)}`);
+                requestAnimationFrame(() => target.setSelectionRange(selectionStart + 2, selectionStart + 2));
+              }
+            }}
+          />
+          <div className="plus-css-editor-actions">
+            <span>
+              {cssStatus === "saving" ? t("plus.cssSaving")
+                : cssStatus === "saved" ? t("plus.cssSaved")
+                  : cssStatus === "error" ? (cssError ?? t("plus.cssError"))
+                    : cssDirty ? "实时预览生效中 · 点击保存写入 custom.css" : t("plus.cssLiveHint")}
+            </span>
+            <span className="spacer" />
+            {customCss.trim().length > 0 && (
               <button
                 type="button"
                 className="config-button config-button-small config-button-secondary"
-                title={t("plus.convertToPaletteHint")}
-                onClick={async () => {
-                  const fromTemplate = editing.css.trimStart().startsWith("/* Based on the built-in");
-                  const definition = definitionFromCss(editing.css);
-                  const css = fromTemplate ? CUSTOM_THEME_CSS_HINT : editing.css;
-                  try {
-                    const response = await fetch(`/api/plus-themes/${encodeURIComponent(editing.id)}`, {
-                      method: "PUT",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ definition, css }),
-                    });
-                    if (!response.ok) throw new Error(await readError(response));
-                    const loaded = await loadUserTheme(editing.id);
-                    if (loaded) {
-                      writeUserThemeCache({ id: editing.id, base: "clean", css: loaded.css });
-                      setUserThemeCss(loaded.css);
-                    }
-                    delete document.documentElement.dataset[THEME_PREVIEW_ATTR];
-                    document.documentElement.dataset.plusStyle = "clean";
-                    await refreshThemes();
-                    setEditing({ ...editing, base: "clean", definition, css });
-                  } catch (error) {
-                    notifyError(error);
-                  }
+                onClick={() => {
+                  setCustomCss("");
+                  void saveCustomCss("");
                 }}
               >
-                {t("plus.convertToPalette")}
+                清空规则
               </button>
-              <input
-                className="plus-theme-name-input"
-                value={editing.name}
-                aria-label={t("plus.themeName")}
-                onChange={(event) => setEditing({ ...editing, name: event.target.value })}
-                onBlur={() => {
-                  void fetch(`/api/plus-themes/${encodeURIComponent(editing.id)}`, {
-                    method: "PUT",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ name: editing.name }),
-                  }).then(() => refreshThemes());
-                }}
-              />
-              <div className="settings-choice-group" role="radiogroup" aria-label={t("plus.themeBase")} title={t("plus.themeBaseHint")}>
-                {(["native", "clean"] as const).map((base) => (
-                  <button
-                    key={base}
-                    type="button"
-                    role="radio"
-                    aria-checked={editing.base === base}
-                    className={`config-button config-button-small ${editing.base === base ? "config-button-primary" : "config-button-secondary"}`}
-                    onClick={() => {
-                      setEditing({ ...editing, base });
-                      document.documentElement.dataset.plusStyle = base;
-                      void fetch(`/api/plus-themes/${encodeURIComponent(editing.id)}`, {
-                        method: "PUT",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ base }),
-                      }).then(async () => {
-                        const loaded = await loadUserTheme(editing.id);
-                        if (loaded) writeUserThemeCache({ id: editing.id, base: loaded.base, css: loaded.css });
-                        applyPlusTheme(settings, base);
-                        await refreshThemes();
-                      });
-                    }}
-                  >
-                    {t(base === "clean" ? "plus.themeBaseClean" : "plus.themeBaseNative")}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-          onPreview={(css) => {
-            if (css === null) {
-              void restoreActiveTheme();
-              return;
-            }
-            document.documentElement.dataset[THEME_PREVIEW_ATTR] = "";
-            setUserThemeCss(css);
-          }}
-          onSave={async (css) => {
-            const response = await fetch(`/api/plus-themes/${encodeURIComponent(editing.id)}`, {
-              method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ css, name: editing.name }),
-            });
-            if (!response.ok) throw new Error(await readError(response));
-            writeUserThemeCache({ id: editing.id, base: editing.base, css });
-            delete document.documentElement.dataset[THEME_PREVIEW_ATTR];
-            setUserThemeCss(css);
-            await refreshThemes();
-          }}
-          onClose={() => {
-            void restoreActiveTheme();
-            setEditing(null);
-          }}
-        />
-      )}
-
-      <div className="plus-appearance-row">
-        <span>
-          <span>{t("plus.accent")}</span>
-          <span className="settings-option-hint">{t("plus.accentHint")}</span>
-        </span>
-        <div className="plus-accent-list" role="radiogroup" aria-label={t("plus.accent")}>
-          <button type="button" role="radio" aria-checked={settings.accent === ""} className="config-button config-button-small config-button-secondary" onClick={() => update({ accent: "" })}>
-            {t("plus.accentDefault")}
-          </button>
-          {PLUS_ACCENT_PRESETS.map((color) => (
-            <button key={color} type="button" role="radio" aria-checked={settings.accent === color} aria-label={color} title={color} className="plus-accent-swatch" style={{ background: color }} onClick={() => update({ accent: color })} />
-          ))}
-          <input type="color" className="plus-accent-custom" aria-label={t("plus.accentCustom")} title={t("plus.accentCustom")} value={settings.accent || "#5b4fe0"} onChange={(event) => update({ accent: event.target.value })} />
-        </div>
-      </div>
-
-      <div className="plus-appearance-heading">
-        <span>{t("plus.fonts")}</span>
-        <span className="plus-appearance-heading-actions">
-          <button type="button" className="config-button config-button-small config-button-secondary" onClick={() => void loadSystemFonts(true).then(() => appNotify.success({ message: t("plus.fontsRefreshed") }))}>
-            {t("plus.fontsRefresh")}
-          </button>
-        </span>
-      </div>
-      {([
-        ["ui", "uiFont", "plus.fontUi", "plus.fontUiHint"],
-        ["chat", "chatFont", "plus.fontChat", "plus.fontChatHint"],
-        ["chatBold", "chatBoldFont", "plus.fontChatBold", "plus.fontChatBoldHint"],
-        ["code", "codeFont", "plus.fontCode", "plus.fontCodeHint"],
-      ] as const).map(([role, key, label, hint]) => (
-        <div key={role} className="plus-appearance-row">
-          <span>
-            <span>{t(label)}</span>
-            <span className="settings-option-hint">{t(hint)}</span>
-          </span>
-          <FontPicker role={role} label={t(label)} value={settings[key]} onChange={(value) => update({ [key]: value })} />
-        </div>
-      ))}
-
-      <div className="plus-appearance-row">
-        <span>
-          <span>{t("plus.customCss")}</span>
-          <span className="settings-option-hint">{t("plus.customCssHint")}</span>
-        </span>
-        <ConfigSwitch checked={settings.customCssOverlay} label={t("plus.customCss")} onChange={(enabled) => update({ customCssOverlay: enabled })} />
-      </div>
-
-      {editing?.kind === "custom-css" ? (
-        <CssEditor
-          key="custom-css"
-          t={t}
-          initial={editing.css}
-          title={t("plus.cssEditor")}
-          onPreview={(css) => {
-            let style = document.getElementById(CUSTOM_CSS_PREVIEW_ID) as HTMLStyleElement | null;
-            if (css === null) {
-              style?.remove();
-              setCustomCssEnabled(settings.customCssOverlay);
-              return;
-            }
-            if (!style) {
-              style = document.createElement("style");
-              style.id = CUSTOM_CSS_PREVIEW_ID;
-              document.head.appendChild(style);
-            }
-            style.textContent = css;
-            setCustomCssEnabled(false);
-          }}
-          onSave={async (css) => {
-            const response = await fetch("/api/custom-css", {
-              method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ css }),
-            });
-            if (!response.ok) throw new Error(await readError(response));
-            document.getElementById(CUSTOM_CSS_PREVIEW_ID)?.remove();
-            reloadCustomCssLink(String(Date.now()));
-          }}
-          onClose={() => setEditing(null)}
-        />
-      ) : (
-        <div className="plus-appearance-row">
-          <span>
-            <span>{t("plus.cssEditor")}</span>
-            <span className="settings-option-hint">{t("plus.cssEditorHint")}</span>
-          </span>
-          <div className="settings-choice-group">
-            <button type="button" className="config-button config-button-small config-button-secondary" onClick={() => reset()}>
-              {t("plus.resetAppearance")}
-            </button>
+            )}
+            {cssDirty && (
+              <button
+                type="button"
+                className="config-button config-button-small config-button-secondary"
+                onClick={() => setCustomCss(savedCustomCss)}
+              >
+                {t("plus.cssDiscard")}
+              </button>
+            )}
             <button
               type="button"
               className="config-button config-button-small config-button-primary"
-              onClick={async () => {
-                const response = await fetch("/api/custom-css", { cache: "no-store" });
-                setEditing({ kind: "custom-css", css: response.ok ? await response.text() : "" });
-              }}
+              disabled={!cssDirty || cssStatus === "saving"}
+              onClick={() => void saveCustomCss()}
             >
-              {t("plus.openCssEditor")}
+              {t("plus.cssSave")}
             </button>
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

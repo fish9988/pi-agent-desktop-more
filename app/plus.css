@@ -833,7 +833,7 @@ html.plus-theme-transition *::after {
 .sidebar-brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
   margin-right: auto;
   padding-left: 6px;
@@ -841,22 +841,33 @@ html.plus-theme-transition *::after {
 .sidebar-brand-mark {
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   flex: none;
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
-  color: var(--accent);
-  font: 600 14px/1 var(--plus-heading-font, Georgia, serif);
+  border-radius: var(--plus-r-ctl, 4px);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  box-shadow: var(--shadow-control);
 }
 .sidebar-brand-name {
   overflow: hidden;
   color: var(--text);
-  font-size: 13px;
+  font-size: var(--plus-fs-2, 13px);
   font-weight: 600;
   letter-spacing: 0.01em;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.sidebar-brand-badge {
+  flex: none;
+  padding: 1px 6px;
+  border: 1px solid var(--accent-border);
+  border-radius: var(--plus-r-ctl, 4px);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: var(--plus-fs-1, 12px);
+  font-weight: 500;
+  line-height: 16px;
 }
 .sidebar-footer {
   display: flex;
@@ -1253,3 +1264,204 @@ html[data-plus-style="clean"] .config-button-danger:not(:disabled):hover {
 .plus-theme-card.is-off { opacity: 0.45; }
 .plus-theme-card.is-off .plus-theme-card-main { cursor: not-allowed; }
 .plus-theme-base { align-self: flex-start; }
+
+/* -- Plus 1.10: Apple / Google modern studio cards & Custom CSS presets ------ */
+.plus-studio-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--plus-s3, 12px);
+  padding: var(--plus-s4, 16px);
+  border: 1px solid var(--plus-stroke);
+  border-radius: var(--plus-r-overlay, 12px);
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  box-shadow: var(--shadow-control);
+}
+.plus-studio-subtitle {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-dim);
+  font-size: var(--plus-fs-1, 12px);
+  font-weight: 400;
+}
+.plus-css-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--plus-s2, 8px);
+}
+.plus-css-preset-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--plus-stroke-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--plus-fs-1, 12px);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--plus-dur-1, 120ms) ease, border-color var(--plus-dur-1, 120ms) ease, color var(--plus-dur-1, 120ms) ease;
+}
+.plus-css-preset-chip:hover {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.plus-css-preset-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.plus-css-guide-drawer {
+  padding: var(--plus-s3, 12px);
+  border: 1px solid var(--plus-stroke);
+  border-radius: var(--plus-r-card, 8px);
+  background: color-mix(in srgb, var(--text) 3%, transparent);
+  font-size: var(--plus-fs-1, 12px);
+  line-height: 1.65;
+}
+.plus-css-guide-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--plus-s3, 12px);
+}
+.plus-css-guide-grid ul {
+  margin: 6px 0 0;
+  padding-left: 16px;
+  color: var(--text-muted);
+}
+.plus-css-guide-grid code {
+  padding: 1px 4px;
+  border-radius: var(--plus-r-ctl, 4px);
+  background: var(--plus-inline-code-bg);
+  color: var(--plus-inline-code);
+}
+
+/* -- Plus 1.10: Global Live Preview floating inspector mode ----------------- */
+html[data-plus-live-preview="1"] .settings-dialog-backdrop.is-plus-page {
+  background: transparent !important;
+  backdrop-filter: none !important;
+  pointer-events: none !important;
+}
+html[data-plus-live-preview="1"] .settings-dialog-backdrop.is-plus-page .settings-dialog-surface {
+  position: fixed !important;
+  right: 20px !important;
+  bottom: 20px !important;
+  left: auto !important;
+  top: auto !important;
+  width: min(500px, calc(100vw - 40px)) !important;
+  height: min(76vh, 680px) !important;
+  max-width: none !important;
+  max-height: none !important;
+  grid-template-columns: 1fr !important;
+  border: 1px solid var(--accent-border) !important;
+  border-radius: var(--plus-r-overlay, 12px) !important;
+  background: color-mix(in srgb, var(--surface) 92%, transparent) !important;
+  backdrop-filter: blur(20px) saturate(140%) !important;
+  box-shadow: var(--shadow-dialog) !important;
+  pointer-events: auto !important;
+  z-index: 9500 !important;
+}
+html[data-plus-live-preview="1"] .settings-dialog-backdrop.is-plus-page :is(.settings-dialog-header, .plus-settings-page-header, .plus-appearance-preview-pane) {
+  display: none !important;
+}
+html[data-plus-live-preview="1"] .settings-dialog-backdrop.is-plus-page .plus-appearance-layout {
+  grid-template-columns: 1fr !important;
+}
+html[data-plus-live-preview="1"] .settings-dialog-backdrop.is-plus-page .settings-dialog-main {
+  padding: var(--plus-s3, 12px) !important;
+}
+
+/* -- Plus 1.10: Full-window image lightbox viewer --------------------------- */
+.plus-image-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  backdrop-filter: blur(18px) saturate(130%);
+}
+.plus-image-lightbox-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--plus-s3, 12px);
+  padding: var(--plus-s3, 12px) var(--plus-s4, 16px);
+  border-bottom: 1px solid var(--plus-stroke);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+}
+.plus-image-lightbox-meta {
+  display: flex;
+  align-items: baseline;
+  gap: var(--plus-s2, 8px);
+  min-width: 0;
+}
+.plus-image-lightbox-title {
+  overflow: hidden;
+  color: var(--text);
+  font-size: var(--plus-fs-3, 14px);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.plus-image-lightbox-sub {
+  color: var(--text-dim);
+  font-size: var(--plus-fs-1, 12px);
+}
+.plus-image-lightbox-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.plus-image-lightbox-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--plus-stroke-strong);
+  border-radius: var(--plus-r-ctl, 4px);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--plus-fs-1, 12px);
+  font-weight: 500;
+  cursor: pointer;
+}
+.plus-image-lightbox-btn:hover {
+  border-color: var(--accent-border);
+  background: var(--bg-hover);
+}
+.plus-image-lightbox-btn.is-readout {
+  min-width: 56px;
+  font-variant-numeric: tabular-nums;
+}
+.plus-image-lightbox-btn.is-close {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.plus-image-lightbox-stage {
+  flex: 1 1 0%;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  padding: var(--plus-s4, 16px);
+  cursor: grab;
+  user-select: none;
+}
+.plus-image-lightbox-stage:active {
+  cursor: grabbing;
+}
+.plus-image-lightbox-img {
+  max-width: 92vw;
+  max-height: calc(100vh - 96px);
+  object-fit: contain;
+  border-radius: var(--plus-r-card, 8px);
+  box-shadow: var(--shadow-dialog);
+  transition: transform 60ms ease-out;
+}

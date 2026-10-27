@@ -119,6 +119,14 @@ html[data-plus-code-font] .cm-editor .cm-content {
   --plus-syn-variable: var(--plus-code-text);
   --plus-syn-inserted: var(--success);
   --plus-syn-deleted: var(--danger);
+  --plus-heading-color: var(--text);
+  --plus-link-color: var(--accent);
+  --plus-user-bar-color: var(--accent);
+  --plus-inline-code-border: transparent;
+  --plus-bg-image: none;
+  --plus-glass-blur: 0px;
+  --plus-glass-saturation: 100%;
+  --plus-surface-alpha: 0%;
 }
 
 /* ---- global ------------------------------------------------------------- */
@@ -153,11 +161,20 @@ html[data-plus-style="clean"] input[type="range"]::-webkit-slider-thumb {
 }
 
 html[data-plus-style="clean"] .app-shell {
-  background:
-    radial-gradient(circle at 60% -35%, color-mix(in srgb, var(--plus-tint) 5%, transparent), transparent 48%),
-    var(--bg) !important;
+  background-color: var(--bg) !important;
+  background-image:
+    var(--plus-bg-image),
+    radial-gradient(circle at 60% -35%, color-mix(in srgb, var(--plus-tint) 5%, transparent), transparent 48%) !important;
+  background-size: cover !important;
+  background-position: center !important;
 }
-html[data-plus-style="clean"] .chat-window { background: var(--workbench-bg); }
+html[data-plus-style="clean"] .chat-window {
+  background: color-mix(in srgb, transparent var(--plus-surface-alpha), var(--workbench-bg));
+  backdrop-filter: blur(var(--plus-glass-blur)) saturate(var(--plus-glass-saturation));
+}
+html[data-plus-style="clean"] :is(.session-sidebar, .app-topbar, .chat-composer-frame, .message-user-bubble, .turn-files-card) {
+  backdrop-filter: blur(var(--plus-glass-blur)) saturate(var(--plus-glass-saturation));
+}
 
 /* ---- sidebar ------------------------------------------------------------ */
 
@@ -330,7 +347,7 @@ html[data-plus-style="clean"] .markdown-compaction-message { font-family: var(--
 
 html[data-plus-style="clean"] .markdown-body :is(h1, h2, h3, h4, h5, h6) {
   font-family: var(--plus-heading-font);
-  color: var(--text);
+  color: var(--plus-heading-color);
   letter-spacing: -0.005em;
 }
 html[data-plus-chat-font] .markdown-body :is(h1, h2, h3, h4, h5, h6) { font-family: inherit !important; }
@@ -347,13 +364,13 @@ html[data-plus-style="clean"]:not([data-plus-chat-font]) .message-assistant .mar
   font-family: var(--plus-bold-font, inherit);
 }
 html[data-plus-style="clean"] .markdown-body a {
-  color: var(--accent);
+  color: var(--plus-link-color);
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
-  text-decoration-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  text-decoration-color: color-mix(in srgb, var(--plus-link-color) 40%, transparent);
 }
-html[data-plus-style="clean"] .markdown-body a:hover { text-decoration-color: var(--accent); }
+html[data-plus-style="clean"] .markdown-body a:hover { text-decoration-color: var(--plus-link-color); }
 html[data-plus-style="clean"] .markdown-body li::marker { color: var(--plus-marker); }
 html[data-plus-style="clean"] .markdown-body li { margin: 0.3em 0; }
 html[data-plus-style="clean"] .markdown-body blockquote {
@@ -364,9 +381,10 @@ html[data-plus-style="clean"] .markdown-body blockquote {
   background: transparent;
   color: var(--text-muted);
 }
-html[data-plus-style="clean"] .markdown-body .markdown-inline-code {
-  padding: 0.1em 0.4em;
+html[data-plus-style="clean"] .markdown-body :is(code:not(pre code), .markdown-inline-code) {
+  padding: 0.12em 0.42em;
   border-radius: var(--plus-r-ctl);
+  border: 1px solid var(--plus-inline-code-border) !important;
   background: var(--plus-inline-code-bg) !important;
   color: var(--plus-inline-code) !important;
   box-shadow: none !important;
@@ -1111,7 +1129,7 @@ html[data-plus-chat-bold-font] .message-user :is(strong, b) {
 /* User turns: editorial callout card with a left accent bar (Kami style). */
 html[data-plus-style="clean"] .message-user-bubble:not(.is-editing) {
   border-radius: var(--plus-r-card) !important;
-  border-left: 3px solid var(--accent) !important;
+  border-left: 3px solid var(--plus-user-bar-color) !important;
   box-shadow: 0 0 0 1px var(--plus-stroke), var(--shadow-control) !important;
 }
 
@@ -1336,15 +1354,43 @@ html[data-plus-style="clean"] .session-sidebar .session-tree-item[data-current] 
     font-weight: 500 !important;
   }
   html[data-plus-style="clean"] .sidebar-project-tree-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 18px;
     margin-left: auto;
-    padding-right: var(--plus-s1);
-    color: var(--text-dim);
+    padding: 0 6px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--text) 6%, transparent);
+    color: var(--text-muted);
     font-size: var(--plus-fs-1);
-    font-weight: 400;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
   }
   html[data-plus-style="clean"] .sidebar-project-tree-row-main { gap: 10px; }
-  html[data-plus-style="clean"] .sidebar-project-tree-folder,
-  html[data-plus-style="clean"] .sidebar-project-tree-group.is-active .sidebar-project-tree-folder { color: var(--text-muted) !important; }
+  html[data-plus-style="clean"] .sidebar-project-tree-folder {
+    display: inline-grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border-radius: var(--plus-r-ctl);
+    border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+    background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+    color: var(--accent) !important;
+    transition: background var(--plus-dur-1) ease, color var(--plus-dur-1) ease;
+  }
+  html[data-plus-style="clean"] .sidebar-project-tree-group.is-active .sidebar-project-tree-folder {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--accent-contrast) !important;
+  }
+  html[data-plus-style="clean"] .sidebar-project-tree-group:not(.is-collapsed) {
+    padding: 2px;
+    border: 1px solid var(--plus-stroke);
+    border-radius: var(--plus-r-card);
+    background: color-mix(in srgb, var(--surface) 50%, transparent);
+  }
   html[data-plus-style="clean"] .sidebar-project-tree-name { font-weight: 500; }
   /* Project rows carry no leading glyph (the folder above already says what
      they are); chats keep their bubble. Running and unread marks sit at the

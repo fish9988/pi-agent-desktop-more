@@ -10,6 +10,9 @@
  */
 export const PLUS_TEST_FLAVOR = process.env.NEXT_PUBLIC_PLUS_FLAVOR === "test";
 export const PRODUCT_NAME: "Pi Agent Plus" | "Pi Agent Plus Test" = PLUS_TEST_FLAVOR ? "Pi Agent Plus Test" : "Pi Agent Plus";
+/** UI display brand shown in the sidebar header and settings overview. */
+export const BRAND_DISPLAY_NAME = PLUS_TEST_FLAVOR ? "Pi Atelier Test" : "Pi Atelier";
+export const BRAND_BADGE = "纸枢";
 
 import desktopPackage from "../src-tauri/pi-agent-desktop-package.json";
 import plusVersion from "../plus-version.json";

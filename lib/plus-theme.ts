@@ -51,7 +51,7 @@ export const DEFAULT_PLUS_THEME: PlusThemeSettings = {
 
 /** Accent presets offered next to the colour picker. */
 export const PLUS_ACCENT_PRESETS: readonly string[] = [
-  "#5b4fe0", "#2563eb", "#0f9d8a", "#16a34a", "#d97706", "#c15f3c", "#db2777", "#18181b",
+  "#c44d36", "#d97706", "#52662c", "#0f9d8a", "#2563eb", "#5b4fe0", "#db2777", "#18181b",
 ];
 
 export type FontRole = "ui" | "chat" | "chatBold" | "code";
@@ -170,14 +170,16 @@ export function accentProperties(accent: string): Record<string, string> {
     "--plus-fill-text": "#ffffff",
     "--plus-marker": `color-mix(in srgb, ${accent} 80%, var(--text-muted))`,
     "--plus-tint": accent,
-    "--plus-inline-code": accent,
-    "--plus-inline-code-bg": `color-mix(in srgb, ${accent} 10%, transparent)`,
   };
 }
 
-const ACCENT_PROPERTY_NAMES = Object.keys(accentProperties("#000000"));
+const ACCENT_PROPERTY_NAMES = [
+  ...Object.keys(accentProperties("#000000")),
+  "--plus-inline-code",
+  "--plus-inline-code-bg",
+];
 /** Accent properties beyond the upstream ones, in accentExtra() order (init script). */
-const ACCENT_EXTRA_KEYS = ["--plus-fill", "--plus-fill-hover", "--plus-fill-text", "--plus-marker", "--plus-tint", "--plus-inline-code", "--plus-inline-code-bg"];
+const ACCENT_EXTRA_KEYS = ["--plus-fill", "--plus-fill-hover", "--plus-fill-text", "--plus-marker", "--plus-tint"];
 
 export interface UserThemeCache {
   id: string;
@@ -256,7 +258,7 @@ export function applyPlusTheme(settings: PlusThemeSettings, userBase?: ThemeBase
   root.dataset.plusTheme = settings.theme;
   const cached = readUserThemeCache();
   const cachedBase = cached && settings.theme === `${USER_THEME_PREFIX}${cached.id}` ? cached.base : undefined;
-  root.dataset.plusStyle = builtin?.base ?? userBase ?? cachedBase ?? "native";
+  root.dataset.plusStyle = builtin?.base ?? userBase ?? cachedBase ?? "clean";
   for (const name of ACCENT_PROPERTY_NAMES) root.style.removeProperty(name);
   for (const [name, value] of Object.entries(accentProperties(settings.accent))) root.style.setProperty(name, value);
   const roles: Array<[FontRole, string]> = [["ui", settings.uiFont], ["chat", settings.chatFont], ["chatBold", settings.chatBoldFont], ["code", settings.codeFont]];
@@ -279,5 +281,5 @@ export function applyPlusTheme(settings: PlusThemeSettings, userBase?: ThemeBase
  * `bases` maps built-in ids to their base.
  */
 export function plusThemeInitScript(bases: Record<string, ThemeBase>): string {
-  return `(function(){try{var r=document.documentElement;var s={};try{s=JSON.parse(localStorage.getItem(${JSON.stringify(PLUS_THEME_STORAGE_KEY)})||"{}")||{}}catch(e){}var B=${JSON.stringify(bases)};var t=typeof s.theme==="string"?s.theme:(s.style==="native"||s.style==="clean"?s.style:${JSON.stringify(DEFAULT_THEME_ID)});var u=t.indexOf(${JSON.stringify(USER_THEME_PREFIX)})===0;if(!u&&!B[t])t=${JSON.stringify(DEFAULT_THEME_ID)};r.dataset.plusTheme=t;var base=B[t]||"native";if(u){try{var c=JSON.parse(localStorage.getItem(${JSON.stringify(PLUS_USER_THEME_CACHE_KEY)})||"null");if(c&&c.id===t.slice(5)&&typeof c.css==="string"){base=c.base==="clean"?"clean":"native";var st=document.createElement("style");st.id=${JSON.stringify(PLUS_USER_THEME_STYLE_ID)};st.textContent=c.css;document.head.appendChild(st)}}catch(e){}}r.dataset.plusStyle=base;function accentExtra(a){return [a,"color-mix(in srgb, "+a+" 86%, black)","#ffffff","color-mix(in srgb, "+a+" 80%, var(--text-muted))",a,a,"color-mix(in srgb, "+a+" 10%, transparent)"]}var F=${JSON.stringify(FONT_FALLBACKS)};var G=${JSON.stringify([...GENERIC_FAMILIES])};function stack(v,k){if(typeof v!=="string")return null;var p=v.split(",").map(function(x){return x.replace(/["'\\\\;{}<>()]/g,"").trim()}).filter(Boolean);if(!p.length)return null;return p.map(function(n){return G.indexOf(n.toLowerCase())>=0?n:'"'+n+'"'}).join(", ")+", "+F[k]}var L={inter:"Inter",harmony:"HarmonyOS Sans SC",misans:"MiSans",serif:"Georgia, Noto Serif SC, SimSun"};var R=[["ui","Ui",s.uiFont!=null?s.uiFont:L[s.font]],["chat","Chat",s.chatFont],["chatBold","ChatBold",s.chatBoldFont],["code","Code",s.codeFont]];for(var i=0;i<R.length;i++){var v=stack(R[i][2],R[i][0]);if(v&&R[i][0]==="chatBold"){var cs=stack(s.chatFont,"chat");if(cs)v=v.slice(0,v.length-F.chatBold.length)+cs}if(v){r.style.setProperty("--plus-font-"+R[i][0],v);r.dataset["plus"+R[i][1]+"Font"]=""}}var a=typeof s.accent==="string"&&/^#[0-9a-f]{6}$/i.test(s.accent)?s.accent:"";if(a){r.style.setProperty("--accent",a);r.style.setProperty("--accent-hover","color-mix(in srgb, "+a+" 86%, black)");r.style.setProperty("--accent-contrast","#ffffff");r.style.setProperty("--accent-soft","color-mix(in srgb, "+a+" 12%, transparent)");r.style.setProperty("--accent-border","color-mix(in srgb, "+a+" 42%, transparent)");r.style.setProperty("--focus-ring","color-mix(in srgb, "+a+" 40%, transparent)");r.style.setProperty("--selection","color-mix(in srgb, "+a+" 24%, transparent)");var A=${JSON.stringify(ACCENT_EXTRA_KEYS)};var X=accentExtra(a);for(var j=0;j<A.length;j++)r.style.setProperty(A[j],X[j])}var l=document.querySelector("link[data-custom-css]");if(l){var off=s.customCssOverlay!==true;l.dataset.plusOff=off?"1":"0";l.dataset.plusGuard="1";l.addEventListener("load",function(){if(l.sheet)l.sheet.disabled=l.dataset.plusOff==="1"});if(off){l.disabled=true;if(l.sheet)l.sheet.disabled=true}}}catch(e){}})();`;
+  return `(function(){try{var r=document.documentElement;var s={};try{s=JSON.parse(localStorage.getItem(${JSON.stringify(PLUS_THEME_STORAGE_KEY)})||"{}")||{}}catch(e){}var B=${JSON.stringify(bases)};var t=typeof s.theme==="string"?s.theme:(s.style==="native"||s.style==="clean"?s.style:${JSON.stringify(DEFAULT_THEME_ID)});var u=t.indexOf(${JSON.stringify(USER_THEME_PREFIX)})===0;if(!u&&!B[t])t=${JSON.stringify(DEFAULT_THEME_ID)};r.dataset.plusTheme=t;var base=B[t]||"clean";if(u){try{var c=JSON.parse(localStorage.getItem(${JSON.stringify(PLUS_USER_THEME_CACHE_KEY)})||"null");if(c&&c.id===t.slice(5)&&typeof c.css==="string"){base=c.base==="clean"?"clean":"native";var st=document.createElement("style");st.id=${JSON.stringify(PLUS_USER_THEME_STYLE_ID)};st.textContent=c.css;document.head.appendChild(st)}}catch(e){}}r.dataset.plusStyle=base;function accentExtra(a){return [a,"color-mix(in srgb, "+a+" 86%, black)","#ffffff","color-mix(in srgb, "+a+" 80%, var(--text-muted))",a]}var F=${JSON.stringify(FONT_FALLBACKS)};var G=${JSON.stringify([...GENERIC_FAMILIES])};function stack(v,k){if(typeof v!=="string")return null;var p=v.split(",").map(function(x){return x.replace(/["'\\\\;{}<>()]/g,"").trim()}).filter(Boolean);if(!p.length)return null;return p.map(function(n){return G.indexOf(n.toLowerCase())>=0?n:'"'+n+'"'}).join(", ")+", "+F[k]}var L={inter:"Inter",harmony:"HarmonyOS Sans SC",misans:"MiSans",serif:"Georgia, Noto Serif SC, SimSun"};var R=[["ui","Ui",s.uiFont!=null?s.uiFont:L[s.font]],["chat","Chat",s.chatFont],["chatBold","ChatBold",s.chatBoldFont],["code","Code",s.codeFont]];for(var i=0;i<R.length;i++){var v=stack(R[i][2],R[i][0]);if(v&&R[i][0]==="chatBold"){var cs=stack(s.chatFont,"chat");if(cs)v=v.slice(0,v.length-F.chatBold.length)+cs}if(v){r.style.setProperty("--plus-font-"+R[i][0],v);r.dataset["plus"+R[i][1]+"Font"]=""}}var a=typeof s.accent==="string"&&/^#[0-9a-f]{6}$/i.test(s.accent)?s.accent:"";if(a){r.style.setProperty("--accent",a);r.style.setProperty("--accent-hover","color-mix(in srgb, "+a+" 86%, black)");r.style.setProperty("--accent-contrast","#ffffff");r.style.setProperty("--accent-soft","color-mix(in srgb, "+a+" 12%, transparent)");r.style.setProperty("--accent-border","color-mix(in srgb, "+a+" 42%, transparent)");r.style.setProperty("--focus-ring","color-mix(in srgb, "+a+" 40%, transparent)");r.style.setProperty("--selection","color-mix(in srgb, "+a+" 24%, transparent)");var A=${JSON.stringify(ACCENT_EXTRA_KEYS)};var X=accentExtra(a);for(var j=0;j<A.length;j++)r.style.setProperty(A[j],X[j])}var l=document.querySelector("link[data-custom-css]");if(l){var off=s.customCssOverlay!==true;l.dataset.plusOff=off?"1":"0";l.dataset.plusGuard="1";l.addEventListener("load",function(){if(l.sheet)l.sheet.disabled=l.dataset.plusOff==="1"});if(off){l.disabled=true;if(l.sheet)l.sheet.disabled=true}}}catch(e){}})();`;
 }
