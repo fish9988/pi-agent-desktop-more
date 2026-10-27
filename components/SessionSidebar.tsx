@@ -2150,23 +2150,13 @@ function SessionFamilyItem({
   /** Cross-project context, shown by the chronological sidebar view. */
   subtitle?: string;
 }) {
-  const { t } = useI18n();
-  const hasChildren = node.children.length > 0;
-  // Plus 1.7: subagent sessions fold into one "Subagents N" row; forks and
-  // other children stay rows. Plus 1.9: a session whose only children are
-  // subagents starts folded, and only a selected subagent opens it (a running
-  // one already shows as the spinner on the parent row).
-  const subagentChildren = node.children.filter((child) => child.session.relation?.kind === "subagent");
+  // Plus 1.10: subagent sessions are switched from the top-bar dropdown
+  // (DSH style) rather than taking space in the sidebar; only non-subagent
+  // children (forks) render as child rows here, while the parent row still
+  // aggregates family selection and running state.
   const otherChildren = node.children.filter((child) => child.session.relation?.kind !== "subagent");
-  const subagentsRunning = subagentChildren.filter((child) => runningSessionIds.has(child.session.id)).length;
-  const subagentSelected = subagentChildren.some((child) => child.session.id === selectedSessionId);
-  const [collapsed, setCollapsed] = useState(() => otherChildren.length === 0 && subagentChildren.length > 0 && !subagentSelected);
-  const [subagentsOpen, setSubagentsOpen] = useState(subagentSelected);
-  useEffect(() => {
-    if (!subagentSelected) return;
-    setCollapsed(false);
-    setSubagentsOpen(true);
-  }, [subagentSelected]);
+  const hasChildren = otherChildren.length > 0;
+  const [collapsed, setCollapsed] = useState(false);
   const renderChild = (child: SessionTreeNode) => (
     <SessionFamilyItem
       key={child.session.id}
@@ -2215,22 +2205,6 @@ function SessionFamilyItem({
       </div>
       {hasChildren && !collapsed && (
         <div>
-          {subagentChildren.length > 0 && (
-            <div className="session-subagent-group" data-open={subagentsOpen ? "" : undefined} style={{ "--subagent-indent": (depth + 1) * 14 + "px" } as CSSProperties}>
-              <button
-                type="button"
-                className="session-subagent-toggle"
-                aria-expanded={subagentsOpen}
-                onClick={() => setSubagentsOpen((open) => !open)}
-              >
-                <svg className="session-subagent-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="4.5 2.5 8 6 4.5 9.5" /></svg>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3 3 7.5l9 4.5 9-4.5z" /><path d="m3 12 9 4.5 9-4.5" /><path d="m3 16.5 9 4.5 9-4.5" /></svg>
-                <span className="session-subagent-label">{t("sidebar.subagentGroup", { count: subagentChildren.length })}</span>
-                {subagentsRunning > 0 && <span className="session-subagent-summary">{t("sidebar.subagentRunningCount", { count: subagentsRunning })}</span>}
-              </button>
-              {subagentsOpen && <div className="session-subagent-list">{subagentChildren.map((child) => renderChild(child))}</div>}
-            </div>
-          )}
           {otherChildren.map(renderChild)}
         </div>
       )}

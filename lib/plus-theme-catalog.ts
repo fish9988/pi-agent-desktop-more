@@ -141,6 +141,27 @@ export const BUILTIN_THEMES: readonly BuiltinTheme[] = [
     },
   },
   {
+    id: "kami",
+    name: { en: "Kami Paper", zh: "纸枢 · Kami", tw: "紙樞 · Kami" },
+    description: { en: "Handmade warm cotton paper, vermilion & olive ink, editorial serif", zh: "手造暖棉纸 + 朱砂与橄榄墨，无纯白纯黑的杂志校样感" },
+    base: "clean",
+    typography: { reading: PLUS_READING, heading: PLUS_BOLD, bold: PLUS_BOLD, readingSize: 16, readingLeading: 1.85, thinkingItalic: true },
+    light: {
+      bg: "#e5dec9", panel: "#e5dec9", workbench: "#efe7d2", surface: "#f7f1de", text: "#15140f", muted: "#5a5448", dim: "#736c5e",
+      accent: "#c44d36", fill: "#c44d36", border: "#d5ccb4", user: "#f7f1de",
+      code: "#e4dcc6", codeHeader: "#dad0b6", codeText: "#1f1d17", inlineCode: "#8f3826", inlineCodeBg: "#e4dcc6", marker: "#c44d36",
+      danger: "#b83524", success: "#52662c", warning: "#96650c",
+      syntax: s("#787162", "#9e3b24", "#4d6328", "#8f5408", "#275b73", "#6b4894", "#275b73", "#5a5448", "#6b6558", "#9e3b24", "#8f5408", "#7d4906", "#2a2620", "#4d6328", "#b83524"),
+    },
+    dark: {
+      bg: "#121210", panel: "#121210", workbench: "#1a1916", surface: "#24221e", text: "#efe7d2", muted: "#bdb5a2", dim: "#918a79",
+      accent: "#ed6f5c", accentText: "#15140f", fill: "#ed6f5c", fillText: "#15140f", border: "#33302a", user: "#24221e",
+      code: "#141311", codeHeader: "#211f1b", codeText: "#e8e0cc", inlineCode: "#f08e7c", inlineCodeBg: "#2d2a24", marker: "#ed6f5c",
+      danger: "#f07167", success: "#99c274", warning: "#e9b94a",
+      syntax: s("#878071", "#f08e7c", "#a7c985", "#e9b94a", "#82b8cf", "#c7aee8", "#82b8cf", "#bdb5a2", "#9e9685", "#f08e7c", "#e9b94a", "#f29d6b", "#efe7d2", "#99c274", "#f07167"),
+    },
+  },
+  {
     id: "clean",
     name: { en: "Clean", zh: "简洁", tw: "簡潔" },
     description: { en: "Neutral greys, violet accent", zh: "中性灰 + 紫色强调" },

@@ -162,6 +162,7 @@ export async function getLatestAppRelease(
   options: { fetcher?: Fetcher; timeoutMs?: number } = {},
 ): Promise<AppComponentReleaseInfo> {
   const fetcher = options.fetcher ?? fetch;
+  const timeoutMs = options.timeoutMs ?? 15_000;
   const response = await fetcher(
     `https://api.github.com/repos/${project.repository}/releases/latest`,
     {
@@ -171,10 +172,35 @@ export async function getLatestAppRelease(
         "X-GitHub-Api-Version": "2022-11-28",
         "User-Agent": `pi-agent-desktop/${APP_VERSION}`,
       },
-      signal: AbortSignal.timeout(options.timeoutMs ?? 15_000),
+      signal: AbortSignal.timeout(timeoutMs),
     },
   );
   if (response.status === 404) return unpublishedRelease(project);
+  // Plus: shared proxy IPs often hit api.github.com's 60 req/hr unauthenticated
+  // rate limit (403/429). Fall back to the release asset `latest.json`, which is
+  // served by GitHub's CDN without REST API rate limits.
+  if (response.status === 403 || response.status === 429) {
+    const fallback = await fetcher(
+      `https://github.com/${project.repository}/releases/latest/download/latest.json`,
+      {
+        cache: "no-store",
+        headers: { "User-Agent": `pi-agent-desktop/${APP_VERSION}` },
+        signal: AbortSignal.timeout(timeoutMs),
+      },
+    ).catch(() => null);
+    if (fallback?.ok) {
+      const manifest = await fallback.json() as { version?: unknown };
+      if (typeof manifest?.version === "string" && manifest.version.trim()) {
+        const clean = manifest.version.trim().replace(/^v/i, "");
+        return parseRelease(project, {
+          tag_name: `v${clean}`,
+          html_url: `https://github.com/${project.repository}/releases/tag/v${clean}`,
+          draft: false,
+          prerelease: false,
+        });
+      }
+    }
+  }
   if (!response.ok) throw new Error(`GitHub request failed with HTTP ${response.status}.`);
   return parseRelease(project, await response.json() as GitHubRelease);
 }

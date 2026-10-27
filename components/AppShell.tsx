@@ -2149,6 +2149,54 @@ export function AppShell() {
           )}
           <div className="app-topbar-title" title={topBarTitle}>
             <span>{topBarTitle}</span>
+            {activeSessionFamily && hasSubagentSessions && !scheduledOpen && (() => {
+              const subCount = activeSessionFamily.subagents.length;
+              const runningSubCount = activeSessionFamily.subagents.filter((s) => runningSessionIds.has(s.id)).length;
+              const isSubagentActive = selectedSession?.relation?.kind === "subagent";
+              const open = activeTopPanel === "agents";
+              return (
+                <>
+                  {isSubagentActive && (
+                    <button
+                      type="button"
+                      className="app-topbar-chip app-topbar-parent-button"
+                      onClick={() => handleSelectSession(activeSessionFamily.root)}
+                      title={activeSessionFamily.root.name || activeSessionFamily.root.firstMessage || translate("agentSwitcher.mainSession")}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <polyline points="15 18 9 12 15 6" />
+                      </svg>
+                      <span>{translate("agentSwitcher.mainSession")}</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className={`app-topbar-chip app-topbar-subagents${open ? " is-open" : ""}${runningSubCount > 0 ? " is-running" : ""}`}
+                    aria-expanded={open}
+                    aria-haspopup="listbox"
+                    onClick={() => toggleTopPanel("agents")}
+                    title={translate("agentSwitcher.title")}
+                  >
+                    {runningSubCount > 0 ? (
+                      <span className="app-topbar-running-dot" aria-hidden="true" />
+                    ) : (
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M12 3 3 7.5l9 4.5 9-4.5z" />
+                        <path d="m3 12 9 4.5 9-4.5" />
+                        <path d="m3 16.5 9 4.5 9-4.5" />
+                      </svg>
+                    )}
+                    <span>
+                      {translate("sidebar.subagentGroup", { count: subCount })}
+                      {runningSubCount > 0 ? ` · ${translate("sidebar.subagentRunningCount", { count: runningSubCount })}` : ""}
+                    </span>
+                    <svg className="app-topbar-subagents-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </button>
+                </>
+              );
+            })()}
             {topBarSubtitle && (
               <small className="app-topbar-chip" title={visibleProjectCwd ?? undefined}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -2550,7 +2598,10 @@ export function AppShell() {
                   subagents={activeSessionFamily.subagents}
                   selectedSessionId={selectedSession.id}
                   runningSessionIds={runningSessionIds}
-                  onSelectSession={handleSelectSession}
+                  onSelectSession={(session) => {
+                    handleSelectSession(session);
+                    setActiveTopPanel(null);
+                  }}
                 />
               )}
               {activeTopPanel === "system" && (

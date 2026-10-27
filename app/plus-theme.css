@@ -1108,10 +1108,11 @@ html[data-plus-chat-bold-font] .message-user :is(strong, b) {
 
 /* ---- step 3: messages ---------------------------------------------------- */
 
-/* User turns: a card with a tucked bottom-right corner, pointing at the reply. */
+/* User turns: editorial callout card with a left accent bar (Kami style). */
 html[data-plus-style="clean"] .message-user-bubble:not(.is-editing) {
-  border-radius: var(--plus-r-overlay) var(--plus-r-overlay) var(--plus-r-ctl) var(--plus-r-overlay) !important;
-  box-shadow: 0 0 0 1px var(--plus-stroke) !important;
+  border-radius: var(--plus-r-card) !important;
+  border-left: 3px solid var(--accent) !important;
+  box-shadow: 0 0 0 1px var(--plus-stroke), var(--shadow-control) !important;
 }
 
 /* Reply footer: one quiet line of facts; actions brighten on hover. */
@@ -1152,15 +1153,18 @@ html[data-plus-style="clean"] .markdown-code-action { border-radius: var(--plus-
 /* Files card: a card with a header row; each file row reads
    type icon · name · folder (relative to the project) · +/- · chevron. */
 html[data-plus-style="clean"] .turn-files-card {
-  border: 1px solid var(--plus-stroke) !important;
+  border: 1px solid var(--plus-stroke-strong) !important;
   border-radius: var(--plus-r-card) !important;
   background: var(--surface) !important;
-  box-shadow: none;
+  box-shadow: var(--shadow-control);
+  overflow: hidden;
 }
 html[data-plus-style="clean"] .turn-files-header {
-  min-height: 42px;
+  min-height: 40px;
   padding-left: 14px;
   padding-right: var(--plus-s2);
+  background: color-mix(in srgb, var(--text) 3.5%, var(--surface));
+  border-bottom: 1px solid var(--plus-stroke);
 }
 html[data-plus-style="clean"] .turn-files-title { font-size: var(--plus-fs-2); font-weight: 600; }
 html[data-plus-style="clean"] .turn-files-row {
@@ -1207,7 +1211,10 @@ html[data-plus-style="clean"] .turn-files-row:hover .turn-files-row-chevron { op
   }
   html[data-plus-style="clean"] .chat-composer-frame > .chat-composer-controls {
     margin-top: 0 !important;
-    padding: 0 var(--plus-s2) var(--plus-s2);
+    padding: var(--plus-s2) var(--plus-s3) !important;
+    border-top: 1px solid var(--plus-stroke);
+    border-radius: 0 0 var(--plus-r-overlay) var(--plus-r-overlay);
+    background: color-mix(in srgb, var(--text) 2.5%, transparent);
   }
   html[data-plus-style="clean"] .chat-composer-frame > .chat-composer-controls button { border-radius: var(--plus-r-ctl) !important; }
 }
@@ -1226,19 +1233,20 @@ html[data-plus-style="clean"] .composer-stop-button:hover:not(:disabled) {
 }
 
 /* ---- step 5: runs -------------------------------------------------------- */
-/* Work groups: a plain line, not a pill; a live run gets a pulsing accent dot
-   (the one place the accent means "happening now" in the transcript). */
+/* Work groups: editorial step strip with subtle paper framing; a live run gets
+   a pulsing accent dot. */
 html[data-plus-style="clean"] .work-group-trigger {
-  border-color: transparent !important;
-  border-radius: var(--plus-r-ctl) !important;
-  background: transparent !important;
+  border: 1px solid var(--plus-stroke) !important;
+  border-radius: var(--plus-r-card) !important;
+  background: color-mix(in srgb, var(--text) 3%, transparent) !important;
   box-shadow: none !important;
+  padding: var(--plus-s1) var(--plus-s3) !important;
   font-family: var(--font-ui);
   font-size: var(--plus-fs-2);
 }
 html[data-plus-style="clean"] .work-group-trigger:hover,
 html[data-plus-style="clean"] .work-group.is-open .work-group-trigger {
-  border-color: transparent !important;
+  border-color: var(--plus-stroke-strong) !important;
   background: var(--bg-hover) !important;
 }
 html[data-plus-style="clean"] .work-group-summary,
@@ -1462,8 +1470,38 @@ html[data-plus-style="clean"] .message-assistant-footer { margin-top: var(--plus
   html[data-plus-style="clean"] .chat-composer-frame > .chat-composer-controls .composer-send-group :is(.composer-send-button.is-labeled, .composer-steer-button) { border-radius: var(--plus-r-card) !important; }
 }
 
-/* ---- title bar: running chip (gap pass) ---------------------------------- */
+/* ---- title bar: running & subagent switcher chips ------------------------ */
 html[data-plus-style="clean"] .app-topbar-title > .app-topbar-running { order: 3; color: var(--accent); background: var(--accent-soft); }
+.app-topbar-title > :is(.app-topbar-subagents, .app-topbar-parent-button) {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--plus-s1);
+  height: 24px;
+  padding: 0 var(--plus-s2);
+  border: 1px solid var(--plus-stroke-strong);
+  border-radius: var(--plus-r-ctl);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--plus-fs-1);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--plus-dur-1) ease, border-color var(--plus-dur-1) ease, color var(--plus-dur-1) ease;
+}
+.app-topbar-title > :is(.app-topbar-subagents, .app-topbar-parent-button):hover {
+  background: var(--bg-hover);
+  border-color: var(--accent-border);
+}
+.app-topbar-title > .app-topbar-subagents:is(.is-open, .is-running) {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.app-topbar-subagents-chevron {
+  transition: transform var(--plus-dur-1) ease;
+}
+.app-topbar-subagents.is-open .app-topbar-subagents-chevron {
+  transform: rotate(180deg);
+}
 .app-topbar-running-dot { width: 6px; height: 6px; flex: none; border-radius: 50%; background: currentColor; }
 @media (prefers-reduced-motion: no-preference) {
   .app-topbar-running-dot { animation: plus-dot-blink 1.6s ease-in-out infinite; }
