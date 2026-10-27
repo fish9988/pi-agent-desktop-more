@@ -1820,3 +1820,125 @@ html:not([data-plus-style="clean"]) .app-topbar-running { display: none !importa
 }
 /* The code font may set CJK two columns wide ("环 境 变 量"); hints in it read in the UI font. */
 html[data-plus-style="clean"] .settings-dialog-surface :is(input, textarea)::placeholder { font-family: var(--font-ui, inherit); }
+
+/* ---- Plus 1.13: Claude-style pasted text attachment chips & preview -------- */
+html[data-plus-style="clean"] .composer-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 28px;
+  padding: 2px 5px 2px 8px;
+  border: 1px solid var(--plus-stroke-strong);
+  border-radius: var(--plus-r-card);
+  background: var(--surface);
+  transition: border-color var(--plus-dur-1) ease, background var(--plus-dur-1) ease;
+}
+html[data-plus-style="clean"] .composer-file-chip:is(:hover, .is-active) {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+}
+html[data-plus-style="clean"] .composer-file-chip-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 0 4px 0 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: var(--plus-fs-1);
+  cursor: pointer;
+}
+html[data-plus-style="clean"] .composer-file-chip-trigger > svg {
+  flex: none;
+  color: var(--accent);
+}
+html[data-plus-style="clean"] .composer-file-chip-expand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--plus-r-ctl);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+html[data-plus-style="clean"] .composer-file-chip-expand:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+html[data-plus-style="clean"] .composer-file-preview {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: var(--plus-s2);
+  border: 1px solid var(--plus-stroke-strong);
+  border-radius: var(--plus-r-card);
+  background: var(--surface);
+  overflow: hidden;
+}
+html[data-plus-style="clean"] .composer-file-preview-head {
+  display: flex;
+  align-items: center;
+  gap: var(--plus-s2);
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--plus-stroke);
+  background: var(--bg-hover);
+  font-size: var(--plus-fs-1);
+  color: var(--text-dim);
+}
+html[data-plus-style="clean"] .composer-file-preview-head > strong {
+  color: var(--text);
+  font-weight: 600;
+  margin-right: auto;
+}
+html[data-plus-style="clean"] .composer-file-preview-action,
+html[data-plus-style="clean"] .composer-file-preview-close {
+  padding: 2px 8px;
+  border: 1px solid var(--plus-stroke-strong);
+  border-radius: var(--plus-r-ctl);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: var(--plus-fs-1);
+  cursor: pointer;
+}
+html[data-plus-style="clean"] :is(.composer-file-preview-action, .composer-file-preview-close):hover {
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+html[data-plus-style="clean"] .composer-file-preview-body {
+  margin: 0;
+  padding: 8px 10px;
+  max-height: 180px;
+  overflow: auto;
+  font-size: var(--plus-fs-1);
+  line-height: 1.5;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+html[data-plus-style="clean"] .paste-threshold-custom-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 4px;
+  font-size: var(--plus-fs-1);
+  color: var(--text-muted);
+}
+html[data-plus-style="clean"] .paste-threshold-custom-input {
+  width: 58px;
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--plus-stroke-strong);
+  border-radius: var(--plus-r-ctl);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--plus-fs-1);
+  text-align: center;
+}
+html[data-plus-style="clean"] .paste-threshold-custom-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}

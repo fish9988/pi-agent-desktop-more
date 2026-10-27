@@ -45,9 +45,13 @@ import { SelectorRow } from "./SelectorRow";
 import { ModelSelector } from "./ModelSelector";
 import {
   composeMessageWithAttachedFiles,
+  countPasteLines,
+  createPastedTextAttachment,
   extractDocxText,
   formatAttachmentSize,
+  getPasteToFileLineThreshold,
   readChatTextAttachments,
+  shouldConvertPasteToAttachment,
   splitMessageForComposer,
   type ChatAttachmentRejection,
   type ChatTextAttachment,
@@ -1241,12 +1245,34 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const clearAttachedFiles = useCallback(() => {
     attachedFilesRef.current = [];
     setAttachedFiles([]);
+    setPreviewFileId(null);
   }, []);
 
   const removeAttachedFile = useCallback((id: string) => {
     const next = attachedFilesRef.current.filter((file) => file.id !== id);
     attachedFilesRef.current = next;
     setAttachedFiles(next);
+    setPreviewFileId((curr) => (curr === id ? null : curr));
+  }, []);
+
+  const [previewFileId, setPreviewFileId] = useState<string | null>(null);
+
+  const expandAttachedFileIntoInput = useCallback((file: ChatTextAttachment) => {
+    const nextFiles = attachedFilesRef.current.filter((item) => item.id !== file.id);
+    attachedFilesRef.current = nextFiles;
+    setAttachedFiles(nextFiles);
+    setPreviewFileId((curr) => (curr === file.id ? null : curr));
+    const current = valueRef.current;
+    const nextValue = current ? `${current.replace(/\s+$/, "")}\n\n${file.text}` : file.text;
+    valueRef.current = nextValue;
+    setValue(nextValue);
+    requestAnimationFrame(() => {
+      const ta = textareaRef.current;
+      if (!ta) return;
+      ta.focus();
+      ta.style.height = "auto";
+      ta.style.height = `${Math.min(ta.scrollHeight, 240)}px`;
+    });
   }, []);
 
   const clearInput = useCallback(() => {
@@ -1893,20 +1919,52 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
     const html = e.clipboardData.getData("text/html");
     const text = e.clipboardData.getData("text/plain");
-    if (!html || !text) return;
-    const document = new DOMParser().parseFromString(html, "text/html");
-    const links = Array.from(document.querySelectorAll("a[href]"), (link) => {
-      const label = link.textContent ?? "";
-      const range = document.createRange();
-      range.setStart(document.body, 0);
-      range.setEndBefore(link);
-      return {
-        label,
-        href: link.getAttribute("href")?.trim() ?? "",
-        occurrence: label ? range.toString().split(label).length - 1 : 0,
-      };
-    });
-    const markdown = replaceLinksWithMarkdown(text, links);
+    if (!text) return;
+
+    let markdown: string | null = null;
+    if (html) {
+      const document = new DOMParser().parseFromString(html, "text/html");
+      const links = Array.from(document.querySelectorAll("a[href]"), (link) => {
+        const label = link.textContent ?? "";
+        const range = document.createRange();
+        range.setStart(document.body, 0);
+        range.setEndBefore(link);
+        return {
+          label,
+          href: link.getAttribute("href")?.trim() ?? "",
+          occurrence: label ? range.toString().split(label).length - 1 : 0,
+        };
+      });
+      markdown = replaceLinksWithMarkdown(text, links);
+    }
+
+    const effectiveText = markdown ?? text;
+    if (
+      !compact
+      && !valueRef.current.trimStart().startsWith("!")
+      && shouldConvertPasteToAttachment(effectiveText, getPasteToFileLineThreshold())
+    ) {
+      const attachment = createPastedTextAttachment(
+        effectiveText,
+        attachedFilesRef.current,
+        markdown !== null ? "md" : undefined,
+      );
+      if (attachment) {
+        e.preventDefault();
+        const ta = e.currentTarget;
+        if (ta.selectionStart !== ta.selectionEnd) {
+          const nextValue = ta.value.slice(0, ta.selectionStart) + ta.value.slice(ta.selectionEnd);
+          valueRef.current = nextValue;
+          setValue(nextValue);
+        }
+        const nextFiles = [...attachedFilesRef.current, attachment];
+        attachedFilesRef.current = nextFiles;
+        setAttachedFiles(nextFiles);
+        setHistoryMenuOpen(false);
+        return;
+      }
+    }
+
     if (markdown === null) return;
 
     const ta = e.currentTarget;
@@ -2414,24 +2472,86 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         )}
 
         {attachedFiles.length > 0 && (
-          <div className="composer-file-chips" style={{ display: "flex", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
-            {attachedFiles.map((file) => (
-              <span key={file.id} className="composer-file-chip" title={`${file.name} · ${formatAttachmentSize(file.size)}`}>
-                <span className="composer-file-chip-name">{file.name}</span>
-                <span className="composer-file-chip-size">{formatAttachmentSize(file.size)}</span>
-                <button
-                  type="button"
-                  className="composer-file-chip-remove"
-                  onClick={() => removeAttachedFile(file.id)}
-                  aria-label={t("chat.removeAttachment", { name: file.name })}
-                >
-                  <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
-                    <line x1="1" y1="1" x2="7" y2="7" /><line x1="7" y1="1" x2="1" y2="7" />
-                  </svg>
-                </button>
-              </span>
-            ))}
-          </div>
+          <>
+            <div className="composer-file-chips" style={{ display: "flex", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
+              {attachedFiles.map((file) => {
+                const lines = countPasteLines(file.text);
+                const sizeLabel = `${lines} 行 · ${formatAttachmentSize(file.size)}`;
+                const isPreviewing = previewFileId === file.id;
+                return (
+                  <span
+                    key={file.id}
+                    className={`composer-file-chip${isPreviewing ? " is-active" : ""}`}
+                    title={`${file.name} · ${sizeLabel}（点击预览内容）`}
+                  >
+                    <button
+                      type="button"
+                      className="composer-file-chip-trigger"
+                      onClick={() => setPreviewFileId((curr) => (curr === file.id ? null : file.id))}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                        <polyline points="14 2 14 8 20 8" />
+                      </svg>
+                      <span className="composer-file-chip-name">{file.name}</span>
+                      <span className="composer-file-chip-size">{sizeLabel}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="composer-file-chip-expand"
+                      title="转回输入框正文"
+                      aria-label="转回输入框正文"
+                      onClick={() => expandAttachedFileIntoInput(file)}
+                    >
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <polyline points="15 3 21 3 21 9" />
+                        <polyline points="9 21 3 21 3 15" />
+                        <line x1="21" y1="3" x2="14" y2="10" />
+                        <line x1="3" y1="21" x2="10" y2="14" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      className="composer-file-chip-remove"
+                      onClick={() => removeAttachedFile(file.id)}
+                      aria-label={t("chat.removeAttachment", { name: file.name })}
+                    >
+                      <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+                        <line x1="1" y1="1" x2="7" y2="7" /><line x1="7" y1="1" x2="1" y2="7" />
+                      </svg>
+                    </button>
+                  </span>
+                );
+              })}
+            </div>
+            {(() => {
+              const previewFile = previewFileId ? attachedFiles.find((f) => f.id === previewFileId) : null;
+              if (!previewFile) return null;
+              return (
+                <div className="composer-file-preview">
+                  <div className="composer-file-preview-head">
+                    <strong>{previewFile.name}</strong>
+                    <span>{countPasteLines(previewFile.text)} 行 · {formatAttachmentSize(previewFile.size)}</span>
+                    <button
+                      type="button"
+                      className="composer-file-preview-action"
+                      onClick={() => expandAttachedFileIntoInput(previewFile)}
+                    >
+                      转回正文编辑
+                    </button>
+                    <button
+                      type="button"
+                      className="composer-file-preview-close"
+                      onClick={() => setPreviewFileId(null)}
+                    >
+                      收起
+                    </button>
+                  </div>
+                  <pre className="composer-file-preview-body">{previewFile.text}</pre>
+                </div>
+              );
+            })()}
+          </>
         )}
 
         {/* Main input. Plus: the frame is the composer card in the clean theme

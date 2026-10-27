@@ -7,11 +7,19 @@
  * block as ordinary message text.
  */
 
+import { APP_PREF_KEYS, getPref, setPref } from "./app-prefs";
+
 export const CHAT_ATTACHMENT_MAX_FILE_BYTES = 256 * 1024;
 export const CHAT_ATTACHMENT_MAX_TOTAL_BYTES = 512 * 1024;
 export const CHAT_ATTACHMENT_MAX_FILES = 5;
 /** A Word file is unzipped on the server, so its own size is capped separately from its text. */
 export const CHAT_ATTACHMENT_EXTRACT_MAX_BYTES = 10 * 1024 * 1024;
+
+/** Default line threshold above which pasted text is converted into an attached file. */
+export const DEFAULT_PASTE_TO_FILE_LINES = 30;
+export const PASTE_TO_FILE_PRESETS = [0, 15, 30, 50, 100] as const;
+export const PASTE_ATTACHMENT_MAX_FILE_BYTES = 1024 * 1024;
+export const PASTE_ATTACHMENT_MAX_FILES = 10;
 
 export interface ChatTextAttachment {
   id: string;
@@ -260,4 +268,104 @@ export function formatAttachmentSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(bytes < 10 * 1024 ? 1 : 0)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export function getPasteToFileLineThreshold(): number {
+  const raw = getPref(APP_PREF_KEYS.pasteToFileLines);
+  if (raw === null || raw.trim() === "") return DEFAULT_PASTE_TO_FILE_LINES;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed)) return DEFAULT_PASTE_TO_FILE_LINES;
+  if (parsed <= 0) return 0;
+  return Math.max(5, Math.min(1000, parsed));
+}
+
+export function setPasteToFileLineThreshold(lines: number): void {
+  const normalized = !Number.isFinite(lines) || lines <= 0
+    ? 0
+    : Math.max(5, Math.min(1000, Math.round(lines)));
+  setPref(APP_PREF_KEYS.pasteToFileLines, String(normalized));
+}
+
+export function countPasteLines(text: string): number {
+  if (!text) return 0;
+  return text.split(/\r\n|\r|\n/).length;
+}
+
+/**
+ * Whether a pasted text snippet should be converted into an attached file.
+ * Triggers when line count >= lineThreshold, or when character count exceeds
+ * a proportional fallback (`max(1800, lineThreshold * 100)`) so giant single-line
+ * pastes (minified JSON, logs, long paragraphs) are also caught.
+ */
+export function shouldConvertPasteToAttachment(
+  text: string,
+  lineThreshold = getPasteToFileLineThreshold(),
+): boolean {
+  if (!text || lineThreshold <= 0) return false;
+  const lines = countPasteLines(text);
+  if (lines >= lineThreshold) return true;
+  const charThreshold = Math.max(1800, lineThreshold * 100);
+  return text.length >= charThreshold;
+}
+
+/** Detect whether pasted text looks like Markdown (.md) or plain text (.txt). */
+export function detectPastedFileExtension(text: string): "md" | "txt" {
+  if (/^```/m.test(text)) return "md";
+  if (/^#{1,6}\s+\S/m.test(text)) return "md";
+  if (/!?\[[^\]]+\]\(https?:\/\/[^)]+\)/.test(text)) return "md";
+  if (/^\|.+\|\s*\r?\n\|[\s:|-]+\|/m.test(text)) return "md";
+  if (/^\s*[-*+]\s+\[[ xX]\]\s+/m.test(text)) return "md";
+  if (/^\s*[-*+]\s+\S/m.test(text) && /(\*\*[^*\n]+\*\*|`[^`\n]+`)/.test(text)) return "md";
+  return "txt";
+}
+
+function extractPasteTitleSlug(text: string): string {
+  const lines = text.split(/\r\n|\r|\n/);
+  for (const rawLine of lines) {
+    const cleaned = rawLine
+      .trim()
+      .replace(/^[#>*\-+\d.)\s`"'“”‘’【】[\]()（）]+/, "")
+      .replace(/[\\/:*?"<>|#`~^$&{}[\];,+=!@%]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!cleaned) continue;
+    // Skip lines that look like raw code/JSON/URLs rather than a human title
+    if (/^(https?:\/\/|import\s|export\s|const\s|let\s|function\s|class\s|\{|\[|<\/?[a-z])/i.test(cleaned)) {
+      return "";
+    }
+    const slug = cleaned.slice(0, 16).trim().replace(/\s+/g, "-");
+    if (slug.length >= 2) return slug;
+    return "";
+  }
+  return "";
+}
+
+/** Build a `ChatTextAttachment` from pasted text, or `null` if limits are exceeded. */
+export function createPastedTextAttachment(
+  text: string,
+  existing: readonly ChatTextAttachment[] = [],
+  preferredExt?: "md" | "txt",
+): ChatTextAttachment | null {
+  if (existing.length >= PASTE_ATTACHMENT_MAX_FILES) return null;
+  const normalized = text.replace(/\r\n?/g, "\n").replace(/^\uFEFF/, "");
+  const bytes = new TextEncoder().encode(normalized).length;
+  if (bytes === 0 || bytes > PASTE_ATTACHMENT_MAX_FILE_BYTES) return null;
+
+  const ext = preferredExt ?? detectPastedFileExtension(normalized);
+  const existingNames = new Set(existing.map((f) => f.name.toLowerCase()));
+  const slug = extractPasteTitleSlug(normalized);
+
+  let index = existing.length + 1;
+  let name = slug ? `pasted-${index}-${slug}.${ext}` : `pasted-${index}.${ext}`;
+  while (existingNames.has(name.toLowerCase())) {
+    index += 1;
+    name = slug ? `pasted-${index}-${slug}.${ext}` : `pasted-${index}.${ext}`;
+  }
+
+  return {
+    id: `paste-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+    name,
+    size: bytes,
+    text: normalized,
+  };
 }

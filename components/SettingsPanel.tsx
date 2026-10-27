@@ -34,6 +34,7 @@ import { McpConfig } from "./McpConfig";
 import { ConfigButton, ConfigSwitch } from "./SettingsUi";
 import { AppearanceSettingsPage } from "./AppearanceSettingsPage";
 import { ArtifactsSettingRow } from "./ArtifactsSettingRow";
+import { PasteAttachmentSettingRow } from "./PasteAttachmentSettingRow";
 import { ChatsSettingsSection } from "./ChatsSettingsSection";
 import { PromptOptimizerSettingsSection } from "./PromptOptimizerSettingsSection";
 
@@ -242,6 +243,7 @@ function GeneralSettings({
                 />
               </div>
               <ArtifactsSettingRow />
+              <PasteAttachmentSettingRow />
               <div className="settings-chat-option settings-chat-switch-option" role="radiogroup" aria-label={t("settings.enterSendMode")}>
                 <span>{t("settings.enterSendMode")}</span>
                 <div className="settings-send-mode-options">
