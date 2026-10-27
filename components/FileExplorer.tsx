@@ -64,6 +64,7 @@ interface Props {
   onChangesCountChange?: (count: number) => void;
   fileSearchOpen?: boolean;
   onFileSearchOpenChange?: (open: boolean) => void;
+  externalQuery?: string;
 }
 
 export interface FileExplorerHandle {
@@ -110,9 +111,61 @@ async function responseError(res: Response, fallback: string): Promise<Error> {
   return new Error(message);
 }
 
-const DIR_CACHE_TTL_MS = 15_000;
+const DIR_CACHE_TTL_MS = 30_000;
+const DIR_STORAGE_KEY = "pi-plus-dir-snapshots-v1";
+const MAX_PERSISTED_DIRS = 20;
 const dirEntriesCache = new Map<string, { entries: FileNode[]; expiresAt: number }>();
 const dirInFlight = new Map<string, Promise<FileNode[]>>();
+
+function readPersistedDirEntries(dirPath: string): FileNode[] | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(DIR_STORAGE_KEY);
+    if (!raw) return null;
+    const map = JSON.parse(raw) as Record<string, Array<{ n: string; d: 0 | 1 }>>;
+    const items = map?.[dirPath];
+    if (!Array.isArray(items)) return null;
+    return items.map((item) => ({
+      name: item.n,
+      fullPath: joinFilePath(dirPath, item.n),
+      isDir: item.d === 1,
+      size: 0,
+      children: item.d === 1 ? [] : undefined,
+      loaded: item.d !== 1,
+    }));
+  } catch {
+    return null;
+  }
+}
+
+function writePersistedDirEntries(dirPath: string, entries: FileNode[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    const raw = window.localStorage.getItem(DIR_STORAGE_KEY);
+    const map = (raw ? JSON.parse(raw) : {}) as Record<string, Array<{ n: string; d: 0 | 1 }>>;
+    delete map[dirPath];
+    map[dirPath] = entries.slice(0, 300).map((e) => ({ n: e.name, d: e.isDir ? 1 : 0 }));
+    const keys = Object.keys(map);
+    while (keys.length > MAX_PERSISTED_DIRS) {
+      const oldest = keys.shift();
+      if (oldest) delete map[oldest];
+    }
+    window.localStorage.setItem(DIR_STORAGE_KEY, JSON.stringify(map));
+  } catch {
+    // ignore storage quota errors
+  }
+}
+
+export function getCachedDirEntries(dirPath: string): FileNode[] | null {
+  const mem = dirEntriesCache.get(dirPath);
+  if (mem) return mem.entries;
+  return readPersistedDirEntries(dirPath);
+}
+
+export function prefetchDirEntries(dirPath: string): void {
+  if (!dirPath) return;
+  void fetchEntries(dirPath).catch(() => {});
+}
 
 async function fetchEntries(dirPath: string, force = false): Promise<FileNode[]> {
   if (!force) {
@@ -137,6 +190,7 @@ async function fetchEntries(dirPath: string, force = false): Promise<FileNode[]>
       outsideLinkEncloses: e.outsideLinkEncloses,
     }));
     dirEntriesCache.set(dirPath, { entries, expiresAt: Date.now() + DIR_CACHE_TTL_MS });
+    writePersistedDirEntries(dirPath, entries);
     return entries;
   })();
   dirInFlight.set(dirPath, promise);
@@ -294,8 +348,8 @@ export function TreeNode({
   const containsGitChanges = node.isDir && (
     gitStatus !== undefined || changedDirectoryPaths.has(normalizedPath)
   );
-  const cachedDir = node.isDir ? dirEntriesCache.get(node.fullPath) : undefined;
-  const [children, setChildren] = useState<FileNode[]>(() => cachedDir?.entries ?? node.children ?? []);
+  const cachedDir = node.isDir ? getCachedDirEntries(node.fullPath) : null;
+  const [children, setChildren] = useState<FileNode[]>(() => cachedDir ?? node.children ?? []);
   const [loaded, setLoaded] = useState(() => Boolean(cachedDir) || (node.loaded ?? false));
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -840,10 +894,11 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
   onChangesCountChange,
   fileSearchOpen = false,
   onFileSearchOpenChange,
+  externalQuery,
 }, ref) {
   const { t } = useI18n();
-  const [roots, setRoots] = useState<FileNode[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [roots, setRoots] = useState<FileNode[]>(() => getCachedDirEntries(cwd) ?? []);
+  const [loading, setLoading] = useState(() => getCachedDirEntries(cwd) === null);
   const [error, setError] = useState<string | null>(null);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
   const [treeRefreshKey, setTreeRefreshKey] = useState(0);
@@ -863,6 +918,9 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
   const [searchExpanded, setSearchExpanded] = useState<Set<string>>(new Set());
   const searchInputRef = useRef<HTMLInputElement>(null);
   const prevCwdRef = useRef<string | null>(null);
+  const loadedCwdRef = useRef<string | null>(null);
+  const activeCwdRef = useRef<string>(cwd);
+  activeCwdRef.current = cwd;
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const refreshToken = `${refreshKey ?? 0}:${treeRefreshKey}`;
   // Plus: file operations context for the tree rows.
@@ -874,12 +932,14 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
     startRootCreate: (kind) => setRootCreating(kind),
   }), [cwd, onOpenFile]);
   const uploadBusy = uploadPhase !== "idle";
-  const hasSearchQuery = searchQuery.trim().length > 0;
+  const effectiveQuery = (externalQuery !== undefined ? externalQuery : searchQuery).trim();
+  const hasSearchQuery = effectiveQuery.length > 0;
+  const searchActive = fileSearchOpen || externalQuery !== undefined;
 
   // Reuse the cached, bounded file index used by @ mentions.
   useEffect(() => {
-    if (!fileSearchOpen) return;
-    const query = searchQuery.trim();
+    if (!searchActive) return;
+    const query = effectiveQuery;
     if (!query) {
       setSearchPaths([]);
       setSearchLoading(false);
@@ -902,7 +962,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
         .finally(() => { if (!controller.signal.aborted) setSearchLoading(false); });
     }, 150);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [cwd, fileSearchOpen, searchQuery]);
+  }, [cwd, searchActive, effectiveQuery]);
 
   // Focus the search input whenever the search panel opens.
   useEffect(() => {
@@ -1077,6 +1137,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
 
     // Reset expanded state only when cwd changes, not on refreshKey bumps
     if (cwdChanged) {
+      loadedCwdRef.current = null;
       setExpandedPaths(new Set());
       setHighlightedPaths(new Set());
       setUploadSummary(null);
@@ -1084,14 +1145,33 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
       setUploadError(null);
     }
 
-    setLoading(cwdChanged);
+    // Keep loading=true until at least one listing for this cwd has resolved,
+    // even if refreshKey or StrictMode re-runs the effect while in flight.
+    const needsInitialLoad = loadedCwdRef.current !== cwd;
+    if (needsInitialLoad) {
+      const cached = getCachedDirEntries(cwd);
+      if (cached) {
+        loadedCwdRef.current = cwd;
+        setRoots(cached);
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
+    }
     setError(null);
-    let cancelled = false;
-    fetchEntries(cwd)
-      .then((entries) => { if (!cancelled) setRoots(entries); })
-      .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+    const targetCwd = cwd;
+    fetchEntries(targetCwd, !needsInitialLoad)
+      .then((entries) => {
+        if (activeCwdRef.current !== targetCwd) return;
+        loadedCwdRef.current = targetCwd;
+        setRoots(entries);
+        setLoading(false);
+      })
+      .catch((e) => {
+        if (activeCwdRef.current !== targetCwd) return;
+        setError(e instanceof Error ? e.message : String(e));
+        setLoading(false);
+      });
   }, [cwd, refreshKey, treeRefreshKey]);
 
   useEffect(() => {
@@ -1249,6 +1329,39 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
         </div>
       )}
 
+      {!fileSearchOpen && hasSearchQuery && (
+        <div style={{ padding: "4px 6px" }}>
+          {searchLoading && <div role="status" style={{ padding: "6px 2px", fontSize: 12, color: "var(--text-dim)" }}>{t("sidebar.searchingFiles")}</div>}
+          {!searchLoading && searchError && <div role="alert" style={{ padding: "6px 2px", fontSize: 12, color: "var(--danger)" }}>{t("i18n.networkError")}</div>}
+          {!searchLoading && !searchError && searchPaths.length === 0 && <div style={{ padding: "6px 2px", fontSize: 12, color: "var(--text-dim)" }}>{t("sidebar.noMatchingFiles")}</div>}
+          {!searchLoading && !searchError && searchPaths.length > 0 && (
+            <div>
+              {searchRoots.map((node) => (
+                <TreeNode
+                  key={`${effectiveQuery}:${node.fullPath}`}
+                  node={node}
+                  depth={0}
+                  cwd={cwd}
+                  onOpenFile={onOpenFile}
+                  onAtMention={onAtMention}
+                  expandedPaths={searchExpanded}
+                  onToggleExpanded={(fullPath, open) => {
+                    setSearchExpanded((prev) => {
+                      const next = new Set(prev);
+                      if (open) next.add(fullPath); else next.delete(fullPath);
+                      return next;
+                    });
+                  }}
+                  highlightedPaths={highlightedPaths}
+                  gitStatusByPath={gitStatusByPath}
+                  changedDirectoryPaths={changedDirectoryPaths}
+                  t={t}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       {fileSearchOpen && (
       <div style={{ padding: "6px 8px", borderBottom: "var(--hairline) solid var(--border)" }}>
         <div style={{ position: "relative" }}>
@@ -1345,7 +1458,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
         </div>
       )}
 
-      {(changesCollapsed || gitFiles.length === 0) && (!fileSearchOpen || !hasSearchQuery) && (
+      {(changesCollapsed || gitFiles.length === 0) && !hasSearchQuery && (
         <div
           className="file-tree-root"
           style={{ padding: "2px 4px", minHeight: 120 }}

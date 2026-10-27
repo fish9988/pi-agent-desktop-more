@@ -162,6 +162,8 @@ html[data-plus-style="clean"] input[type="range"]::-webkit-slider-thumb {
 }
 
 html[data-plus-style="clean"] .app-shell {
+  position: relative;
+  isolation: isolate;
   background-color: var(--bg) !important;
   background-image:
     var(--plus-bg-image),
@@ -169,17 +171,23 @@ html[data-plus-style="clean"] .app-shell {
   background-size: cover !important;
   background-position: center !important;
 }
+html[data-plus-style="clean"] .app-shell::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  backdrop-filter: blur(var(--plus-glass-blur)) saturate(var(--plus-glass-saturation));
+}
 html[data-plus-style="clean"] .chat-window {
   background: color-mix(in srgb, transparent var(--plus-surface-alpha), var(--workbench-bg));
+}
+html[data-plus-style="clean"] :is(.message-user-bubble, .turn-files-card) {
   backdrop-filter: blur(var(--plus-glass-blur)) saturate(var(--plus-glass-saturation));
 }
-html[data-plus-style="clean"] :is(.session-sidebar, .app-topbar, .chat-composer-frame, .message-user-bubble, .turn-files-card) {
-  backdrop-filter: blur(var(--plus-glass-blur)) saturate(var(--plus-glass-saturation));
-}
-html[data-plus-gpu="1"] :is(.session-sidebar, .chat-messages-scroll, .right-panel-container, .file-viewer-shell) {
-  transform: translateZ(0);
-  backface-visibility: hidden;
-  will-change: transform;
+html[data-plus-style="clean"] .file-tree-loading > span {
+  background: linear-gradient(90deg, var(--plus-stroke) 20%, var(--plus-stroke-strong) 50%, var(--plus-stroke) 80%) !important;
+  background-size: 220% 100% !important;
 }
 
 /* ---- sidebar ------------------------------------------------------------ */
@@ -1540,6 +1548,7 @@ html[data-plus-style="clean"] .message-assistant-footer { margin-top: var(--plus
   html[data-plus-style="clean"] .chat-composer-controls:has(> .composer-send-group) > div > div:not([class]) { display: contents !important; }
   html[data-plus-style="clean"] .chat-composer-controls .chat-project-context { display: none !important; }
   html[data-plus-style="clean"] .chat-composer-controls .composer-thinking { order: 1; }
+  html[data-plus-style="clean"] .composer-thinking .composer-run-menu { left: 0 !important; right: auto !important; }
   html[data-plus-style="clean"] .chat-composer-controls .composer-extensions-chip { order: 2; }
   html[data-plus-style="clean"] .chat-composer-controls .composer-controls-spacer { order: 3; flex: 1 1 auto !important; }
   html[data-plus-style="clean"] .chat-composer-controls .context-usage-ring { order: 4; }

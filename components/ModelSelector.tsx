@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import { modelDotColor } from "@/lib/model-dot";
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -74,6 +75,7 @@ export function ModelSelector({
   const { t } = useI18n();
   const isMobile = useIsMobile();
   const rootRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [anchorRect, setAnchorRect] = useState<{ top: number; right: number; bottom: number; left: number; width: number } | null>(null);
@@ -108,6 +110,23 @@ export function ModelSelector({
     document.addEventListener("mousedown", handleOutsideClick);
     return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const syncRect = () => {
+      const el = buttonRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      setAnchorRect({ top: rect.top, right: rect.right, bottom: rect.bottom, left: rect.left, width: rect.width });
+    };
+    syncRect();
+    window.addEventListener("resize", syncRect);
+    window.addEventListener("scroll", syncRect, true);
+    return () => {
+      window.removeEventListener("resize", syncRect);
+      window.removeEventListener("scroll", syncRect, true);
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!locked) return;
@@ -182,6 +201,7 @@ export function ModelSelector({
       }}
     >
       <button
+        ref={buttonRef}
         type="button"
         aria-label={ariaLabel ?? buttonTitle}
         aria-haspopup="listbox"
@@ -242,18 +262,23 @@ export function ModelSelector({
       {open && anchorRect && (() => {
         const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
         const viewportWidth = window.visualViewport?.width ?? window.innerWidth;
-        const spaceAbove = anchorRect.top - 8;
-        const spaceBelow = viewportHeight - anchorRect.bottom - 8;
-        const openAbove = placement === "up" || spaceAbove > spaceBelow;
-        const maxHeight = Math.max(120, Math.min(openAbove ? spaceAbove : spaceBelow, viewportHeight * 0.6));
+        const spaceAbove = Math.max(0, anchorRect.top - 12);
+        const spaceBelow = Math.max(0, viewportHeight - anchorRect.bottom - 12);
+        // Flip downward if the composer sits near the top of the window (e.g. a new session).
+        const openAbove = placement === "up"
+          ? spaceAbove >= 240 || spaceAbove >= spaceBelow
+          : spaceAbove > spaceBelow;
+        const availableSpace = openAbove ? spaceAbove : spaceBelow;
+        const maxHeight = Math.max(96, Math.min(availableSpace, viewportHeight * 0.6));
         const verticalPosition = openAbove
-          ? { bottom: viewportHeight - anchorRect.top + 6 }
-          : { top: anchorRect.bottom + 6 };
+          ? { bottom: Math.max(8, viewportHeight - anchorRect.top + 6) }
+          : { top: Math.max(8, anchorRect.bottom + 6) };
+        const clampedLeft = Math.max(8, Math.min(anchorRect.left, viewportWidth - Math.max(anchorRect.width, 280) - 8));
         const horizontalPosition: CSSProperties = isMobile
           ? { left: 8, right: 8, maxWidth: "calc(100vw - 16px)" }
-          : { left: anchorRect.left, width: "max-content", minWidth: anchorRect.width, maxWidth: Math.max(anchorRect.width, viewportWidth - anchorRect.left - 8) };
+          : { left: clampedLeft, width: "max-content", minWidth: Math.max(anchorRect.width, 240), maxWidth: Math.max(anchorRect.width, viewportWidth - clampedLeft - 8) };
 
-        return (
+        const menuNode = (
           <div
             ref={panelRef}
             className="native-popover app-menu"
@@ -263,7 +288,7 @@ export function ModelSelector({
               position: "fixed",
               ...verticalPosition,
               ...horizontalPosition,
-              zIndex: 500,
+              zIndex: 2400,
               display: "flex",
               flexDirection: "column",
               maxHeight,
@@ -346,6 +371,7 @@ export function ModelSelector({
             </div>
           </div>
         );
+        return typeof document !== "undefined" ? createPortal(menuNode, document.body) : menuNode;
       })()}
     </div>
   );

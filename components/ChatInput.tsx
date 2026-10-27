@@ -3066,7 +3066,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 </button>
                 {thinkingDropdownOpen && (() => {
                   const vh = typeof window !== "undefined" ? window.visualViewport?.height ?? window.innerHeight : 800;
-                  const maxH = Math.max(120, vh * 0.6);
+                  const rectTop = thinkingDropdownRef.current?.getBoundingClientRect().top ?? vh;
+                  const maxH = Math.max(120, Math.min(rectTop - 60, vh * 0.6));
                   return (
                   <div className="native-popover app-menu composer-run-menu" role="listbox" style={{
                     position: "absolute",
@@ -3214,7 +3215,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 </button>
                 {toolDropdownOpen && (() => {
                   const vh = typeof window !== "undefined" ? window.visualViewport?.height ?? window.innerHeight : 800;
-                  const maxH = Math.max(120, vh * 0.6);
+                  const rectTop = toolDropdownRef.current?.getBoundingClientRect().top ?? vh;
+                  const maxH = Math.max(120, Math.min(rectTop - 60, vh * 0.6));
                   const vw = window.innerWidth;
                   const width = Math.min(304, vw - 32);
                   const anchorRight = toolDropdownRef.current?.getBoundingClientRect().right ?? vw - 16;

@@ -281,7 +281,7 @@ export async function listSessionSummaries(): Promise<SessionInfo[]> {
   return buildSessionList(await listSessionsIncremental({ deferDetails: true }));
 }
 
-export async function listAllSessions(options: { force?: boolean; allowStale?: boolean } = {}): Promise<SessionInfo[]> {
+export async function listAllSessions(options: { force?: boolean; allowStale?: boolean; _retried?: boolean } = {}): Promise<SessionInfo[]> {
   if (options.force) invalidateSessionListCache();
   const generation = globalThis.__piSessionListGeneration ?? 0;
 
@@ -309,13 +309,15 @@ export async function listAllSessions(options: { force?: boolean; allowStale?: b
   }
 
   const loadPromise = loadAllSessions().then((data) => {
-    // If a mutation invalidated this scan, make this caller join (or start) a
-    // scan for the current generation. Returning the stale result here made a
-    // refresh race indistinguishable from a successful refresh.
-    if ((globalThis.__piSessionListGeneration ?? 0) !== generation) {
-      return listAllSessions();
+    const currentGen = globalThis.__piSessionListGeneration ?? 0;
+    // Always seed the cache if none exists yet so allowStale callers never starve
+    // while an active agent turn is continuously bumping the generation.
+    if (!globalThis.__piSessionListCache || options.allowStale || options._retried || currentGen === generation) {
+      globalThis.__piSessionListCache = { data, ts: Date.now(), generation: options._retried ? currentGen : generation };
     }
-    globalThis.__piSessionListCache = { data, ts: Date.now(), generation };
+    if (currentGen !== generation && !options.allowStale && !options._retried) {
+      return listAllSessions({ _retried: true });
+    }
     return data;
   });
   const trackedPromise = loadPromise.finally(() => {

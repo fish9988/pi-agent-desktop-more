@@ -27,7 +27,7 @@ export function ComposerExtensionsChip({ widgets, statuses }: { widgets: Extensi
   const [open, setOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const popRef = useRef<HTMLDivElement | null>(null);
-  const [position, setPosition] = useState<{ left: number; bottom: number } | null>(null);
+  const [position, setPosition] = useState<{ left: number; bottom?: number; top?: number; maxHeight: number } | null>(null);
   const items = visibleStatuses(statuses);
   const count = items.length + widgets.length;
 
@@ -45,11 +45,25 @@ export function ComposerExtensionsChip({ widgets, statuses }: { widgets: Extensi
 
   useLayoutEffect(() => {
     if (!open || !buttonRef.current) return;
-    const rect = buttonRef.current.getBoundingClientRect();
-    setPosition({
-      left: Math.max(8, Math.min(window.innerWidth - POPOVER_WIDTH - 8, rect.left)),
-      bottom: window.innerHeight - rect.top + 6,
-    });
+    const updatePos = () => {
+      if (!buttonRef.current) return;
+      const rect = buttonRef.current.getBoundingClientRect();
+      const spaceAbove = rect.top - 12;
+      const spaceBelow = window.innerHeight - rect.bottom - 12;
+      const openAbove = spaceAbove >= 200 || spaceAbove >= spaceBelow;
+      setPosition({
+        left: Math.max(8, Math.min(window.innerWidth - POPOVER_WIDTH - 8, rect.left)),
+        ...(openAbove ? { bottom: window.innerHeight - rect.top + 6 } : { top: rect.bottom + 6 }),
+        maxHeight: Math.max(120, Math.min(openAbove ? spaceAbove : spaceBelow, window.innerHeight * 0.65)),
+      });
+    };
+    updatePos();
+    window.addEventListener("resize", updatePos);
+    window.addEventListener("scroll", updatePos, true);
+    return () => {
+      window.removeEventListener("resize", updatePos);
+      window.removeEventListener("scroll", updatePos, true);
+    };
   }, [open]);
 
   useEffect(() => {
@@ -101,7 +115,7 @@ export function ComposerExtensionsChip({ widgets, statuses }: { widgets: Extensi
           role="dialog"
           aria-label={t("composer.extensions")}
           className="native-popover app-menu composer-extensions-popover"
-          style={{ position: "fixed", left: position.left, bottom: position.bottom, width: POPOVER_WIDTH, zIndex: 2400 }}
+          style={{ position: "fixed", left: position.left, bottom: position.bottom, top: position.top, maxHeight: position.maxHeight, overflowY: "auto", width: POPOVER_WIDTH, zIndex: 2400 }}
         >
           <div className="composer-extensions-heading">{t("composer.extensions")}</div>
           {items.length > 0 && (

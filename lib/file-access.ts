@@ -3,7 +3,7 @@ import { userHome } from "./user-home.ts";
 import path from "path";
 import { getAdditionalAllowedRoots, normalizeSlashes } from "./allowed-roots";
 import { isExistingPathWithinRoots, isPathWithinRoots } from "./path-security";
-import { listAllSessions } from "./session-reader";
+import { listAllSessions, listSessionSummaries } from "./session-reader";
 export { allowFileRoot, normalizeSlashes } from "./allowed-roots";
 export { isWindowsAbsolutePath } from "./paths";
 
@@ -27,7 +27,9 @@ export async function getAllowedFileRoots(): Promise<Set<string>> {
   // location call allowFileRoot() directly. Forcing a fresh scan made the 10 s
   // worktree poll pay a full catalogue rebuild whenever agent activity had
   // invalidated the list — which during use is almost always.
-  const sessions = await listAllSessions({ allowStale: true });
+  const sessions = globalThis.__piSessionListCache
+    ? await listAllSessions({ allowStale: true })
+    : await listSessionSummaries();
   const roots = new Set<string>();
   for (const s of sessions) {
     if (s.cwd) roots.add(normalizeSlashes(s.cwd));

@@ -3,6 +3,23 @@
 Pi Agent Plus 是 [abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop) 的个人二次开发版（仅 Windows），
 与官方版可同时安装、互不覆盖。版本规则见 [VERSIONING-PLUS.md](./VERSIONING-PLUS.md)。
 
+## [1.12.1] - 2026-10-27
+
+基于 Pi Agent 0.7.5（底层 Pi SDK 1.4.0）。彻底解决右侧文件树在后台流式输出期间等待 78 秒的饥饿循环与竞态问题，实现文件树 `localStorage` 快照 0ms 首帧秒开；修复模型选择器偏移/截断与会话信息弹窗越界问题，并通过 Playwright 真实浏览器截图验证。
+
+### 彻底根治文件树 78 秒慢加载与实现 0ms 首帧秒开
+- **消除活跃对话流式输出期间的会话扫描饥饿循环**（`lib/session-reader.ts`）：修复 `listAllSessions()` 在模型流式输出频繁触发 `invalidateSessionListCache()` 时无限递归重扫 `.jsonl` 文件直至回合结束（耗时数十秒）的问题，增加重试上限并立即写入缓存快照。
+- **冷启动鉴权改走轻量摘要扫描 & 跳过巨型工具结果 JSON 解析**（`lib/file-access.ts`、`lib/session-list-scanner.ts`）：`getAllowedFileRoots()` 冷启动时改调仅读取首行的 `listSessionSummaries()`，且增量扫描器跳过对超大 `toolResult` 行的 `JSON.parse`。
+- **文件树 `localStorage` 快照缓存 + 预加载 + 消除 StrictMode 竞态**（`components/FileExplorer.tsx`、`components/AppShell.tsx`）：
+  - 移除 `FileExplorer` 的 `next/dynamic` 异步分包延迟，改为同步直装并在确定项目路径时立即后台预取根目录；
+  - 将最近访问的 20 个目录结构持久化缓存于 `localStorage`（`stale-while-revalidate`），打开右侧栏或重启应用时 **0ms 首帧直接渲染目录树**，后台静默刷新；
+  - 修复 `FileExplorer` 在 `refreshKey` 变动时提前将 `loading` 置为 `false` 导致闪现空白或「未找到文件」的竞态；接通顶栏「筛选文件...」输入框实时过滤。
+
+### 修复模型选择器偏移/截断与会话统计弹窗越界
+- **根治 `position: fixed` 包含块偏移**（`app/plus-theme.css`）：将毛玻璃 `backdrop-filter` 移至无子节点的 `.app-shell::before` 背景伪元素上，移除 `.chat-window`、`.chat-composer-frame`、`.app-topbar`、`.session-sidebar` 容器自身的 `backdrop-filter` 与 `transform`，彻底解决容器内所有 `position: fixed` 弹窗（模型选择器、会话信息、分支导航等）向右下偏移或被 `overflow: hidden` 裁剪的根因。
+- **模型选择器 Portal 化与自适应翻转**（`components/ModelSelector.tsx`）：将模型下拉菜单通过 `createPortal` 挂载至 `document.body`，当输入框靠近窗口上方（如新会话）时自动向下翻转展开并严格限制最大高度，彻底杜绝只露出底部几个模型的情况。
+- **会话信息弹窗自适应右侧边栏宽度**（`components/AppShell.tsx`）：监听右侧面板与文件树开关/宽度变化，实时重算顶栏浮层宽度，并采用三档响应式网格（宽屏三栏 / 右侧栏展开时双栏 / 窄屏单栏），右侧 Token 数据永不越界截断。
+
 ## [1.12.0] - 2026-10-27
 
 基于 Pi Agent 0.7.5（底层 Pi SDK 1.4.0）。大幅提升右侧文件树目录与文件加载速度、新增 GPU 硬件合成加速开关、新增免失焦系统通知与测试按钮、重构左侧边栏项目行细节，并将聊天输入框默认高度扩展为舒适的多行尺寸。

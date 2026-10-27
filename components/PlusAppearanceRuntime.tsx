@@ -12,7 +12,7 @@ import {
 import { applyGpuAcceleration } from "@/lib/desktop-notify";
 import type { ThemeBase } from "@/lib/plus-theme-catalog";
 
-const POLL_MS = 1000;
+const POLL_MS = 2500;
 export const CUSTOM_CSS_PREVIEW_ID = "plus-custom-css-preview";
 /** Set on <html> while the theme editor previews unsaved CSS. */
 export const THEME_PREVIEW_ATTR = "plusThemePreview";
@@ -120,7 +120,8 @@ export function PlusAppearanceRuntime() {
       if (stopped) return;
       const root = document.documentElement;
       const previewing = Boolean(document.getElementById(CUSTOM_CSS_PREVIEW_ID)) || root.dataset[THEME_PREVIEW_ATTR] !== undefined;
-      if (document.visibilityState === "visible" && !previewing) {
+      const activeWatch = settingsRef.current.customCssOverlay || isUserTheme(themeRef.current);
+      if (document.visibilityState === "visible" && !previewing && activeWatch) {
         const theme = themeRef.current;
         const themeId = isUserTheme(theme) ? theme.slice(USER_THEME_PREFIX.length) : null;
         try {

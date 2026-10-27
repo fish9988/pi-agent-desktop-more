@@ -19,7 +19,7 @@ import { TabBar, type Tab } from "./TabBar";
 // config modals may never be opened at all; FileViewer drags in markdown +
 // syntax highlighting a second time and only matters once a file tab opens.
 const FileViewer = dynamic(() => import("./FileViewer").then((m) => m.FileViewer), { ssr: false });
-const FileExplorer = dynamic(() => import("./FileExplorer").then((m) => m.FileExplorer), { ssr: false });
+import { FileExplorer, prefetchDirEntries, type FileExplorerHandle } from "./FileExplorer";
 // Only mounted once opened; xterm alone is a large share of the page bundle.
 const TerminalPanel = dynamic(() => import("./TerminalPanel").then((m) => m.TerminalPanel), { ssr: false });
 const ScheduledView = dynamic(() => import("./scheduled/ScheduledView").then((m) => m.ScheduledView), { ssr: false });
@@ -96,7 +96,6 @@ import { shouldShowUsageBreakdown, UNATTRIBUTED_USAGE_KEY } from "@/lib/usage-br
 import { cacheWarmingRows } from "@/lib/cache-warming-display";
 import type { McpErrorResponse, ProjectTrustStatus } from "@/lib/api-types";
 import type { ChatInputHandle } from "./ChatInput";
-import type { FileExplorerHandle } from "./FileExplorer";
 import type { SessionStatsInfo } from "@/lib/pi-types";
 import type { FileViewerState } from "@/lib/file-viewer-state";
 import type { ToolEntry } from "@/lib/tool-presets";
@@ -657,12 +656,11 @@ export function AppShell() {
   useEffect(() => {
     if (!activeTopPanel || !topBarRef.current) return;
     const update = () => {
-      const topBarRect = topBarRef.current!.getBoundingClientRect();
-      // The top bar spans exactly the center column: the sidebar and the
-      // file panel are full-height siblings of the main column, so its rect is
-      // already clear of both and the dropdowns can use it as-is.
-      const left = topBarRect.left;
-      const available = topBarRect.width;
+      if (!topBarRef.current) return;
+      const topBarRect = topBarRef.current.getBoundingClientRect();
+      const viewportWidth = window.visualViewport?.width ?? window.innerWidth;
+      const left = Math.max(0, topBarRect.left);
+      const available = Math.max(240, Math.min(topBarRect.width, viewportWidth - left));
       if (activeTopPanel === "agents") {
         setTopPanelPos({
           top: topBarRect.bottom,
@@ -676,8 +674,12 @@ export function AppShell() {
     update();
     const ro = new ResizeObserver(update);
     ro.observe(topBarRef.current);
-    return () => ro.disconnect();
-  }, [activeTopPanel]);
+    window.addEventListener("resize", update);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, [activeTopPanel, rightPanelOpen, rightPanelWidth, sidebarOpen, fileTreeOpen]);
 
   // Files unmount when inactive; workspace terminals stay mounted until closed.
   const [fileTabs, setFileTabs] = useState<Tab[]>([]);
@@ -783,6 +785,9 @@ export function AppShell() {
   // Project-scoped chrome (trust, pickers, file tree, window title) must never
   // receive the hidden chat workspace path.
   const visibleProjectCwd = isChatWorkspaceActive ? null : activeCwd;
+  useEffect(() => {
+    if (visibleProjectCwd) prefetchDirEntries(visibleProjectCwd);
+  }, [visibleProjectCwd]);
   const projectPickerStartCwd = isChatWorkspaceActive
     ? null
     : selectedSession?.cwd ?? newSessionCwd ?? activeCwd;
@@ -2628,6 +2633,10 @@ export function AppShell() {
               )}
               {activeTopPanel === "session" && (
                 <div className="session-info-popover" style={{
+                  boxSizing: "border-box",
+                  width: "100%",
+                  maxWidth: "100%",
+                  overflowX: "hidden",
                   background: "var(--bg-panel)",
                   borderBottom: "var(--hairline) solid var(--border)",
                   boxShadow: "0 10px 28px rgba(0,0,0,0.10)",
@@ -2803,13 +2812,13 @@ export function AppShell() {
                     return (
                       <div style={{
                         display: "grid",
-                        // The clamped popover can be narrower than the three
-                        // columns' combined min width (~770px); stack instead
-                        // of overflowing under the file panel.
-                        gridTemplateColumns: isMobile || topPanelPos.width < 780
+                        // Adapt cleanly to narrow center columns when the right sidebar is open.
+                        gridTemplateColumns: isMobile || topPanelPos.width < 640
                           ? "1fr"
-                          : "minmax(360px, 1.7fr) minmax(140px, 0.55fr) minmax(190px, 0.75fr)",
-                        gap: isMobile ? 16 : 24,
+                          : topPanelPos.width < 920
+                            ? "minmax(0, 1.35fr) minmax(0, 1fr)"
+                            : "minmax(260px, 1.5fr) minmax(120px, 0.5fr) minmax(170px, 0.7fr)",
+                        gap: isMobile ? 16 : 20,
                         fontSize: 12,
                         lineHeight: 1.5,
                         fontFamily: "var(--font-mono)",
@@ -3299,6 +3308,7 @@ export function AppShell() {
                   onUploadBusyChange={setExplorerUploadBusy}
                   changesCollapsed={changesCollapsed}
                   onChangesCountChange={setChangesCount}
+                  externalQuery={fileExplorerQuery}
                 />
               </div>
               </div>

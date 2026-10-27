@@ -177,6 +177,14 @@ export async function scanSessionFileInfo(
 		});
 
 		for await (const line of rl) {
+			// Fast path: toolResult lines in large transcripts can be 5MB+ each,
+			// and scanSessionFileInfo only counts them in messageCount (it ignores
+			// their timestamps and textContent). Skipping JSON.parse on them avoids
+			// hundreds of milliseconds of main-thread blocking per changed session.
+			if (header && line.length > 4096 && line.slice(0, 256).includes('"role":"toolResult"')) {
+				messageCount++;
+				continue;
+			}
 			const entry = parseLine(line);
 			if (!entry) continue;
 
