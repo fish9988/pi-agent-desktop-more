@@ -10,7 +10,7 @@ _最后更新：2026-10-27_
 - 上一版 v1.6.1：修复文件树下载按钮无反应、「在资源管理器中显示」打开错目录（正斜杠路径 + Rust 引号问题，改用 `raw_arg`）。v1.6.0 是上游周报 #1 的移植。
 - 用户的正式版 `D:\Pi Agent Plus` 是 **1.5.0**，用户会自己点「更新」升级到 1.6.0。
 - 测试版 `D:\Pi Agent Plus Test` 是 1.7.0-test.23（`plus-prefs.test.json` 里主题选了「Plus 分层」、深色），没在运行。
-- **最新发布：v1.13.1**（2026-10-27）：彻底根治切换主题卡顿 10–20 秒与长对话渲染卡顿（移除 `html.plus-theme-transition *` 与 `* { scrollbar-color }` 通配符规则、全屏设置打开时对底层聊天区应用 `content-visibility: hidden`、`ChatWindow` 历史回合改用惰性 Thunk 延迟构建、默认关闭无意义的 `backdrop-filter` 合成通道，实测千条消息下切换主题仅 76~200ms）+ 将设置项更名为「硬件加速」并真正接入 Rust Tauri `WebviewWindowBuilder::additional_browser_args`（控制 WebView2 `--enable-gpu-rasterization --enable-zero-copy` / `--disable-gpu`）+ 移除左上角多余的「纸枢」小徽章并修复侧栏原生滚动条箭头。上一版 v1.13.0（2026-10-27）：新增对标 Claude 的长文本粘贴自动转为 `.md` / `.txt` 文件附件功能与「设置 › 常规 › 对话」可配置行数阈值。
+- **最新发布：v1.13.2**（2026-10-28）：通过 CDP `StyleInvalidatorInvalidationTracking` 定位并彻底根治含大量 KaTeX 公式/代码的长对话中**打字卡顿**问题（移除 `.app-shell:has(...)` 根容器选择器避免每次按键令 5 万个 DOM 节点样式失效、为 `.chat-scroll-container [data-entry-id]` 开启回合级 `content-visibility: auto`、移除 `ChatInput` 重复的 `onInput` 同步 `scrollHeight` 布局抖动；实测在 50,448 节点的 Transformer 会话中连续输入 10 个汉字总耗时从 **4,654ms** 降至 **141ms**，`RecalcStyle` 从 **1,714.7ms** 降至 **5.4ms**）。上一版 v1.13.1（2026-10-27）：解决切换主题 10–20s 卡顿、接入 Tauri WebView2 底层「硬件加速」启动参数、移除左上角多余「纸枢」徽章与侧栏原生滚动条箭头。
 - 上游周报 #2（2026-10-27）已移植并标记为已看（`.github/upstream-reviewed.json` 指向 pi-web `e533d9b3`、abcwyc `56691c5a`）。
 
 ## 顶栏子代理下拉切换器与《纸枢 · Kami》视觉升级（1.10.0，2026-10-27）

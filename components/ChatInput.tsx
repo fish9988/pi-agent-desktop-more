@@ -1330,11 +1330,30 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     });
   }, [draftKey, setHashQuery]);
 
+  const prevTextareaLenRef = useRef(0);
   const resizeTextarea = useCallback(() => {
     const ta = textareaRef.current;
     if (!ta) return;
-    ta.style.height = "auto";
-    if (ta.value) ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
+    const len = ta.value.length;
+    const prevLen = prevTextareaLenRef.current;
+    prevTextareaLenRef.current = len;
+    if (len === 0) {
+      if (ta.style.height) ta.style.height = "";
+      return;
+    }
+    // Short single-line input always fits inside the default 3-row minHeight;
+    // skip forced scrollHeight measurement and style attribute churn on every keystroke.
+    if (len < 48 && !ta.value.includes("\n") && !ta.style.height) {
+      return;
+    }
+    if (len < prevLen && ta.style.height) {
+      ta.style.height = "auto";
+    }
+    const targetHeight = Math.min(ta.scrollHeight, 240);
+    if (targetHeight > ta.clientHeight || len < prevLen) {
+      const nextHeight = `${targetHeight}px`;
+      if (ta.style.height !== nextHeight) ta.style.height = nextHeight;
+    }
   }, []);
 
   useLayoutEffect(resizeTextarea, [value, fontSize, resizeTextarea]);
@@ -1899,13 +1918,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     },
     [isMobile, enterSendMode, isStreaming, onSteer, onFollowUp, onAbort, slashMenuOpen, slashQuery, displayedSlashCommands, slashActiveIndex, applySlashCommand, sendQueued, handleSend, getNextSlashIndex, hashMenuOpen, hashQuery, hashMatches, hashActiveIndex, applyHashCompletion, atMenuOpen, atQuery, atMatches, atActiveIndex, applyAtCompletion, historyMenuOpen, inputHistory, historyActiveIndex, applyHistoryInput, value, setHashActiveIndex, setHashMenuOpen]
   );
-
-  const handleInput = useCallback(() => {
-    const ta = textareaRef.current;
-    if (!ta) return;
-    ta.style.height = "auto";
-    ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
-  }, []);
 
   const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const items = Array.from(e.clipboardData?.items ?? []);
@@ -2965,7 +2977,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               updateAtQuery(el.value, el.selectionStart);
               updateHashQuery(el.value, el.selectionStart);
             }}
-            onInput={handleInput}
             onPaste={handlePaste}
             placeholder={
               isStreaming && (onSteer || onFollowUp)

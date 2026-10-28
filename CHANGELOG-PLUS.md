@@ -3,6 +3,20 @@
 Pi Agent Plus 是 [abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop) 的个人二次开发版（仅 Windows），
 与官方版可同时安装、互不覆盖。版本规则见 [VERSIONING-PLUS.md](./VERSIONING-PLUS.md)。
 
+## [1.13.2] - 2026-10-28
+
+基于 Pi Agent 0.7.5（底层 Pi SDK 1.4.0）。通过 Chrome DevTools Protocol 追踪定位并彻底根治含大量公式/代码的长对话中**输入框打字卡顿**问题（在 50,448 个 DOM 节点、713 个 KaTeX 公式的 Transformer 会话中，单字输入耗时从 **350~770ms** 降至 **11~14ms**，样式重算耗时降低 **317 倍**）。
+
+### 彻底根治长对话打字卡顿（单字延迟从 770ms 降至 11ms）
+- **消除根容器 `.app-shell:has(...)` 引发的全树样式失效**（`app/plus-theme.css`、`components/SettingsPanel.tsx`）：
+  - CDP `StyleInvalidatorInvalidationTracking` 追踪发现：每敲击一个字符，`.app-shell:has(.app-sidebar.sidebar-closed)` 都会使整个 `<div class="app-shell">` 下全部 `50,448` 个 DOM 节点（`98,923` 个样式节点）失效重算（单次 `UpdateLayoutTree` 高达 `368ms`）；
+  - 现已将 `.app-shell:has(...)` 全部替换为兄弟选择器 `.app-sidebar.sidebar-closed ~ div .app-content-layer` 与 `html[data-plus-settings-open="1"]`，彻底切断输入框变更向全局 DOM 树的样式传染。
+- **消息回合级 `content-visibility: auto` 视口裁剪**（`app/plus-theme.css`）：
+  - 为 `.chat-scroll-container [data-entry-id]` 及 `.katex-display`、`table`、`pre` 开启 `content-visibility: auto`，使滚出视口的历史公式与长文完全跳过 Blink 样式重算与布局。
+- **消除输入框每次按键的双重同步 `scrollHeight` 布局抖动**（`components/ChatInput.tsx`）：
+  - 移除与 `useLayoutEffect(resizeTextarea)` 重复执行的 `onInput={handleInput}`；
+  - 优化 `resizeTextarea`：单行短文本与常规追加输入时不再每次先将 `height` 设为 `"auto"` 再同步读取 `scrollHeight`（消除每敲一字触发 4 次 `style` 属性变更与 2 次强制同步布局）。
+
 ## [1.13.1] - 2026-10-27
 
 基于 Pi Agent 0.7.5（底层 Pi SDK 1.4.0）。彻底解决切换主题卡顿 10–20 秒与长对话渲染卡顿问题（实测 1000+ 消息会话切换主题仅需 76~200ms）；打通 Tauri WebView2 底层「硬件加速」命令行开关；移除左上角多余的「纸枢」小徽章并修复侧栏原生滚动条箭头问题。

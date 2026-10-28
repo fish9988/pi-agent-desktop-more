@@ -415,7 +415,13 @@ export function SettingsPanel({
   useEffect(() => setLastSettingsSection(initialSection), [initialSection]);
 
   // Per-platform dialog styling (native-theme.css) keys off <html data-platform>; set before paint.
-  useLayoutEffect(() => { applyUiPlatform(); }, []);
+  useLayoutEffect(() => {
+    applyUiPlatform();
+    document.documentElement.dataset.plusSettingsOpen = "1";
+    return () => {
+      delete document.documentElement.dataset.plusSettingsOpen;
+    };
+  }, []);
 
   // Bubble phase, unless something nearer handled the key. The trust dialog,
   // which opens above Settings, takes Escape in the capture phase and stops it,

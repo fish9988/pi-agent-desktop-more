@@ -207,10 +207,14 @@ html[data-plus-style="clean"] .app-shell::before {
   pointer-events: none;
   backdrop-filter: var(--plus-glass-filter);
 }
-html[data-plus-style="clean"]:not([data-plus-live-preview="1"]) .app-shell:has(> .settings-dialog-backdrop.is-plus-page) > :not(.settings-dialog-backdrop, .project-trust-backdrop) {
+html[data-plus-style="clean"][data-plus-settings-open="1"]:not([data-plus-live-preview="1"]) .app-shell > :not(.settings-dialog-backdrop, .project-trust-backdrop) {
   content-visibility: hidden;
 }
-html[data-plus-style="clean"] .chat-scroll-container .markdown-body pre,
+html[data-plus-style="clean"] .chat-scroll-container [data-entry-id] {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 240px;
+}
+html[data-plus-style="clean"] .chat-scroll-container .markdown-body :is(pre, table, .katex-display),
 html[data-plus-style="clean"] .chat-scroll-container .process-details.work-group:not(.is-open) {
   content-visibility: auto;
   contain-intrinsic-size: auto 72px;
@@ -317,7 +321,7 @@ html[data-plus-style="clean"] .file-workbench { background: var(--workbench-bg);
     /* the panel clips its children to the rounded corners */
     isolation: isolate;
   }
-  html[data-plus-style="clean"] .app-shell:has(.app-sidebar.sidebar-closed) .app-content-layer { margin-left: var(--plus-s2); }
+  html[data-plus-style="clean"] .app-sidebar.sidebar-closed ~ div .app-content-layer { margin-left: var(--plus-s2); }
   /* The right panel is a second panel of the same kind, full height. */
   html[data-plus-style="clean"] .right-panel-container.right-panel-open {
     margin: var(--plus-s2) var(--plus-s2) var(--plus-s2) 0;
