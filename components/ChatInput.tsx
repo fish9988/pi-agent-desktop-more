@@ -1256,6 +1256,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   }, []);
 
   const [previewFileId, setPreviewFileId] = useState<string | null>(null);
+  const [composerExpanded, setComposerExpanded] = useState(false);
 
   const expandAttachedFileIntoInput = useCallback((file: ChatTextAttachment) => {
     const nextFiles = attachedFilesRef.current.filter((item) => item.id !== file.id);
@@ -1285,6 +1286,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     if (draftKeyRef.current && draftKeyRef.current !== draftKey) clearDraft(draftKeyRef.current);
     clearImages();
     clearAttachedFiles();
+    setComposerExpanded(false);
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
@@ -2568,7 +2570,36 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
         {/* Main input. Plus: the frame is the composer card in the clean theme
             engine, so the controls row sits inside it (app/plus-theme.css). */}
-        <div className="chat-composer-frame" style={{ position: "relative", minWidth: 0 }}>
+        <div className={`chat-composer-frame${composerExpanded ? " is-expanded" : ""}`} style={{ position: "relative", minWidth: 0 }}>
+          {!compact && (
+            <button
+              type="button"
+              className={`composer-expand-corner-btn${composerExpanded ? " is-expanded" : ""}`}
+              title={composerExpanded ? "收起输入框" : "展开长文编辑框"}
+              aria-label={composerExpanded ? "收起输入框" : "展开长文编辑框"}
+              aria-pressed={composerExpanded}
+              onClick={() => {
+                setComposerExpanded((v) => !v);
+                requestAnimationFrame(() => textareaRef.current?.focus());
+              }}
+            >
+              {composerExpanded ? (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="4 14 10 14 10 20" />
+                  <polyline points="20 10 14 10 14 4" />
+                  <line x1="14" y1="10" x2="21" y2="3" />
+                  <line x1="3" y1="21" x2="10" y2="14" />
+                </svg>
+              ) : (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="15 3 21 3 21 9" />
+                  <polyline points="9 21 3 21 3 15" />
+                  <line x1="21" y1="3" x2="14" y2="10" />
+                  <line x1="3" y1="21" x2="10" y2="14" />
+                </svg>
+              )}
+            </button>
+          )}
           {historyMenuOpen && inputHistory.length > 0 && (
             <div
               ref={historyMenuRef}

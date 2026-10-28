@@ -34,6 +34,7 @@ export const APP_PREF_KEYS = {
   notifyAlways: "pi-plus-notify-always",
   gpuAcceleration: "pi-plus-gpu-acceleration",
   pasteToFileLines: "pi-plus-paste-to-file-lines",
+  userProfile: "pi-plus-user-profile-v1",
   chatDrafts: "pi-chat-drafts-v1",
   diffViewMode: "pi-diff-view-mode",
   /** Last open session / cwd / file tabs for desktop cold-start restore. */

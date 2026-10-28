@@ -10,7 +10,7 @@ _最后更新：2026-10-27_
 - 上一版 v1.6.1：修复文件树下载按钮无反应、「在资源管理器中显示」打开错目录（正斜杠路径 + Rust 引号问题，改用 `raw_arg`）。v1.6.0 是上游周报 #1 的移植。
 - 用户的正式版 `D:\Pi Agent Plus` 是 **1.5.0**，用户会自己点「更新」升级到 1.6.0。
 - 测试版 `D:\Pi Agent Plus Test` 是 1.7.0-test.23（`plus-prefs.test.json` 里主题选了「Plus 分层」、深色），没在运行。
-- **最新发布：v1.13.2**（2026-10-28）：通过 CDP `StyleInvalidatorInvalidationTracking` 定位并彻底根治含大量 KaTeX 公式/代码的长对话中**打字卡顿**问题（移除 `.app-shell:has(...)` 根容器选择器避免每次按键令 5 万个 DOM 节点样式失效、为 `.chat-scroll-container [data-entry-id]` 开启回合级 `content-visibility: auto`、移除 `ChatInput` 重复的 `onInput` 同步 `scrollHeight` 布局抖动；实测在 50,448 节点的 Transformer 会话中连续输入 10 个汉字总耗时从 **4,654ms** 降至 **141ms**，`RecalcStyle` 从 **1,714.7ms** 降至 **5.4ms**）。上一版 v1.13.1（2026-10-27）：解决切换主题 10–20s 卡顿、接入 Tauri WebView2 底层「硬件加速」启动参数、移除左上角多余「纸枢」徽章与侧栏原生滚动条箭头。
+- **最新发布：v1.14.0**（2026-10-28）：将内置 `claude` 主题全面升级为 **Cherry Studio V2 仿 Claude 主题**（`#faf9f5` 暖白 + `#f5f0e8` 侧栏 + `#efe9de` 气泡 + `#cc785c` 陶土橙 + `Tiempos Text` 16px 衬线排版 + 链接渐变底线与陶土橙引用块/列表标记）+ 聊天输入框右上角新增悬停显隐的**「展开长文编辑框 (`⤢`)」**按钮 + 左上角移除应用标题与 π 图标，升级为可自定义的**个人画像与昵称**（支持上传本地照片自动裁剪持久化及 6 款精选插画头像，已通过 Playwright 截图验证）。上一版 v1.13.2（2026-10-28）：通过 CDP 定位并根治 5 万节点 KaTeX 会话打字卡顿问题（单字耗时从 770ms 降至 11ms）。
 - 上游周报 #2（2026-10-27）已移植并标记为已看（`.github/upstream-reviewed.json` 指向 pi-web `e533d9b3`、abcwyc `56691c5a`）。
 
 ## 顶栏子代理下拉切换器与《纸枢 · Kami》视觉升级（1.10.0，2026-10-27）

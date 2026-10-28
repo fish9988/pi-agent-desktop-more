@@ -43,7 +43,8 @@ import { useNativeContextMenu } from "@/hooks/useNativeContextMenu";
 import { DomContextMenuHost } from "./DomContextMenuHost";
 import { getFileName } from "@/lib/file-paths";
 import { buildAtMentionText, buildFileAtMentionsText, buildFileLineMentionText } from "@/lib/file-fuzzy";
-import { APP_VERSION, BRAND_DISPLAY_NAME, PRODUCT_NAME } from "@/lib/branding";
+import { APP_VERSION, PRODUCT_NAME } from "@/lib/branding";
+import { UserProfileControl } from "./UserProfileControl";
 import { isImeComposing } from "@/lib/ime";
 import {
   resolveInitialNavigation,
@@ -1819,17 +1820,7 @@ export function AppShell() {
   // Settings moved to the footer row below (settings · version · light / dark).
   const sidebarHeaderControls = (
     <>
-      <span className="sidebar-brand" aria-hidden="true" title={PRODUCT_NAME}>
-        <span className="sidebar-brand-mark">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M5 7.5C6.8 6.3 9.2 5.8 12.2 5.8H19.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-            <path d="M9.6 6.2L8.4 17.8" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" />
-            <path d="M14.8 6.2L14.2 15.2C14.1 16.9 15 17.8 16.5 17.8C17.4 17.8 18.2 17.3 18.7 16.5" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" />
-            <circle cx="18.4" cy="11.2" r="1.4" fill="currentColor" />
-          </svg>
-        </span>
-        <span className="sidebar-brand-name">{BRAND_DISPLAY_NAME}</span>
-      </span>
+      <UserProfileControl />
       <button
         className="sidebar-chrome-button"
         onClick={handleSidebarToggle}

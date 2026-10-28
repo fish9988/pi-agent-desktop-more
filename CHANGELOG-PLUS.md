@@ -3,6 +3,27 @@
 Pi Agent Plus 是 [abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop) 的个人二次开发版（仅 Windows），
 与官方版可同时安装、互不覆盖。版本规则见 [VERSIONING-PLUS.md](./VERSIONING-PLUS.md)。
 
+## [1.14.0] - 2026-10-28
+
+基于 Pi Agent 0.7.5（底层 Pi SDK 1.4.0）。将内置「陶土 · Claude」主题全面升级为 **Cherry Studio V2 仿 Claude 主题**；在聊天输入框右上角新增悬停显隐的 **「展开长文编辑框 (`⤢`)」** 按钮；将左上角品牌图标替换为可自定义的 **个人画像（支持上传本地照片与 6 款精选插画头像）与用户昵称**。
+
+### 适配 Cherry Studio V2 仿 Claude 主题（替换内置 `claude` 主题）
+- **原汁原味移植 Cherry Studio V2 色彩与字体排版**（`lib/plus-theme-catalog.ts`、`app/plus-theme.css`）：
+  - 浅色模式采用 `#faf9f5` 暖白主画布、`#f5f0e8` 侧栏与代码块、`#efe9de` 用户消息气泡与行内代码底色、`#cc785c` 经典陶土橙主色（Hover `#a9583e`）；
+  - 深色模式采用 `#181715` 暖炭黑底、`#1f1e1b` 工作台、`#252320` 卡片浮层与 `#e8a48c` 暖陶土行内代码；
+  - 字体栈升级为 `Styrene / Inter` UI 字体 + `Tiempos Text / Noto Serif SC` 16px 衬线正文与标题 + `JetBrains Mono` 等宽代码字体；
+  - 同步引入 Cherry Studio V2 的 Markdown 细节：链接底部 1px 渐变下划线（Hover 加粗为 2px）、2px 陶土橙左边框暖底引用块（`blockquote`）、陶土橙有序/无序列表序号（`li::marker`）。
+
+### 输入框右上角悬停「展开长文编辑框 (`⤢`)」按钮
+- **对标 Cherry Studio 输入框右上角交互**（`components/ChatInput.tsx`、`app/plus-theme.css`）：
+  - 鼠标移入或聚焦聊天输入框时，右上角平滑浮现 `26×26px` 圆角展开按钮（`⤢`）；
+  - 点击即可一键将输入框展开为半屏沉浸式长文编辑器（`min(46vh, 380px)`），再次点击（`⤡`）或发送消息后自动收起。
+
+### 左上角个人画像与昵称（支持上传照片 & 6 款精选插画头像）
+- **移除左上角应用标题与 π 图标，升级为个人专属画像栏**（`components/UserProfileControl.tsx`、`components/AppShell.tsx`）：
+  - 侧边栏左上角直接展示你的**个人头像 + 昵称 + 可选状态签名**；
+  - 点击即可打开个人画像卡片：支持**上传任意本地照片**（自动居中裁剪压缩持久化保存），或一键切换 **6 款内置艺术插画头像**（暖阳橘猫、落日远山、水墨松竹、星际旅人、元气柴犬、森系青年），随时修改显示昵称与签名。
+
 ## [1.13.2] - 2026-10-28
 
 基于 Pi Agent 0.7.5（底层 Pi SDK 1.4.0）。通过 Chrome DevTools Protocol 追踪定位并彻底根治含大量公式/代码的长对话中**输入框打字卡顿**问题（在 50,448 个 DOM 节点、713 个 KaTeX 公式的 Transformer 会话中，单字输入耗时从 **350~770ms** 降至 **11~14ms**，样式重算耗时降低 **317 倍**）。

@@ -1982,3 +1982,204 @@ html[data-plus-style="clean"] .paste-threshold-custom-input:focus {
   outline: none;
   border-color: var(--accent);
 }
+
+/* ---- Plus 1.14: Cherry Studio V2 Claude details, composer hover expand & user profile ---- */
+html[data-plus-style="clean"] .markdown-body a {
+  text-decoration: none !important;
+  background-image: linear-gradient(to right, var(--plus-link-color), var(--plus-link-color));
+  background-size: 100% 1px;
+  background-repeat: no-repeat;
+  background-position: 0 100%;
+  padding-bottom: 1px;
+}
+html[data-plus-style="clean"] .markdown-body a:hover {
+  background-size: 100% 2px;
+}
+html[data-plus-style="clean"] .markdown-body blockquote {
+  border-left: 2px solid var(--plus-marker) !important;
+  background: color-mix(in srgb, var(--plus-marker) 7%, var(--surface)) !important;
+  padding: 8px 14px !important;
+  border-radius: 0 var(--plus-r-card) var(--plus-r-card) 0 !important;
+  color: var(--text-muted) !important;
+  font-style: normal !important;
+}
+html[data-plus-style="clean"] .markdown-body ol > li::marker {
+  color: var(--plus-marker) !important;
+  font-weight: 600;
+}
+html[data-plus-style="clean"] .composer-expand-corner-btn {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  z-index: 25;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--plus-stroke-strong);
+  border-radius: var(--plus-r-card);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--plus-dur-1) ease, border-color var(--plus-dur-1) ease, color var(--plus-dur-1) ease, background var(--plus-dur-1) ease;
+}
+html[data-plus-style="clean"] :is(.chat-composer-frame:hover, .chat-composer-frame:focus-within) > .composer-expand-corner-btn,
+html[data-plus-style="clean"] .composer-expand-corner-btn.is-expanded {
+  opacity: 1;
+  pointer-events: auto;
+}
+html[data-plus-style="clean"] .composer-expand-corner-btn:is(:hover, .is-expanded) {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+html[data-plus-style="clean"] .chat-composer-frame.is-expanded .chat-input-textarea {
+  min-height: min(46vh, 380px) !important;
+  max-height: min(56vh, 460px) !important;
+}
+
+/* Sidebar top-left user profile & avatar picker */
+html[data-plus-style="clean"] .sidebar-user-profile {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  max-width: calc(100% - 34px);
+  padding: 3px 8px 3px 4px;
+  border: 1px solid transparent;
+  border-radius: var(--plus-r-card);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--plus-dur-1) ease, border-color var(--plus-dur-1) ease;
+}
+html[data-plus-style="clean"] .sidebar-user-profile:hover {
+  background: var(--bg-hover);
+  border-color: var(--plus-stroke);
+}
+html[data-plus-style="clean"] .sidebar-user-avatar-wrap {
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: var(--plus-r-card);
+  overflow: hidden;
+  border: 1px solid var(--plus-stroke-strong);
+  background: var(--surface);
+}
+html[data-plus-style="clean"] .sidebar-user-avatar {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+html[data-plus-style="clean"] .sidebar-user-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.2;
+}
+html[data-plus-style="clean"] .sidebar-user-name {
+  font-size: var(--plus-fs-2);
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+html[data-plus-style="clean"] .sidebar-user-subtitle {
+  font-size: var(--plus-fs-1);
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+html[data-plus-style="clean"] .sidebar-user-popover {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px !important;
+}
+html[data-plus-style="clean"] .sidebar-user-popover-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--plus-stroke);
+}
+html[data-plus-style="clean"] .sidebar-user-popover-preview {
+  width: 48px;
+  height: 48px;
+  flex: none;
+  border-radius: 12px;
+  object-fit: cover;
+  border: 1px solid var(--plus-stroke-strong);
+}
+html[data-plus-style="clean"] .sidebar-user-popover-upload {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+html[data-plus-style="clean"] .sidebar-user-popover-upload > strong {
+  font-size: var(--plus-fs-2);
+  color: var(--text);
+}
+html[data-plus-style="clean"] .sidebar-user-popover-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+html[data-plus-style="clean"] .sidebar-user-popover-field > label,
+html[data-plus-style="clean"] .sidebar-user-popover-presets-label {
+  font-size: var(--plus-fs-1);
+  font-weight: 500;
+  color: var(--text-dim);
+}
+html[data-plus-style="clean"] .sidebar-user-popover-field > input {
+  width: 100%;
+  box-sizing: border-box;
+  height: 30px;
+  padding: 0 9px;
+  border: 1px solid var(--plus-stroke-strong);
+  border-radius: var(--plus-r-ctl);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--plus-fs-1);
+  outline: none;
+}
+html[data-plus-style="clean"] .sidebar-user-popover-field > input:focus {
+  border-color: var(--accent);
+}
+html[data-plus-style="clean"] .sidebar-user-popover-presets {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
+html[data-plus-style="clean"] .sidebar-user-preset-btn {
+  padding: 2px;
+  border: 2px solid transparent;
+  border-radius: var(--plus-r-card);
+  background: transparent;
+  cursor: pointer;
+  transition: border-color var(--plus-dur-1) ease, transform var(--plus-dur-1) ease;
+}
+html[data-plus-style="clean"] .sidebar-user-preset-btn:hover {
+  transform: translateY(-1px);
+  border-color: var(--plus-stroke-strong);
+}
+html[data-plus-style="clean"] .sidebar-user-preset-btn.is-active {
+  border-color: var(--accent);
+}
+html[data-plus-style="clean"] .sidebar-user-preset-btn > img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: var(--plus-r-ctl);
+  display: block;
+}

@@ -105,7 +105,9 @@ export interface BuiltinTheme extends ThemeDefinition {
 const PLUS_READING = "\"霞鹜新致宋＋\", \"LXGW Neo ZhiSong Plus\", \"LXGW Neo ZhiSong\", \"Noto Serif SC\", \"Source Han Serif SC\", Georgia, serif";
 const PLUS_BOLD = "\"Noto Serif SC\", \"Source Han Serif SC\", \"Source Han Serif\", Georgia, serif";
 
-const SERIF_READING = "\"Anthropic Serif\", \"Copernicus\", \"Tiempos Text\", Georgia, \"Noto Serif SC\", \"Source Han Serif SC\", \"Source Han Serif\", \"Songti SC\", \"STSong\", \"SimSun\", serif";
+const SERIF_READING = "\"Tiempos Text\", \"Source Serif Pro\", Georgia, \"Noto Serif CJK SC\", \"Noto Serif SC\", \"Source Han Serif SC\", \"Songti SC\", \"STSong\", \"SimSun\", serif";
+const CLAUDE_UI_FONT = "\"Styrene\", \"Inter\", -apple-system, BlinkMacSystemFont, \"Segoe UI\", system-ui, Roboto, sans-serif";
+const CLAUDE_CODE_FONT = "\"JetBrains Mono\", \"SF Mono\", \"Cascadia Code\", Menlo, Consolas, monospace";
 
 const s = (
   comment: string, keyword: string, string: string, number: string, fn: string, cls: string, property: string,
@@ -158,23 +160,23 @@ export const BUILTIN_THEMES: readonly BuiltinTheme[] = [
   },
   {
     id: "claude",
-    name: { en: "Claude", zh: "陶土 · Claude", tw: "陶土 · Claude" },
-    description: { en: "Warm paper, clay accent, serif reading", zh: "暖奶油纸 + 陶土橙，衬线阅读" },
+    name: { en: "Claude (Cherry V2)", zh: "陶土 · Claude", tw: "陶土 · Claude" },
+    description: { en: "Cherry Studio V2 Claude palette, #faf9f5 warm ivory & #cc785c terracotta, Tiempos serif", zh: "Cherry Studio V2 仿 Claude 配色（#faf9f5 暖白 + #cc785c 陶土橙 + Tiempos 衬线阅读）" },
     base: "clean",
-    typography: { reading: SERIF_READING, heading: SERIF_READING, readingSize: 15, readingLeading: 1.72, thinkingItalic: true },
+    typography: { ui: CLAUDE_UI_FONT, reading: SERIF_READING, heading: SERIF_READING, code: CLAUDE_CODE_FONT, readingSize: 16, readingLeading: 1.7, thinkingItalic: true },
     light: {
-      bg: "#f2f0e8", panel: "#f2f0e8", workbench: "#faf9f5", surface: "#ffffff", text: "#141413", muted: "#5e5d59", dim: "#6f6e68",
-      accent: "#b85636", fill: "#c15f3c", border: "#e3dfd3", user: "#efece3",
-      code: "#f1eee6", codeHeader: "#e8e4d9", codeText: "#2b2a27", inlineCode: "#8f3c22", inlineCodeBg: "#ece8de", marker: "#d97757",
+      bg: "#f5f0e8", panel: "#f5f0e8", workbench: "#faf9f5", surface: "#ffffff", text: "#141413", muted: "#5e5c56", dim: "#6c6a64",
+      accent: "#a9583e", fill: "#cc785c", border: "#e6dfd8", user: "#efe9de",
+      code: "#f5f0e8", codeHeader: "#ebe6df", codeText: "#141413", inlineCode: "#9c4930", inlineCodeBg: "#efe9de", marker: "#cc785c",
       danger: "#b4372a", success: "#4f7a28", warning: "#9a6200",
-      syntax: s("#85827a", "#a8452a", "#4f7a28", "#9c5b00", "#2c6a84", "#7650a3", "#2c6a84", "#5e5d59", "#6e6c66", "#a8452a", "#9c5b00", "#8a5300", "#3d3d3a", "#4f7a28", "#b4372a"),
+      syntax: s("#85827a", "#a9583e", "#4f7a28", "#9c5b00", "#2c6a84", "#7650a3", "#2c6a84", "#5e5c56", "#6c6a64", "#a9583e", "#9c5b00", "#8a5300", "#141413", "#4f7a28", "#b4372a"),
     },
     dark: {
-      bg: "#1f1e1d", panel: "#1f1e1d", workbench: "#262624", surface: "#30302e", text: "#f5f4ef", muted: "#c2c0b6", dim: "#9c9a92",
-      accent: "#d97757", accentText: "#ffffff", fill: "#c6613f", border: "#3e3d39", user: "#1a1918",
-      code: "#1c1b1a", codeHeader: "#2b2a27", codeText: "#e9e6dc", inlineCode: "#f0a487", inlineCodeBg: "#383733", marker: "#d97757",
+      bg: "#181715", panel: "#181715", workbench: "#1f1e1b", surface: "#252320", text: "#faf9f5", muted: "#c2bfb8", dim: "#a09d96",
+      accent: "#e09175", accentText: "#ffffff", fill: "#cc785c", border: "#3a3935", user: "#252320",
+      code: "#181715", codeHeader: "#262421", codeText: "#faf9f5", inlineCode: "#e8a48c", inlineCodeBg: "#2b2723", marker: "#cc785c",
       danger: "#ef8a7a", success: "#a3c27a", warning: "#e3b45f",
-      syntax: s("#8f8c83", "#ea9a7c", "#b3cc8a", "#e8bd76", "#86bcd2", "#c4ace6", "#86bcd2", "#c2c0b6", "#a8a59c", "#ea9a7c", "#e8bd76", "#e3b45f", "#e9e6dc", "#a3c27a", "#ef8a7a"),
+      syntax: s("#8f8c83", "#e8a48c", "#b3cc8a", "#e8bd76", "#86bcd2", "#c4ace6", "#86bcd2", "#c2bfb8", "#a09d96", "#e8a48c", "#e8bd76", "#e3b45f", "#faf9f5", "#a3c27a", "#ef8a7a"),
     },
   },
   {
