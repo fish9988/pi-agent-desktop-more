@@ -68,6 +68,10 @@ export interface ThemePalette {
 }
 
 export interface ThemeTypography {
+  /** UI font family list (CSS syntax). */
+  ui?: string;
+  /** Code / monospace font family list (CSS syntax). */
+  code?: string;
   /** Assistant reply font family list (CSS syntax). */
   reading?: string;
   /** Markdown headings font family list. */
@@ -428,6 +432,8 @@ export function paletteTokens(p: ThemePalette, mode: boolean): Record<string, st
 export function sharedTokens(def: ThemeDefinition): Record<string, string> {
   const tokens: Record<string, string> = {};
   const t = def.typography;
+  if (t?.ui) tokens["--font-ui"] = t.ui;
+  if (t?.code) tokens["--font-mono"] = t.code;
   if (t?.reading) tokens["--plus-reading-font"] = t.reading;
   if (t?.heading) tokens["--plus-heading-font"] = t.heading;
   if (t?.bold) tokens["--plus-bold-font"] = t.bold;
