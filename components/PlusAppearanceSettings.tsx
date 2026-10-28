@@ -14,6 +14,7 @@ import {
 import {
   BUILTIN_THEMES,
   builtinDefinition,
+  compileUserThemeCss,
   CUSTOM_THEME_CSS_HINT,
   DEFAULT_THEME_ID,
   definitionFromCss,
@@ -111,6 +112,7 @@ html[data-plus-theme]:root {
 html[data-plus-theme]:root {
   --plus-glass-blur: 20px;
   --plus-glass-saturation: 160%;
+  --plus-glass-filter: blur(20px) saturate(160%);
   --plus-surface-alpha: 26%;
 }`,
   },
@@ -126,6 +128,7 @@ html[data-plus-theme]:root {
     radial-gradient(circle at 52% 88%, rgba(82, 102, 44, 0.18), transparent 52%);
   --plus-glass-blur: 22px;
   --plus-glass-saturation: 165%;
+  --plus-glass-filter: blur(22px) saturate(165%);
   --plus-surface-alpha: 32%;
 }`,
   },
@@ -496,14 +499,22 @@ export function PlusAppearanceSettings({
   };
 
   const applyGalleryTheme = async (theme: GalleryTheme) => {
+    const compiled = compileUserThemeCss(theme.definition, CUSTOM_THEME_CSS_HINT);
     const existing = userThemes.find((item) => item.name === theme.name && item.hasPalette);
     if (existing) {
-      update({ theme: `${USER_THEME_PREFIX}${existing.id}` });
+      const fullId = `${USER_THEME_PREFIX}${existing.id}`;
+      setUserThemeCss(compiled);
+      writeUserThemeCache({ id: existing.id, base: "clean", css: compiled });
+      update({ theme: fullId, accent: "" });
       return;
     }
     setBusy(true);
     try {
-      await createTheme(theme.name, "clean", CUSTOM_THEME_CSS_HINT, true, theme.definition);
+      const created = await createTheme(theme.name, "clean", CUSTOM_THEME_CSS_HINT, false, theme.definition);
+      const fullId = `${USER_THEME_PREFIX}${created.id}`;
+      setUserThemeCss(compiled);
+      writeUserThemeCache({ id: created.id, base: "clean", css: compiled });
+      update({ theme: fullId, accent: "" });
     } catch (error) {
       notifyError(error);
     } finally {

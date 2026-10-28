@@ -387,14 +387,6 @@ html.is-resizing-chat-column * {
 .message-assistant.is-streaming { animation: plus-fade-in 200ms ease-out; }
 .plus-appearance-preview { transition: background-color 250ms ease; }
 
-/* Switching theme, accent or light/dark fades colours instead of snapping. */
-html.plus-theme-transition,
-html.plus-theme-transition *,
-html.plus-theme-transition *::before,
-html.plus-theme-transition *::after {
-  transition: background-color 260ms ease, color 260ms ease, border-color 260ms ease, fill 260ms ease, stroke 260ms ease, box-shadow 260ms ease !important;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .work-group-body,
   .work-group.is-live .work-tl-row,
@@ -403,10 +395,6 @@ html.plus-theme-transition *::after {
   .message-assistant.is-streaming,
   .message-assistant-footer:hover .message-usage-full { animation: none !important; }
   .work-group-chevron { transition: none; }
-  html.plus-theme-transition,
-  html.plus-theme-transition *,
-  html.plus-theme-transition *::before,
-  html.plus-theme-transition *::after { transition: none !important; }
 }
 
 /* ---- Plus: work timeline (one line per step) ------------------------------ */
@@ -857,17 +845,6 @@ html.plus-theme-transition *::after {
   letter-spacing: 0.01em;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.sidebar-brand-badge {
-  flex: none;
-  padding: 1px 6px;
-  border: 1px solid var(--accent-border);
-  border-radius: var(--plus-r-ctl, 4px);
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-size: var(--plus-fs-1, 12px);
-  font-weight: 500;
-  line-height: 16px;
 }
 .sidebar-footer {
   display: flex;

@@ -29,6 +29,7 @@
     "allow-app-ready",
     "allow-window-painted",
     "allow-set-ui-theme",
+    "allow-set-hardware-acceleration",
     "allow-clear-app-cache",
     "allow-get-desktop-api-token"
   ]

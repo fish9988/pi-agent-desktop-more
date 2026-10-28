@@ -236,9 +236,16 @@ export function setCustomCssEnabled(enabled: boolean): void {
   if (typeof document === "undefined") return;
   const link = document.querySelector<HTMLLinkElement>("link[data-custom-css]");
   if (!link) return;
-  link.dataset.plusOff = enabled ? "0" : "1";
-  link.disabled = !enabled;
-  if (link.sheet) link.sheet.disabled = !enabled;
+  const nextOff = enabled ? "0" : "1";
+  if (link.dataset.plusOff !== nextOff) {
+    link.dataset.plusOff = nextOff;
+  }
+  if (link.disabled !== !enabled) {
+    link.disabled = !enabled;
+  }
+  if (link.sheet && link.sheet.disabled !== !enabled) {
+    link.sheet.disabled = !enabled;
+  }
   if (!link.dataset.plusGuard) {
     link.dataset.plusGuard = "1";
     link.addEventListener("load", () => {
@@ -255,21 +262,35 @@ export function applyPlusTheme(settings: PlusThemeSettings, userBase?: ThemeBase
   if (typeof document === "undefined") return;
   const root = document.documentElement;
   const builtin = findBuiltinTheme(settings.theme);
-  root.dataset.plusTheme = settings.theme;
+  if (root.dataset.plusTheme !== settings.theme) {
+    root.dataset.plusTheme = settings.theme;
+  }
   const cached = readUserThemeCache();
   const cachedBase = cached && settings.theme === `${USER_THEME_PREFIX}${cached.id}` ? cached.base : undefined;
-  root.dataset.plusStyle = builtin?.base ?? userBase ?? cachedBase ?? "clean";
-  for (const name of ACCENT_PROPERTY_NAMES) root.style.removeProperty(name);
-  for (const [name, value] of Object.entries(accentProperties(settings.accent))) root.style.setProperty(name, value);
+  const nextStyle = builtin?.base ?? userBase ?? cachedBase ?? "clean";
+  if (root.dataset.plusStyle !== nextStyle) {
+    root.dataset.plusStyle = nextStyle;
+  }
+  const nextAccentProps = accentProperties(settings.accent);
+  for (const name of ACCENT_PROPERTY_NAMES) {
+    const target = nextAccentProps[name];
+    if (target) {
+      if (root.style.getPropertyValue(name) !== target) root.style.setProperty(name, target);
+    } else if (root.style.getPropertyValue(name)) {
+      root.style.removeProperty(name);
+    }
+  }
   const roles: Array<[FontRole, string]> = [["ui", settings.uiFont], ["chat", settings.chatFont], ["chatBold", settings.chatBoldFont], ["code", settings.codeFont]];
   for (const [role, value] of roles) {
     const stack = role === "chatBold" ? chatBoldStack(settings.chatBoldFont, settings.chatFont) : fontStack(value, role);
+    const propName = `--plus-font-${role}`;
+    const dataKey = `plus${role[0].toUpperCase()}${role.slice(1)}Font`;
     if (stack) {
-      root.style.setProperty(`--plus-font-${role}`, stack);
-      root.dataset[`plus${role[0].toUpperCase()}${role.slice(1)}Font`] = "";
+      if (root.style.getPropertyValue(propName) !== stack) root.style.setProperty(propName, stack);
+      if (root.dataset[dataKey] !== "") root.dataset[dataKey] = "";
     } else {
-      root.style.removeProperty(`--plus-font-${role}`);
-      delete root.dataset[`plus${role[0].toUpperCase()}${role.slice(1)}Font`];
+      if (root.style.getPropertyValue(propName)) root.style.removeProperty(propName);
+      if (dataKey in root.dataset) delete root.dataset[dataKey];
     }
   }
   if (!isUserTheme(settings.theme)) setUserThemeCss(null);

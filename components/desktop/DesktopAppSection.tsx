@@ -151,14 +151,14 @@ export function DesktopAppSection() {
         </div>
         <div className="settings-option">
           <span className="settings-option-text">
-            <span className="settings-option-title">GPU 硬件合成加速与极速目录预加载</span>
+            <span className="settings-option-title">硬件加速</span>
             <span className="settings-option-hint">
-              开启 GPU 复合层渲染加速（提升滚动与面板缩放帧率），并在鼠标悬停右侧文件树目录时自动预加载内容以实现秒开
+              启用 WebView2 GPU 硬件光栅化与零拷贝合成加速，关闭则切换为软件渲染（修改后下次启动应用生效）
             </span>
           </span>
           <ConfigSwitch
             checked={gpuEnabled}
-            label="GPU 硬件合成加速与极速目录预加载"
+            label="硬件加速"
             onChange={(next) => {
               setGpuEnabled(next);
               setPrefBool(APP_PREF_KEYS.gpuAcceleration, next);

@@ -141,6 +141,17 @@ pub fn build_window(app: &tauri::AppHandle, app_url: Url) -> tauri::Result<Webvi
         builder = builder.decorations(false);
     }
 
+    #[cfg(target_os = "windows")]
+    {
+        let hw_accel = crate::native_prefs::read_hardware_acceleration(app);
+        let browser_args = if hw_accel {
+            "--enable-gpu-rasterization --enable-zero-copy --ignore-gpu-blocklist"
+        } else {
+            "--disable-gpu --disable-gpu-compositing"
+        };
+        builder = builder.additional_browser_args(browser_args);
+    }
+
     let window = builder.build()?;
     desktop_log(
         app,

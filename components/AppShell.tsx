@@ -43,7 +43,7 @@ import { useNativeContextMenu } from "@/hooks/useNativeContextMenu";
 import { DomContextMenuHost } from "./DomContextMenuHost";
 import { getFileName } from "@/lib/file-paths";
 import { buildAtMentionText, buildFileAtMentionsText, buildFileLineMentionText } from "@/lib/file-fuzzy";
-import { APP_VERSION, BRAND_BADGE, BRAND_DISPLAY_NAME, PRODUCT_NAME } from "@/lib/branding";
+import { APP_VERSION, BRAND_DISPLAY_NAME, PRODUCT_NAME } from "@/lib/branding";
 import { isImeComposing } from "@/lib/ime";
 import {
   resolveInitialNavigation,
@@ -1829,7 +1829,6 @@ export function AppShell() {
           </svg>
         </span>
         <span className="sidebar-brand-name">{BRAND_DISPLAY_NAME}</span>
-        <span className="sidebar-brand-badge">{BRAND_BADGE}</span>
       </span>
       <button
         className="sidebar-chrome-button"

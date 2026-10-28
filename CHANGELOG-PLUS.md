@@ -3,6 +3,27 @@
 Pi Agent Plus 是 [abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop) 的个人二次开发版（仅 Windows），
 与官方版可同时安装、互不覆盖。版本规则见 [VERSIONING-PLUS.md](./VERSIONING-PLUS.md)。
 
+## [1.13.1] - 2026-10-27
+
+基于 Pi Agent 0.7.5（底层 Pi SDK 1.4.0）。彻底解决切换主题卡顿 10–20 秒与长对话渲染卡顿问题（实测 1000+ 消息会话切换主题仅需 76~200ms）；打通 Tauri WebView2 底层「硬件加速」命令行开关；移除左上角多余的「纸枢」小徽章并修复侧栏原生滚动条箭头问题。
+
+### 彻底解决切换主题 10–20 秒卡顿与长对话渲染卡顿
+- **移除全局通配符过渡与通配滚动条规则**（`app/plus.css`、`app/plus-theme.css`、`components/PlusAppearanceRuntime.tsx`）：
+  - 移除切换主题时挂在 `<html>` 上的 `html.plus-theme-transition *, *::before, *::after { transition: ... !important }`（该规则在千条消息的长对话中会同时触发 10 万+ 个 CSS 属性动画与 `color-mix()` 逐帧重算，导致主线程卡死 10–20 秒）；
+  - 移除 `html[data-plus-style="clean"] * { scrollbar-color: ... }` 全局通配符规则，恢复精细的 `::-webkit-scrollbar` 胶囊滚动条，同时消除了切换其他主题时左侧栏出现 Windows 原生带上下三角箭头粗滚动条的问题。
+- **长对话虚拟化延迟构建与 CSS 视口隔离**（`components/ChatWindow.tsx`、`app/plus-theme.css`、`lib/plus-theme.ts`）：
+  - `ChatWindow` 对滑出当前可见窗口（`startIndex` 之前）的历史回合改用惰性 Thunk 延迟求值，避免每次重渲染时对整场千条历史消息重复执行 `summarizeWorkActivities`、`getTurnWrittenFiles` 与 VDOM 构建，CPU 开销降低 90%；
+  - 打开全屏设置页时自动对背后的主工作区启用 `content-visibility: hidden`，对长对话中的代码块与已折叠工具组启用 `content-visibility: auto`，并将默认主题的 `backdrop-filter` 设为 `none`（仅在自定义开启毛玻璃时启用），实测 1,012 条消息会话下切换主题耗时降至 **76ms ~ 200ms**。
+- **主题画廊 0ms 本地即时编译应用**（`components/PlusAppearanceSettings.tsx`）：点击画廊主题时直接在前端内存调用 `compileUserThemeCss` 即刻生效，不再等待后端接口往返。
+
+### 真正打通 WebView2 底层「硬件加速」开关
+- **选项更名为「硬件加速」并接入 Tauri Rust 启动参数**（`src-tauri/src/native_prefs.rs`、`src-tauri/src/shell/window.rs`、`components/desktop/DesktopAppSection.tsx`）：
+  - 核实原前端 CSS 层面的 GPU 开关在移除 `transform` 后已无实际作用；现将其正式重命名为 **「硬件加速」**，通过 Tauri IPC `set_hardware_acceleration` 持久化至 `ui-prefs.json`；
+  - Windows WebView2 创建窗口时读取该配置：开启时传入 `--enable-gpu-rasterization --enable-zero-copy --ignore-gpu-blocklist` 强制启用 GPU 光栅化与零拷贝合成；关闭时传入 `--disable-gpu --disable-gpu-compositing` 切换为软件渲染。
+
+### 移除左上角多余的「纸枢」徽章
+- 移除左上角 `Pi Atelier` 旁固定显示「纸枢」的 `.sidebar-brand-badge` 小标签（`components/AppShell.tsx`、`app/plus.css`），切换任何主题都保持干净统一。
+
 ## [1.13.0] - 2026-10-27
 
 基于 Pi Agent 0.7.5（底层 Pi SDK 1.4.0）。新增对标 Claude 的**长文本粘贴自动转为文件附件（`.md` / `.txt`）**功能，并在「设置 › 常规 › 对话」中提供可配置的行数阈值与一键自定义。

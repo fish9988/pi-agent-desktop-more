@@ -57,32 +57,6 @@ export function PlusAppearanceRuntime() {
     applyGpuAcceleration();
   }, [settings]);
 
-  // Fade colours when the theme, accent or light/dark mode changes (not on
-  // the first paint). The class goes on in the same task as the change, so
-  // the transition applies to it.
-  useEffect(() => {
-    const root = document.documentElement;
-    let timer: number | null = null;
-    let last = `${root.classList.contains("dark")}|${root.dataset.plusTheme}|${root.style.getPropertyValue("--accent")}`;
-    const observer = new MutationObserver(() => {
-      const next = `${root.classList.contains("dark")}|${root.dataset.plusTheme}|${root.style.getPropertyValue("--accent")}`;
-      if (next === last) return;
-      last = next;
-      root.classList.add("plus-theme-transition");
-      if (timer !== null) window.clearTimeout(timer);
-      timer = window.setTimeout(() => {
-        timer = null;
-        root.classList.remove("plus-theme-transition");
-      }, 320);
-    });
-    observer.observe(root, { attributes: true, attributeFilter: ["class", "data-plus-theme", "style"] });
-    return () => {
-      observer.disconnect();
-      if (timer !== null) window.clearTimeout(timer);
-      root.classList.remove("plus-theme-transition");
-    };
-  }, []);
-
   // Load the imported theme whenever it becomes active.
   useEffect(() => {
     if (!isUserTheme(settings.theme)) {

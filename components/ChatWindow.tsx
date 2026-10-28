@@ -1434,12 +1434,13 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
                 );
               };
 
-              const rendered: ReactNode[] = [];
+              const rendered: Array<ReactNode | (() => ReactNode)> = [];
               for (let idx = 0; idx < messages.length;) {
                 const msg = messages[idx];
                 const hasAnchor = isMessageGroupAnchor(msg);
                 if (!hasAnchor && idx !== 0) {
-                  rendered.push(renderMessage(idx));
+                  const capturedIdx = idx;
+                  rendered.push(() => renderMessage(capturedIdx));
                   idx += 1;
                   continue;
                 }
@@ -1535,7 +1536,8 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
 
                 if (finalAssistantIdx === -1) {
                   for (let renderIdx = groupStartIdx; renderIdx < endIdx; renderIdx++) {
-                    rendered.push(renderMessage(renderIdx));
+                    const capturedIdx = renderIdx;
+                    rendered.push(() => renderMessage(capturedIdx));
                   }
                   idx = endIdx;
                   continue;
@@ -1544,20 +1546,23 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
                 const isLiveTail = (sessionBusy || isStreaming) && endIdx === messages.length && userIdx === lastAnchorIdx;
                 if (isLiveTail) {
                   for (let renderIdx = groupStartIdx; renderIdx < endIdx; renderIdx++) {
-                    rendered.push(renderMessage(renderIdx));
+                    const capturedIdx = renderIdx;
+                    rendered.push(() => renderMessage(capturedIdx));
                   }
                   idx = endIdx;
                   continue;
                 }
 
-                if (hasAnchor) rendered.push(renderMessage(userIdx));
+                if (hasAnchor) {
+                  const capturedUserIdx = userIdx;
+                  rendered.push(() => renderMessage(capturedUserIdx));
+                }
 
                 const finalAssistant = messages[finalAssistantIdx] as AssistantMessage;
                 const { answerMessage: finalAnswerMessage, processMessage: finalProcessMessage } = getFinalSplit(finalAssistant);
 
-                const processViews: ReactNode[] = [];
-                const processTimeline: WorkTimelineItem[] = [];
                 const processUsesTimeline = workPolicy.foldCompletedTurns && workPolicy.compactSteps;
+                let processStepCount = 0;
                 let processToolCount = 0;
                 let processRefIdx: number | undefined;
                 let revealProcess = false;
@@ -1565,96 +1570,117 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
                 for (let processIdx = userIdx + 1; processIdx <= finalAssistantIdx; processIdx++) {
                   const processMessage = messages[processIdx];
                   if (processMessage.role === "custom") {
+                    processStepCount += 1;
                     revealProcess ||= Boolean(pendingSearchScroll && pendingSearchScroll.entryId === entryIds[processIdx]);
-                    const node = renderMessage(processIdx, { attachRef: false, keyPrefix: "process" });
-                    processViews.push(node);
-                    processTimeline.push({ type: "node", key: `process-node-${messageKeys[processIdx] ?? processIdx}`, node });
                     continue;
                   }
                   if (processMessage.role !== "assistant") continue;
                   const message = processIdx === finalAssistantIdx ? finalProcessMessage : processMessage;
                   const blocks = getDisplayableAssistantBlocks(message);
                   if (blocks.length === 0) continue;
+                  processStepCount += 1;
                   processRefIdx ??= visibleRefIndexByMessage.get(processIdx);
                   processToolCount += countToolCallBlocks(blocks);
                   revealProcess ||= Boolean(pendingSearchScroll && entryIds[processIdx] === pendingSearchScroll.entryId && (!searchBlock || blocks.includes(searchBlock)));
-                  if (processUsesTimeline) {
-                    processViews.push(null);
-                    processTimeline.push({ type: "step", step: {
-                      key: `process-${messageKeys[processIdx] ?? processIdx}`,
-                      entryId: entryIds[processIdx],
-                      message: message as AssistantMessage,
-                      prevTimestamp: messageTime(messages[processIdx - 1]) ?? undefined,
-                      searchBlock: entryIds[processIdx] === pendingSearchScroll?.entryId ? searchBlock : undefined,
-                    } });
-                    continue;
-                  }
-                  processViews.push(renderMessage(processIdx, {
-                    attachRef: false,
-                    keyPrefix: "process",
-                    messageOverride: message,
-                    showTimestamp: false,
-                    compactStep: workPolicy.foldCompletedTurns && workPolicy.compactSteps,
-                  }));
                 }
 
-                if (processViews.length > 0) {
-                  rendered.push(
-                    <div
-                      key={`process-group-${messageKeys[groupStartIdx] ?? groupStartIdx}`}
-                      ref={processRefIdx === undefined ? undefined : (el) => { messageRefs.current[processRefIdx] = el; }}
-                    >
-                      {/* Re-key on answer availability: useState reads defaultExpanded only
-                          on mount, so a turn first rendered without an answer (expanded)
-                          would otherwise stay open once its answer shows up, e.g. when
-                          switching between an answered and an unanswered leaf of the same
-                          turn. Manual toggles survive every other re-render. */}
-                      {workPolicy.foldCompletedTurns ? (
-                        <FinishedWorkGroup
-                          key={finalAnswerMessage ? "answered" : "unanswered"}
-                          messageCount={processViews.length}
-                          toolCallCount={processToolCount}
-                          durationMs={(() => {
-                            const start = hasAnchor ? messageTime(messages[userIdx]) : null;
-                            const end = messageTime(finalAssistant);
-                            return start != null && end != null ? end - start : null;
-                          })()}
-                          activities={summarizeWorkActivities(messages.slice(userIdx + 1, finalAssistantIdx + 1))}
-                          answered={Boolean(finalAnswerMessage)}
-                          defaultExpanded={!finalAnswerMessage || (workCollapseTiming === "next-input" && endIdx === messages.length)}
-                          reveal={revealProcess || Boolean(findReveal && messages.slice(userIdx + 1, finalAssistantIdx + 1).some((_, offset) => entryIds[userIdx + 1 + offset] === findReveal))}
-                        >
-                          {processUsesTimeline ? (
-                            <WorkTimeline
-                              items={processTimeline}
-                              live={false}
-                              toolResults={toolResultsMap}
-                              cwd={messageCwd}
-                              sessionId={session?.id ?? sessionIdRef.current ?? undefined}
-                              onOpenFile={openFile}
-                              onOpenSession={onOpenSession}
-                            />
-                          ) : processViews}
-                        </FinishedWorkGroup>
-                      ) : processViews}
-                    </div>,
-                  );
+                if (processStepCount > 0) {
+                  const capturedGroupStartIdx = groupStartIdx;
+                  const capturedUserIdx = userIdx;
+                  const capturedFinalAssistantIdx = finalAssistantIdx;
+                  const capturedEndIdx = endIdx;
+                  const capturedRefIdx = processRefIdx;
+                  const capturedToolCount = processToolCount;
+                  const capturedStepCount = processStepCount;
+                  const capturedReveal = revealProcess;
+                  rendered.push(() => {
+                    const processViews: ReactNode[] = [];
+                    const processTimeline: WorkTimelineItem[] = [];
+                    for (let processIdx = capturedUserIdx + 1; processIdx <= capturedFinalAssistantIdx; processIdx++) {
+                      const processMessage = messages[processIdx];
+                      if (processMessage.role === "custom") {
+                        const node = renderMessage(processIdx, { attachRef: false, keyPrefix: "process" });
+                        processViews.push(node);
+                        processTimeline.push({ type: "node", key: `process-node-${messageKeys[processIdx] ?? processIdx}`, node });
+                        continue;
+                      }
+                      if (processMessage.role !== "assistant") continue;
+                      const message = processIdx === capturedFinalAssistantIdx ? finalProcessMessage : processMessage;
+                      const blocks = getDisplayableAssistantBlocks(message);
+                      if (blocks.length === 0) continue;
+                      if (processUsesTimeline) {
+                        processViews.push(null);
+                        processTimeline.push({ type: "step", step: {
+                          key: `process-${messageKeys[processIdx] ?? processIdx}`,
+                          entryId: entryIds[processIdx],
+                          message: message as AssistantMessage,
+                          prevTimestamp: messageTime(messages[processIdx - 1]) ?? undefined,
+                          searchBlock: entryIds[processIdx] === pendingSearchScroll?.entryId ? searchBlock : undefined,
+                        } });
+                        continue;
+                      }
+                      processViews.push(renderMessage(processIdx, {
+                        attachRef: false,
+                        keyPrefix: "process",
+                        messageOverride: message,
+                        showTimestamp: false,
+                        compactStep: workPolicy.foldCompletedTurns && workPolicy.compactSteps,
+                      }));
+                    }
+                    return (
+                      <div
+                        key={`process-group-${messageKeys[capturedGroupStartIdx] ?? capturedGroupStartIdx}`}
+                        ref={capturedRefIdx === undefined ? undefined : (el) => { messageRefs.current[capturedRefIdx] = el; }}
+                      >
+                        {workPolicy.foldCompletedTurns ? (
+                          <FinishedWorkGroup
+                            key={finalAnswerMessage ? "answered" : "unanswered"}
+                            messageCount={capturedStepCount}
+                            toolCallCount={capturedToolCount}
+                            durationMs={(() => {
+                              const start = hasAnchor ? messageTime(messages[capturedUserIdx]) : null;
+                              const end = messageTime(finalAssistant);
+                              return start != null && end != null ? end - start : null;
+                            })()}
+                            activities={summarizeWorkActivities(messages.slice(capturedUserIdx + 1, capturedFinalAssistantIdx + 1))}
+                            answered={Boolean(finalAnswerMessage)}
+                            defaultExpanded={!finalAnswerMessage || (workCollapseTiming === "next-input" && capturedEndIdx === messages.length)}
+                            reveal={capturedReveal || Boolean(findReveal && messages.slice(capturedUserIdx + 1, capturedFinalAssistantIdx + 1).some((_, offset) => entryIds[capturedUserIdx + 1 + offset] === findReveal))}
+                          >
+                            {processUsesTimeline ? (
+                              <WorkTimeline
+                                items={processTimeline}
+                                live={false}
+                                toolResults={toolResultsMap}
+                                cwd={messageCwd}
+                                sessionId={session?.id ?? sessionIdRef.current ?? undefined}
+                                onOpenFile={openFile}
+                                onOpenSession={onOpenSession}
+                              />
+                            ) : processViews}
+                          </FinishedWorkGroup>
+                        ) : processViews}
+                      </div>
+                    );
+                  });
                 }
 
                 if (finalAnswerMessage) {
-                  // Each tool call is stored as its own assistant entry, so the
-                  // final answer alone carries no record of what the turn wrote.
-                  // Gather the turn's assistant blocks and derive the file list
-                  // from the write/edit calls among them.
-                  const writtenFiles = getTurnWrittenFiles(finalAssistant, messages.slice(userIdx + 1, finalAssistantIdx + 1), toolResultsMap, messageCwd);
-                  rendered.push(renderMessage(finalAssistantIdx, {
-                    messageOverride: finalAnswerMessage,
-                    writtenFiles,
-                    recoverTruncation: endIdx === messages.length && !isStreaming && !hasAssistantAnswer(finalAnswerMessage),
-                  }));
+                  const capturedUserIdx = userIdx;
+                  const capturedFinalAssistantIdx = finalAssistantIdx;
+                  const capturedEndIdx = endIdx;
+                  rendered.push(() => {
+                    const writtenFiles = getTurnWrittenFiles(finalAssistant, messages.slice(capturedUserIdx + 1, capturedFinalAssistantIdx + 1), toolResultsMap, messageCwd);
+                    return renderMessage(capturedFinalAssistantIdx, {
+                      messageOverride: finalAnswerMessage,
+                      writtenFiles,
+                      recoverTruncation: capturedEndIdx === messages.length && !isStreaming && !hasAssistantAnswer(finalAnswerMessage),
+                    });
+                  });
                 }
                 for (let renderIdx = finalAssistantIdx + 1; renderIdx < endIdx; renderIdx++) {
-                  rendered.push(renderMessage(renderIdx));
+                  const capturedIdx = renderIdx;
+                  rendered.push(() => renderMessage(capturedIdx));
                 }
                 idx = endIdx;
               }
@@ -1667,7 +1693,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
                        {t("chat.loadEarlier")}
                     </div>
                   )}
-                  {rendered.slice(startIndex)}
+                  {rendered.slice(startIndex).map((item) => (typeof item === "function" ? item() : item))}
                 </>
               );
             })()}

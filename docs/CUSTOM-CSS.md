@@ -89,7 +89,7 @@ html.dark[data-plus-theme]:root {
 
 如果你想针对某个具体模块精细调整布局或样式，可以直接使用以下选择器：
 
-- **左上角品牌区**：`.sidebar-brand`、`.sidebar-brand-mark`（图标章）、`.sidebar-brand-name`（名称）、`.sidebar-brand-badge`（纸枢徽章）
+- **左上角品牌区**：`.sidebar-brand`、`.sidebar-brand-mark`（图标章）、`.sidebar-brand-name`（名称）
 - **左侧边栏项目列表**：
   - 项目分组容器：`.sidebar-project-tree-group`（激活态 `.is-active`，折叠态 `.is-collapsed`）
   - 文件夹图标徽标：`.sidebar-project-tree-folder`

@@ -72,3 +72,8 @@ commands.allow = ["show_popup_menu"]
 identifier = "allow-clear-app-cache"
 description = "Allows the UI to clear the webview's disk caches and learn how many bytes were freed."
 commands.allow = ["clear_app_cache"]
+
+[[permission]]
+identifier = "allow-set-hardware-acceleration"
+description = "Allows the UI to persist hardware acceleration preference for WebView2 on the next launch."
+commands.allow = ["set_hardware_acceleration"]

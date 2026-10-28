@@ -10,7 +10,7 @@ export function desktopNotifyAlwaysEnabled(): boolean {
   return getPrefBool(APP_PREF_KEYS.notifyAlways, true);
 }
 
-/** Whether GPU compositor layer promotion and directory hover-prefetch are enabled (default: true). */
+/** Whether hardware acceleration is enabled (default: true). */
 export function gpuAccelerationEnabled(): boolean {
   return getPrefBool(APP_PREF_KEYS.gpuAcceleration, true);
 }
@@ -21,6 +21,11 @@ export function applyGpuAcceleration(enabled = gpuAccelerationEnabled()): void {
     document.documentElement.dataset.plusGpu = "1";
   } else {
     delete document.documentElement.dataset.plusGpu;
+  }
+  if (isTauriDesktop()) {
+    void import("@tauri-apps/api/core")
+      .then(({ invoke }) => invoke("set_hardware_acceleration", { enabled }))
+      .catch(() => {});
   }
 }
 

@@ -23,7 +23,8 @@ mod shell;
 
 use logging::{desktop_log, install_panic_hook, mark_process_start, since_process_start_ms};
 use native_prefs::{
-    clear_app_cache, reconcile_webview_cache_for_version, set_ui_theme, write_last_version,
+    clear_app_cache, reconcile_webview_cache_for_version, set_hardware_acceleration, set_ui_theme,
+    write_last_version,
 };
 #[cfg(feature = "custom-protocol")]
 use native_prefs::{read_last_server_port, write_last_server_port};
@@ -1234,6 +1235,7 @@ pub fn run() {
             app_ready,
             window_painted,
             set_ui_theme,
+            set_hardware_acceleration,
             clear_app_cache
         ])
         .setup(move |app| {

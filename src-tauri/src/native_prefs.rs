@@ -26,6 +26,21 @@ pub fn set_ui_theme(app: tauri::AppHandle, theme: String) -> Result<(), String> 
     Ok(())
 }
 
+/// Persist WebView2 hardware acceleration preference for the next cold start.
+#[tauri::command]
+pub fn set_hardware_acceleration(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    let mut prefs = read_ui_prefs(&app);
+    prefs["hardwareAcceleration"] = serde_json::Value::Bool(enabled);
+    write_ui_prefs(&app, &prefs)
+}
+
+pub fn read_hardware_acceleration(app: &AppHandle) -> bool {
+    read_ui_prefs(app)
+        .get("hardwareAcceleration")
+        .and_then(|value| value.as_bool())
+        .unwrap_or(true)
+}
+
 /// Total size in bytes of every regular file under `path` (0 when missing).
 fn dir_size(path: &Path) -> u64 {
     let Ok(entries) = fs::read_dir(path) else {
