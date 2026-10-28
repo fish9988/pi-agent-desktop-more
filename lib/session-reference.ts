@@ -1,9 +1,12 @@
 import type { AgentMessage, SessionInfo } from "./types";
 
 // The visible token contains the session name, not its id. Quoted names keep
-// spaces intact, e.g. #"Design review".
+// spaces intact, e.g. #"Design review". Full UUIDs or 8+ hex prefixes (e.g.
+// #01a1795e-45ab-752a-84ca-886edf7f60ca or #01a1795e) also resolve directly by id.
 export const SESSION_REFERENCE_PATTERN = /#(?:"([^"\n]*)"|([^\s]+))/g;
 export const MAX_SESSION_REFERENCE_CHARS = 120_000;
+const SESSION_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const SESSION_HEX_PREFIX_PATTERN = /^[0-9a-f]{8,36}$/i;
 
 function contentText(content: unknown): string {
   if (typeof content === "string") return content;
@@ -93,13 +96,29 @@ export async function resolveSessionReferences(
   }
 
   const fallbackTargets = new Map<string, string>();
-  const missingLabels = labels.filter((label) => !selectedTargets.has(label) && quotedLabels.has(label));
+  for (const label of labels) {
+    if (SESSION_UUID_PATTERN.test(label)) {
+      fallbackTargets.set(label, label);
+    }
+  }
+  const missingLabels = labels.filter((label) => (
+    !selectedTargets.has(label)
+    && !fallbackTargets.has(label)
+    && (quotedLabels.has(label) || SESSION_HEX_PREFIX_PATTERN.test(label))
+  ));
   if (missingLabels.length > 0) {
     try {
       const response = await fetchImpl("/api/sessions");
       if (response.ok) {
         const data = await response.json() as { sessions?: SessionInfo[] };
         for (const session of data.sessions ?? []) {
+          for (const missing of missingLabels) {
+            if (fallbackTargets.has(missing)) continue;
+            if (session.id === missing || (SESSION_HEX_PREFIX_PATTERN.test(missing) && session.id.toLowerCase().startsWith(missing.toLowerCase()))) {
+              fallbackTargets.set(missing, session.id);
+              continue;
+            }
+          }
           const name = session.name?.trim();
           if (name && missingLabels.includes(name) && !fallbackTargets.has(name)) fallbackTargets.set(name, session.id);
           if (!name && missingLabels.includes(session.firstMessage.trim()) && !fallbackTargets.has(session.firstMessage.trim())) {
@@ -129,9 +148,8 @@ export async function resolveSessionReferences(
   return message.replace(SESSION_REFERENCE_PATTERN, (token, quotedLabel: string | undefined, plainLabel: string | undefined) => {
     const label = quotedLabel ?? plainLabel;
     if (!label) return token;
-    // Bare tokens expand only when the user confirmed the target via the
-    // mention panel; otherwise they stay exactly as typed.
-    if (!quotedLabel && !selectedTargets.has(label)) return token;
+    // Bare tokens expand when confirmed via the mention panel, or when they are an explicit session UUID / 8+ hex prefix.
+    if (!quotedLabel && !selectedTargets.has(label) && !fallbackTargets.has(label)) return token;
     const id = selectedTargets.get(label) ?? fallbackTargets.get(label);
     return id ? (byId.get(id) || token) : token;
   });

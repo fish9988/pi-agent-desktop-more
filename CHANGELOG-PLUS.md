@@ -3,6 +3,18 @@
 Pi Agent Plus 是 [abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop) 的个人二次开发版（仅 Windows），
 与官方版可同时安装、互不覆盖。版本规则见 [VERSIONING-PLUS.md](./VERSIONING-PLUS.md)。
 
+## [1.15.1] - 2026-10-28
+
+基于 Pi Agent 0.7.5（底层 Pi SDK 1.4.0）。在侧边栏会话 `···` 菜单中新增 **「复制会话 ID」**、**「复制跨对话引用 (`#ID`)」** 以及底部可点击的 `ID` 信息栏，并支持在任意其他对话中直接粘贴 `#<会话ID>`（或 8 位以上前缀）自动注入该会话的完整对话记录。
+
+### 侧边栏会话菜单新增 Session ID 复制与跨对话读取
+- **侧栏会话 `···` 菜单增强**（`components/SessionSidebar.tsx`）：
+  - 新增 **「复制会话 ID」**：一键复制当前会话完整 UUID（如 `01a1795e-45ab-752a-84ca-886edf7f60ca`）；
+  - 新增 **「复制跨对话引用 (`#ID`)」**：一键复制 `#01a1795e-...` 引用标记；
+  - 菜单底部信息区新增显示 **`ID: 01a1795e…f60ca`**（点击同样可一键复制完整 ID）。
+- **支持通过 `#<会话ID>` 跨对话直接读取上下文**（`lib/session-reference.ts`、`lib/session-reference.test.mjs`）：
+  - 在任意其他对话（包括无文件工具的纯「对话」模式或不同项目的会话）中输入或粘贴 `#<完整UUID>` 或 `#<8位以上ID前缀>`（如 `参考 #01a1795e 里的方案继续写`），发送时会自动拉取目标会话的完整记录并以 `<referenced-session>` 块注入给大模型，无需手动找 `.jsonl` 文件路径。
+
 ## [1.15.0] - 2026-10-28
 
 基于 Pi Agent 0.7.5（底层 Pi SDK 1.4.0）。完整移植 `abcwyc/pi-agent-desktop` 与 `agegr/pi-web` 近期 8 项核心改进：内置终端默认 Shell 选择（Windows 自动优先 PowerShell 7）、上下文压缩期间消息自动入队与 `/compact` 防锁死、子代理模型/思考深度展示、聊天底部子代理实时运行状态与整组任务收官通知、用户消息「原文 / 渲染」切换、AI 回复生成速度 `tok/s` 统计，以及长队列防遮挡保护。

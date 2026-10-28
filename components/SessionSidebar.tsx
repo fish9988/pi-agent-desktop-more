@@ -43,6 +43,7 @@ import { ProjectViewMenu, type ProjectViewMode } from "./ProjectViewMenu";
 import { ChatsSectionMenu } from "./ChatsSectionMenu";
 import { orderChatFamilies, toggleId } from "@/lib/chat-groups";
 import { ScheduledSidebarRow } from "./scheduled/ScheduledSidebarRow";
+import { appNotify } from "@/lib/notification-store";
 import { isScheduledRunSession } from "@/hooks/useScheduledTasks";
 import { prefetchSessionData } from "@/lib/session-data-cache";
 import { isImeComposing } from "@/lib/ime";
@@ -2457,7 +2458,26 @@ function SessionItem({
   }, [session.id, session.transient, onDeleted, reportActionError, t]);
 
   // "…" menu: fixed-position portal so the sidebar's overflow/backdrop-filter can't clip it
-  const MENU_WIDTH = 190;
+  const MENU_WIDTH = 206;
+  const isZh = locale.startsWith("zh");
+  const copySessionId = useCallback(() => {
+    void navigator.clipboard?.writeText(session.id).then(() => {
+      appNotify.success({
+        message: isZh ? `已复制会话 ID：${session.id.slice(0, 8)}…` : `Copied Session ID: ${session.id.slice(0, 8)}…`,
+      });
+    }).catch(() => {});
+  }, [isZh, session.id]);
+  const copySessionRef = useCallback(() => {
+    const token = `#${session.id}`;
+    void navigator.clipboard?.writeText(token).then(() => {
+      appNotify.success({
+        message: isZh
+          ? `已复制跨对话引用 ${token.slice(0, 9)}…，粘贴到其他对话发送即可读取此会话内容`
+          : `Copied ${token.slice(0, 9)}… — paste into any chat to reference this session`,
+      });
+    }).catch(() => {});
+  }, [isZh, session.id]);
+
   // Desktop shell: the same actions as the DOM menu below, as a native popup.
   // `menuOpen` stays true while it is up so the trailing "…" button does not
   // swap back to the timestamp; `menuPos` stays null, so no DOM menu renders.
@@ -2466,6 +2486,8 @@ function SessionItem({
     setMenuOpen(true);
     const shown = await showNativeMenu([
       { label: t("sidebar.rename"), onSelect: startRename },
+      { label: isZh ? "复制会话 ID" : "Copy Session ID", onSelect: copySessionId },
+      { label: isZh ? "复制跨对话引用 (#ID)" : "Copy Session Reference (#ID)", onSelect: copySessionRef },
       ...(chatActions
         ? [{ label: t(chatActions.pinned ? "sidebar.unpinChat" : "sidebar.pinChat"), onSelect: chatActions.onTogglePin }]
         : []),
@@ -2478,6 +2500,10 @@ function SessionItem({
       { label: t("sidebar.delete"), onSelect: beginDeleteConfirmation },
       { kind: "separator" },
       {
+        label: `ID: ${session.id.slice(0, 8)}…${session.id.slice(-4)}`,
+        onSelect: copySessionId,
+      },
+      {
         label: `${formatRelativeTime(session.modified, locale)} · ${t("sidebar.messagesCount", { count: session.messageCount })}`,
         disabled: true,
       },
@@ -2488,7 +2514,7 @@ function SessionItem({
     ], at);
     setMenuOpen(false);
     return shown;
-  }, [beginDeleteConfirmation, chatActions, onContinueInProject, session, locale, startRename, t]);
+  }, [beginDeleteConfirmation, chatActions, copySessionId, copySessionRef, isZh, onContinueInProject, session, locale, startRename, t]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const handled = dispatchSessionRowContextMenu({
@@ -2829,6 +2855,44 @@ function SessionItem({
                 </svg>
                 {t("sidebar.rename")}
               </button>
+              <button
+                role="menuitem"
+                onClick={() => { setMenuOpen(false); copySessionId(); }}
+                title={session.id}
+                style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  width: "100%", height: 30, padding: "0 8px",
+                  background: "transparent", border: 0, borderRadius: 7,
+                  color: "var(--text)", cursor: "pointer",
+                  fontSize: 13, textAlign: "left",
+                }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+                {isZh ? "复制会话 ID" : "Copy Session ID"}
+              </button>
+              <button
+                role="menuitem"
+                onClick={() => { setMenuOpen(false); copySessionRef(); }}
+                title={isZh ? `复制 #${session.id}，粘贴到其他对话即可读取本对话记录` : `Copy #${session.id} to reference in another chat`}
+                style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  width: "100%", height: 30, padding: "0 8px",
+                  background: "transparent", border: 0, borderRadius: 7,
+                  color: "var(--text)", cursor: "pointer",
+                  fontSize: 13, textAlign: "left",
+                }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                  <line x1="4" y1="9" x2="20" y2="9" />
+                  <line x1="4" y1="15" x2="20" y2="15" />
+                  <line x1="10" y1="3" x2="8" y2="21" />
+                  <line x1="16" y1="3" x2="14" y2="21" />
+                </svg>
+                {isZh ? "复制跨对话引用 (#ID)" : "Copy Reference (#ID)"}
+              </button>
               {chatActions && (
                 <button
                   role="menuitem"
@@ -2911,6 +2975,13 @@ function SessionItem({
               </button>
               <div style={{ height: 1, margin: "4px 3px", background: "var(--border)" }} />
               <div style={{ padding: "3px 8px 5px", color: "var(--text-dim)", fontSize: 12, lineHeight: 1.6 }}>
+                <div
+                  title={isZh ? `完整 ID：${session.id}（点击复制）` : `Full ID: ${session.id} (click to copy)`}
+                  onClick={() => { setMenuOpen(false); copySessionId(); }}
+                  style={{ fontFamily: "var(--font-mono)", cursor: "pointer", color: "var(--text-muted)" }}
+                >
+                  ID: {session.id.slice(0, 8)}…{session.id.slice(-4)}
+                </div>
                 <div title={session.created}>
                   {formatRelativeTime(session.modified, locale)} · {t("sidebar.messagesCount", { count: session.messageCount })}
                 </div>
