@@ -43,7 +43,6 @@ import { ProjectViewMenu, type ProjectViewMode } from "./ProjectViewMenu";
 import { ChatsSectionMenu } from "./ChatsSectionMenu";
 import { orderChatFamilies, toggleId } from "@/lib/chat-groups";
 import { ScheduledSidebarRow } from "./scheduled/ScheduledSidebarRow";
-import { appNotify } from "@/lib/notification-store";
 import { isScheduledRunSession } from "@/hooks/useScheduledTasks";
 import { prefetchSessionData } from "@/lib/session-data-cache";
 import { isImeComposing } from "@/lib/ime";
