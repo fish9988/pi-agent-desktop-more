@@ -3,6 +3,30 @@
 Pi Agent Plus 是 [abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop) 的个人二次开发版（仅 Windows），
 与官方版可同时安装、互不覆盖。版本规则见 [VERSIONING-PLUS.md](./VERSIONING-PLUS.md)。
 
+## [1.15.0] - 2026-10-28
+
+基于 Pi Agent 0.7.5（底层 Pi SDK 1.4.0）。完整移植 `abcwyc/pi-agent-desktop` 与 `agegr/pi-web` 近期 8 项核心改进：内置终端默认 Shell 选择（Windows 自动优先 PowerShell 7）、上下文压缩期间消息自动入队与 `/compact` 防锁死、子代理模型/思考深度展示、聊天底部子代理实时运行状态与整组任务收官通知、用户消息「原文 / 渲染」切换、AI 回复生成速度 `tok/s` 统计，以及长队列防遮挡保护。
+
+### 上游精选 8 项功能与稳定性移植
+1. **流式 Markdown 增量块缓存优化**（`components/MarkdownBody.tsx`、`abcwyc` `108dd60f`）：在流式分块缓存（`splitMarkdownBlocks`）基础上跳过无 `:::artifact` 块的正则扫描，进一步降低流式渲染开销。
+2. **「设置 › 常规 › 内置终端」默认 Shell 选择 + Windows ConPTY 信号修复**（`lib/terminal-shells.ts`、`lib/terminal-settings.ts`、`lib/terminal-manager.ts`、`app/api/terminal/settings/route.ts`、`components/TerminalSettingsSection.tsx`、`abcwyc` PR #166）：
+   - Windows 自动按 `PowerShell 7 (pwsh)` → `Windows PowerShell` → `CMD` 优先级探测，并支持检测 `Git Bash`；可在「设置 › 常规」自由切换默认终端 Shell；
+   - 修复 Windows 关闭内置终端时向 ConPTY 传入不支持的 POSIX `SIGKILL` 信号的问题。
+3. **上下文压缩期间支持发消息排队 + 修复 `/compact` 锁死输入框**（`lib/rpc-manager.ts`、`hooks/useAgentSession.ts`、`pi-web` PR #1426）：
+   - 当会话正在执行手动或自动压缩时，新发送的提示词自动进入 `ComposerQueue` 排队并在 `compaction_end` 时自动唤醒按序投递，不再报错退回；
+   - `/compact` 命令改为异步后台执行，不再阻塞 `runBuiltinCommand` 导致输入框 `<fieldset>` 在整个压缩期间被禁用锁死。
+4. **聊天底部显示运行中子代理状态 + 整组子代理全部结束后再发完成通知**（`components/ChatWindow.tsx`、`components/AppShell.tsx`、`pi-web` PR #1418 & #1437）：
+   - 当后台有子代理正在运行时，聊天区底部实时展示 `有 N 个子代理正在运行（任务1、任务2…）`；
+   - 主会话阶段性暂停但后台子代理仍在运行时，不再提前误发完成提示音与系统通知，等整组子代理及主会话最终汇总全部完成后再统一通知。
+5. **顶栏子代理下拉面板显示「实际模型 · 思考深度」**（`lib/session-reader.ts`、`lib/types.ts`、`components/AgentSessionPanel.tsx`、`pi-web` PR #1440）：
+   - 在顶栏子代理列表第 2 行直接展示 `代理类型 · 实际模型 · 思考深度 · 相对时间`，悬停可查看完整 `provider/modelId`。
+6. **单条用户消息支持切换「原文 / 渲染」视图**（`components/MessageView.tsx`、`pi-web` PR #1420）：
+   - 用户消息底部新增「原文 / 渲染」切换按钮，一键查看未经 Markdown/HTML 过滤的原始文本（完整保留 `<TableOperator ... />` 等标签与模板表达式）。
+7. **AI 回复底栏用量新增平均输出速度（`tok/s`）**（`components/MessageView.tsx`、`pi-web` PR #1417）：
+   - 根据回合耗时与输出 Token 自动计算并展示平均生成速度（如 `52.4 tok/s`），鼠标悬停底栏即可查看完整输入/输出/缓存/花费/速度明细。
+8. **待发消息队列高度上限保护**（`app/plus-theme.css`、`pi-web` PR #1429）：
+   - 限制 `.composer-outbox` 最大高度为 `min(180px, 25dvh)` 并支持内部滚动，防止排队消息过多时将输入框挤出屏幕。
+
 ## [1.14.0] - 2026-10-28
 
 基于 Pi Agent 0.7.5（底层 Pi SDK 1.4.0）。将内置「陶土 · Claude」主题全面升级为 **Cherry Studio V2 仿 Claude 主题**；在聊天输入框右上角新增悬停显隐的 **「展开长文编辑框 (`⤢`)」** 按钮；将左上角品牌图标替换为可自定义的 **个人画像（支持上传本地照片与 6 款精选插画头像）与用户昵称**。

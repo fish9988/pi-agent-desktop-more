@@ -61,6 +61,7 @@ interface Props {
   initialScrollPosition?: ChatScrollPosition | null;
   onScrollPositionChange?: (sessionId: string, position: ChatScrollPosition) => void;
   sessionRunning?: boolean;
+  runningSubagents?: SessionInfo[];
   newSessionCwd: string | null;
   newSessionDraftKey: string | null;
   onAgentEnd?: () => void;
@@ -227,12 +228,12 @@ export function getTurnWrittenFiles(finalAssistant: AssistantMessage, turnMessag
 // Plus: the finished/live work rows live in ./WorkGroups (FinishedWorkGroup,
 // LiveWorkGroup) and follow the work details level.
 
-export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTargetHandled, initialScrollPosition, onScrollPositionChange, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd, onAttentionNeeded, onSessionCreated, onSessionForked, modelsRefreshKey, workspaceUnavailable, onRecheckWorkspace, chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemToolsChange, onSystemInfoLoaderChange, onSessionStatsChange, onSessionStatsPanelOpen, onOpenSettings, onOpenModelsConfig, onContextUsageChange, onOpenFile, onOpenSession, onAskInNewChat, onSelectProject, projectOptions, onProjectChange, onProjectFilesImported, quoteSelectionEnabled = true, initialPrompt, onInitialPromptConsumed, soundEnabled = true, playDoneSound = () => {}, unlockAudio }: Props) {
-  const { t } = useI18n();
+export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTargetHandled, initialScrollPosition, onScrollPositionChange, sessionRunning, runningSubagents, newSessionCwd, newSessionDraftKey, onAgentEnd, onAttentionNeeded, onSessionCreated, onSessionForked, modelsRefreshKey, workspaceUnavailable, onRecheckWorkspace, chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemToolsChange, onSystemInfoLoaderChange, onSessionStatsChange, onSessionStatsPanelOpen, onOpenSettings, onOpenModelsConfig, onContextUsageChange, onOpenFile, onOpenSession, onAskInNewChat, onSelectProject, projectOptions, onProjectChange, onProjectFilesImported, quoteSelectionEnabled = true, initialPrompt, onInitialPromptConsumed, soundEnabled = true, playDoneSound = () => {}, unlockAudio }: Props) {
+  const { locale, t } = useI18n();
   const isMobile = useIsMobile();
   const chatOnly = workspaceKind === "chat" || session?.workspaceKind === "chat";
   const messageRefs = useRef<Record<number, HTMLDivElement | null>>({});
-  const completionNotificationsEnabled = session?.relation?.kind !== "subagent";
+  const completionNotificationsEnabled = session?.relation?.kind !== "subagent" && (runningSubagents?.length ?? 0) === 0;
 
   // Wrap onAgentEnd to play the completion sound. This is more reliable than
   // wrapping handleAgentEventRef because useAgentSession overwrites that ref
@@ -1704,6 +1705,16 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
             {agentRunning && !hasStreamingContent && (agentPhase || isCompacting) && !liveGroupRendered && (
               <div className="break-words py-2 text-[13px] text-text-muted">
                 <span className="animate-[pulse_1.5s_infinite]">{phaseLabel(agentPhase, t, isCompacting, { name: lastSlashCommand(messages), awaitingPanel: Boolean(extensionCustomUi) })}</span>
+              </div>
+            )}
+
+            {runningSubagents && runningSubagents.length > 0 && (
+              <div className="running-subagents-status break-words py-2 text-[13px] text-text-muted" role="status">
+                <span className="animate-[pulse_1.5s_infinite]">
+                  {locale.startsWith("zh")
+                    ? `有 ${runningSubagents.length} 个子代理正在运行（${runningSubagents.map((s) => (s.relation?.kind === "subagent" && s.relation.description) || s.name || s.firstMessage || "子任务").join("、")}）`
+                    : `${runningSubagents.length} subagent${runningSubagents.length === 1 ? "" : "s"} running (${runningSubagents.map((s) => (s.relation?.kind === "subagent" && s.relation.description) || s.name || s.firstMessage || "Subagent").join(", ")})`}
+                </span>
               </div>
             )}
 

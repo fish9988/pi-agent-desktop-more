@@ -354,9 +354,10 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
   onCancelEdit?: () => void;
   isEditing?: boolean;
 }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const [copied, setCopied] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [rawView, setRawView] = useState(false);
 
   // Session files can hold `\r\n` or lone `\r` line endings (#680). Chrome renders
   // a lone `\r` as a space even in the pre-wrap command-args and raw-text views.
@@ -501,7 +502,15 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
             <>
               {imageBlocksNode}
               {attachedFiles.length > 0 && <AttachedFileList files={attachedFiles} />}
-              {bodyText && <CollapsibleUserText text={bodyText} cwd={cwd} onOpenFile={onOpenFile} />}
+              {bodyText && (
+                rawView ? (
+                  <pre className="user-message-raw-view" style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word", fontFamily: "inherit", fontSize: "calc(14px + var(--chat-font-size-offset, 0px))", lineHeight: 1.6, color: "var(--text)" }}>
+                    {bodyText}
+                  </pre>
+                ) : (
+                  <CollapsibleUserText text={bodyText} cwd={cwd} onOpenFile={onOpenFile} />
+                )
+              )}
             </>
           )}
         </div>
@@ -514,7 +523,39 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
           display: "flex", alignItems: "center", justifyContent: "flex-end",
           gap: 6, marginTop: 3,
         }}>
-          <div className="message-copy-actions">
+          <div className="message-copy-actions" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            {Boolean(bodyText) && !commandText && (
+              <button
+                type="button"
+                onClick={() => setRawView((v) => !v)}
+                aria-pressed={rawView}
+                title={rawView ? (locale.startsWith("zh") ? "切换为 Markdown 渲染视图" : "Show rendered view") : (locale.startsWith("zh") ? "查看原始文本（保留 HTML 标签）" : "Show raw text")}
+                style={{
+                  display: "flex", alignItems: "center", gap: 4,
+                  padding: "3px 8px", height: 22,
+                  background: "none", border: "none",
+                  borderRadius: 5,
+                  color: rawView ? "var(--accent)" : "var(--text-dim)",
+                  cursor: "pointer",
+                  fontSize: 12, fontWeight: 400,
+                  whiteSpace: "nowrap",
+                  transition: "color 0.12s",
+                }}
+              >
+                {rawView ? (
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                ) : (
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <polyline points="16 18 22 12 16 6" />
+                    <polyline points="8 6 2 12 8 18" />
+                  </svg>
+                )}
+                {rawView ? (locale.startsWith("zh") ? "渲染" : "Rendered") : (locale.startsWith("zh") ? "原文" : "Raw")}
+              </button>
+            )}
             <button
               onClick={copyContent}
                title={t("i18n.copyMessage")}
@@ -939,13 +980,19 @@ function AssistantMessageView({
             {getModelDisplayName(message.provider, message.model, modelNames)}
           </span>
         )}
-        {message.usage && !isStreaming && (
-          // Plus: the cost alone by default; hovering the footer shows the full line.
-          <div className="message-meta message-usage" style={{ fontSize: 12, color: "var(--text-dim)" }} title={formatUsage(message.usage)}>
-            <span className="message-usage-compact">{formatUsageCompact(message.usage)}</span>
-            <span className="message-usage-full">{formatUsage(message.usage)}</span>
-          </div>
-        )}
+        {message.usage && !isStreaming && (() => {
+          const turnDurationMs = message.timestamp && prevTimestamp && message.timestamp > prevTimestamp
+            ? message.timestamp - prevTimestamp
+            : undefined;
+          const fullUsageText = formatUsage(message.usage, turnDurationMs);
+          return (
+            // Plus: the cost alone by default; hovering the footer shows the full line.
+            <div className="message-meta message-usage" style={{ fontSize: 12, color: "var(--text-dim)" }} title={fullUsageText}>
+              <span className="message-usage-compact">{formatUsageCompact(message.usage)}</span>
+              <span className="message-usage-full">{fullUsageText}</span>
+            </div>
+          );
+        })()}
         {time && !isStreaming && (
           <span className="message-meta message-footer-time" style={{ fontSize: 12, color: "var(--text-dim)" }}>{time}</span>
         )}
@@ -2201,19 +2248,28 @@ export function formatUsageCompact(usage: { output: number; cost?: { total: numb
   return out >= 1000 ? `${(out / 1000).toFixed(out >= 10_000 ? 0 : 1)}k out` : `${out} out`;
 }
 
-function formatUsage(usage: {
-  input: number;
-  output: number;
-  cacheRead: number;
-  cacheWrite: number;
-  cost: { total: number };
-}): string {
+function formatUsage(
+  usage: {
+    input: number;
+    output: number;
+    cacheRead: number;
+    cacheWrite: number;
+    cost: { total: number };
+  },
+  durationMs?: number,
+): string {
   const parts = [];
   if (usage.input) parts.push(`${usage.input.toLocaleString()} in`);
   if (usage.output) parts.push(`${usage.output.toLocaleString()} out`);
   if (usage.cacheRead) parts.push(`${usage.cacheRead.toLocaleString()} cache R`);
   if (usage.cacheWrite) parts.push(`${usage.cacheWrite.toLocaleString()} cache W`);
   if (usage.cost?.total) parts.push(`$${usage.cost.total.toFixed(4)}`);
+  if (durationMs && durationMs >= 200 && usage.output > 0) {
+    const tokPerSec = usage.output / (durationMs / 1000);
+    if (Number.isFinite(tokPerSec) && tokPerSec > 0 && tokPerSec < 5000) {
+      parts.push(`${tokPerSec.toFixed(1)} tok/s`);
+    }
+  }
   return parts.join(" · ");
 }
 

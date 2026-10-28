@@ -2183,3 +2183,7 @@ html[data-plus-style="clean"] .sidebar-user-preset-btn > img {
   border-radius: var(--plus-r-ctl);
   display: block;
 }
+html[data-plus-style="clean"] .composer-outbox {
+  max-height: min(180px, 25dvh);
+  overflow-y: auto;
+}

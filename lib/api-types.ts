@@ -49,6 +49,13 @@ export interface ToolSettingsResponse {
   codemodeInlineBudget: CodemodeInlineBudgetSetting;
 }
 
+export interface TerminalSettingsResponse {
+  shell: string;
+  defaultShell: string | null;
+  options: Array<{ value: string; label: string }>;
+  unavailable: boolean;
+}
+
 export interface SkillSearchResult {
   package: string;
   installs: string;

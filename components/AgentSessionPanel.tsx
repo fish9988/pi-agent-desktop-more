@@ -108,9 +108,21 @@ function AgentRow({
   const relation = session.relation?.kind === "subagent" ? session.relation : null;
   const status: SubagentSessionStatus = running ? "running" : relation?.status ?? "completed";
   const primary = main ? t("agentSwitcher.main") : relation?.description || sessionTitle(session);
+  const profileLabel = relation?.profile ?? t("agentSwitcher.subagent");
+  const modelId = relation?.model?.modelId;
+  const thinkingLevel = relation?.thinkingLevel && relation.thinkingLevel !== "off" ? relation.thinkingLevel : undefined;
+  const relTime = formatRelativeTime(session.modified, locale);
   const secondary = main
     ? sessionTitle(session)
-    : `${relation?.profile ?? t("agentSwitcher.subagent")} · ${formatRelativeTime(session.modified, locale)}`;
+    : [profileLabel, modelId, thinkingLevel, relTime].filter(Boolean).join(" · ");
+  const secondaryTitle = main
+    ? secondary
+    : [
+        profileLabel,
+        relation?.model ? `${relation.model.provider}/${relation.model.modelId}` : undefined,
+        thinkingLevel,
+        relTime,
+      ].filter(Boolean).join(" · ");
   const controllable = !main && running;
 
   return (
@@ -162,7 +174,7 @@ function AgentRow({
         <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12, fontWeight: selected ? 600 : 500 }} title={primary}>
           {primary}
         </span>
-        <span style={{ display: "block", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-dim)", fontSize: 12 }} title={secondary}>
+        <span style={{ display: "block", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-dim)", fontSize: 12 }} title={secondaryTitle}>
           {secondary}
         </span>
       </span>

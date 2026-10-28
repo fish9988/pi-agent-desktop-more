@@ -188,7 +188,7 @@ export interface SlashCommandInfo {
 
 export type BuiltinSlashCommandResult =
   | { handled: false }
-  | { handled: true; message?: string; error?: string; action?: "openSessionStats" | "openSettings" };
+  | { handled: true; message?: string; error?: string; action?: "openSessionStats" | "openSettings" | "compact" };
 
 export interface UseAgentSessionOptions {
   session: SessionInfo | null;
@@ -1950,6 +1950,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     pendingScrollToUserRef.current = true;
     setPromptAnchorActive(true);
 
+    const dropOptimisticUserMessage = () => {
+      setMessages((prev) => {
+        const index = prev.lastIndexOf(userMsg);
+        return index === -1 ? prev : [...prev.slice(0, index), ...prev.slice(index + 1)];
+      });
+      optimisticUserMessageKeyRef.current = null;
+    };
     const piImages = images?.map((img) => ({ type: "image" as const, data: img.data, mimeType: img.mimeType }));
     let sentSessionId: string | null = null;
     let promptRequestStarted = false;
@@ -1970,21 +1977,23 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         }
         await ensureEventsConnected(sid);
         promptRequestStarted = true;
-        await sendAgentCommand(sid, {
+        const queuedAck = await sendAgentCommand<{ queued?: boolean }>(sid, {
           type: "prompt",
           message,
           ...(piImages?.length ? { images: piImages } : {}),
         });
+        if (queuedAck?.queued) dropOptimisticUserMessage();
         promoteNewSession(1, message);
       } else if (session) {
         sentSessionId = session.id;
         await ensureEventsConnected(session.id);
         promptRequestStarted = true;
-        await sendAgentCommand(session.id, {
+        const queuedAck = await sendAgentCommand<{ queued?: boolean }>(session.id, {
           type: "prompt",
           message,
           ...(piImages?.length ? { images: piImages } : {}),
         });
+        if (queuedAck?.queued) dropOptimisticUserMessage();
       } else {
         throw new Error("No active session for the prompt");
       }
@@ -2202,7 +2211,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, [addNotice, currentModelOverride, isNew, loadSession, setNewSessionModel]);
 
-  const handleCompact = useCallback(async () => {
+  const handleCompact = useCallback(async (customInstructions?: string) => {
     const sid = sessionIdRef.current;
     if (!sid || isCompacting) return;
     setIsCompacting(true);
@@ -2210,18 +2219,21 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setCompactNotice(null);
     setCompactResult(null);
     try {
-      const result = await sendAgentCommand<CompactCommandResult>(sid, { type: "compact" });
+      const result = await sendAgentCommand<CompactCommandResult>(sid, {
+        type: "compact",
+        ...(customInstructions ? { customInstructions } : {}),
+      });
       setCompactResult(readCompactResult(result, "manual"));
       // includeState: manual compact ends no model run, so no agent_end ever
       // refreshes contextUsage — the ring would keep the pre-compact percentage
       // until the next turn (PR #38).
-      await loadSession(sid, true, true);
+      if (await loadSession(sid, true, true)) promoteNewSession();
     } catch (e) {
       reportCompactFailure(e instanceof Error ? e.message : String(e));
     } finally {
       setIsCompacting(false);
     }
-  }, [isCompacting, loadSession, reportCompactFailure, setCompactNotice]);
+  }, [isCompacting, loadSession, promoteNewSession, reportCompactFailure, setCompactNotice]);
 
   const loadModels = useCallback(async (signal?: AbortSignal) => {
     const modelCwd = newSessionCwd ?? session?.cwd ?? "";
@@ -2374,18 +2386,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       switch (commandName) {
         case "compact": {
           if (!sid || isCompacting) return complete({ handled: true, error: "No active session to compact" });
-          setIsCompacting(true);
-          setCompactError(null);
-          setCompactNotice(null);
-          setCompactResult(null);
-          const result = await sendAgentCommand<CompactCommandResult>(sid, {
-            type: "compact",
-            ...(args ? { customInstructions: args } : {}),
-          });
-          setCompactResult(readCompactResult(result, "manual"));
-          // includeState refreshes contextUsage — see handleCompact (PR #38).
-          if (await loadSession(sid, true, true)) promoteNewSession();
-          return complete({ handled: true, message: "Compacted context" });
+          void handleCompact(args || undefined);
+          return complete({ handled: true, action: "compact" });
         }
 
         case "auto-compact": {

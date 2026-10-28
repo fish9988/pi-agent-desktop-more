@@ -505,7 +505,7 @@ export class AgentSessionWrapper {
       ) {
         notifyRunningChange();
       }
-      if (event.type === "agent_settled") {
+      if (event.type === "agent_settled" || event.type === "compaction_end") {
         this.composerQueue.wake();
         this.notifyAgentRunCompleteIfIdle();
       }
@@ -880,6 +880,7 @@ export class AgentSessionWrapper {
           let preflightAccepted = false;
           let preflightSettled = false;
           let promptSettled = false;
+          let queuedSubmission = false;
           let acceptPreflight!: (disposition?: string) => void;
           let rejectPreflight!: (error: unknown) => void;
           const preflight = new Promise<void>((resolve, reject) => {
@@ -968,7 +969,10 @@ export class AgentSessionWrapper {
               // validation and extension preflight have accepted the submission.
               // Every disposition (handled, queued, started) is an acceptance; a
               // rejected prompt never calls this and rejects `prompt` instead.
-              preflightResult: (disposition) => acceptPreflight(disposition),
+              preflightResult: (disposition) => {
+                if (disposition === "queued") queuedSubmission = true;
+                acceptPreflight(disposition);
+              },
             });
           } catch (error) {
             finishPrompt();
@@ -982,6 +986,20 @@ export class AgentSessionWrapper {
             finishPrompt();
             if (!streamingBehavior) this.emit({ type: "prompt_done" });
           }, (error) => {
+            if (
+              this.inner.isCompacting
+              || (error instanceof Error && /compaction is in progress/i.test(error.message))
+            ) {
+              try {
+                this.composerQueue.enqueue(command.message as string, promptImages);
+                queuedSubmission = true;
+                acceptPreflight("queued");
+                finishPrompt();
+                return;
+              } catch {
+                // fall through to normal rejection if queue is full
+              }
+            }
             rejectPreflight(error);
             finishPrompt();
             invalidateSessionListCache();
@@ -1002,7 +1020,7 @@ export class AgentSessionWrapper {
           });
 
           await preflight;
-          return null;
+          return queuedSubmission ? { queued: true } : null;
         } finally {
           releaseAdmission();
         }

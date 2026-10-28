@@ -417,6 +417,8 @@ export interface SessionInfo {
         profile: string;
         description: string;
         status: SubagentSessionStatus;
+        model?: { provider: string; modelId: string };
+        thinkingLevel?: string;
       };
   /** Main repo root shared by all worktrees of this cwd (cwd itself for non-git dirs).
    *  Always set by the server; optional because the client builds transient

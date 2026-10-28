@@ -285,7 +285,7 @@ const MarkdownBlock = memo(function MarkdownBlock({ markdown, remarkPlugins, url
 export const MarkdownBody = memo(function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile, keepLineBreaks, artifacts }: MarkdownBodyProps) {
   const markdown = useStreamingThrottle(children, Boolean(isStreaming));
   const normalizedMarkdown = useMemo(
-    () => normalizeDisplayMath(artifacts ? encodeArtifactsForMarkdown(markdown) : markdown),
+    () => normalizeDisplayMath(artifacts && markdown.includes(":::artifact") ? encodeArtifactsForMarkdown(markdown) : markdown),
     [markdown, artifacts],
   );
   const components = useMemo(

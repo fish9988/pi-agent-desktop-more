@@ -198,15 +198,11 @@ export function mergeSessionLists(
   return [...byId.values()].sort((a, b) => b.modified.localeCompare(a.modified));
 }
 
-type ScannedSubagent = NonNullable<ReturnType<typeof readSubagentRun>>;
+type ScannedSubagent = NonNullable<ReturnType<typeof readSubagentRun>> & {
+  model?: { provider: string; modelId: string };
+  thinkingLevel?: string;
+};
 
-/**
- * A fork's or subagent's run, read from its file, per scanned row. The scanner
- * hands back the same row object while the file's size and mtime stay the same
- * and a new one once they change, so the row is the cache key: every list
- * rebuild re-read ~140 subagent files synchronously (~36 ms of blocked event
- * loop) though only the session that just ran had changed.
- */
 const scannedSubagentRuns = new WeakMap<ScannedSessionInfo, ScannedSubagent | null>();
 
 function resolveScannedSessionRelation(
@@ -221,7 +217,26 @@ function resolveScannedSessionRelation(
   const cached = scannedSubagentRuns.get(scanned);
   if (cached !== undefined) return { originSessionId, subagent: cached };
   try {
-    const subagent = readSubagentRun(readSessionRelationEntries(scanned.path), scanned.id, scanned.path);
+    const entries = readSessionRelationEntries(scanned.path);
+    const run = readSubagentRun(entries, scanned.id, scanned.path);
+    if (!run) {
+      scannedSubagentRuns.set(scanned, null);
+      return { originSessionId, subagent: null };
+    }
+    const model = getLatestModelChange(entries) ?? getLatestResponseModel(entries);
+    let thinkingLevel: string | undefined;
+    for (let i = entries.length - 1; i >= 0; i--) {
+      const entry = entries[i];
+      if (entry.type === "thinking_level_change") {
+        thinkingLevel = entry.thinkingLevel;
+        break;
+      }
+    }
+    const subagent: ScannedSubagent = {
+      ...run,
+      ...(model ? { model } : {}),
+      ...(thinkingLevel && thinkingLevel !== "off" ? { thinkingLevel } : {}),
+    };
     scannedSubagentRuns.set(scanned, subagent);
     return { originSessionId, subagent };
   } catch {
@@ -253,7 +268,17 @@ function mapScannedSession(
       : scanned.firstMessage || "(no messages)",
     parentSessionId: originSessionId,
     ...(subagent
-      ? { relation: { kind: "subagent" as const, parentSessionId: subagent.parentSessionId, profile: subagent.profile, description: subagent.description, status: subagent.status } }
+      ? {
+          relation: {
+            kind: "subagent" as const,
+            parentSessionId: subagent.parentSessionId,
+            profile: subagent.profile,
+            description: subagent.description,
+            status: subagent.status,
+            ...(subagent.model ? { model: subagent.model } : {}),
+            ...(subagent.thinkingLevel ? { thinkingLevel: subagent.thinkingLevel } : {}),
+          },
+        }
       : scanned.parentSessionPath
         ? { relation: { kind: "fork" as const, ...(originSessionId ? { originSessionId } : {}) } }
         : {}),
