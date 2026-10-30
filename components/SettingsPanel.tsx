@@ -29,7 +29,7 @@ import { SkillsConfig } from "./SkillsConfig";
 import { AgentsConfig } from "./AgentsConfig";
 import { PluginsConfig } from "./PluginsConfig";
 import { AppUpdatesSection } from "./AppUpdatesSection";
-import { DesktopAppSection, WindowControls, useWindowDrag } from "./desktop";
+import { DesktopAppSection } from "./desktop";
 import { McpConfig } from "./McpConfig";
 import { ConfigButton, ConfigSwitch } from "./SettingsUi";
 import { AppearanceSettingsPage } from "./AppearanceSettingsPage";
@@ -38,6 +38,7 @@ import { PasteAttachmentSettingRow } from "./PasteAttachmentSettingRow";
 import { ChatsSettingsSection } from "./ChatsSettingsSection";
 import { PromptOptimizerSettingsSection } from "./PromptOptimizerSettingsSection";
 import { TerminalSettingsSection } from "./TerminalSettingsSection";
+import { PlusSettingsWindowBar } from "./PlusSettingsWindowBar";
 
 interface Props {
   cwd: string | null;
@@ -400,11 +401,7 @@ export function SettingsPanel({
     requiresProject: settingsSectionRequiresProject(item.id),
   }));
   const sectionRequiresProject = settingsSectionRequiresProject(section);
-  // Plus 1.8: under the clean engine Settings is a full page (after PI-Desktop): a
-  // back button, a search box and grouped sections on the left, a page header on top.
   const pageLayout = usePlusStyle() === "clean";
-  // The page covers the app's top bar, so it carries the window's drag strip and buttons.
-  const windowDrag = useWindowDrag();
   const [query, setQuery] = useState("");
   const visibleSections = pageLayout
     ? matchSettingsSections(sections.map((item) => ({ ...item, description: t(`plus.settings.desc.${item.id}`) })), query)
@@ -552,8 +549,8 @@ export function SettingsPanel({
             ) : "×"}
           </button>
           {pageLayout && (
-            <div className="plus-settings-titlebar" data-tauri-drag-region {...windowDrag}>
-              <WindowControls />
+            <div className="plus-settings-titlebar">
+              <PlusSettingsWindowBar dialogRef={dialogRef} onClose={onClose} busy={busy} />
             </div>
           )}
         </div>

@@ -207,7 +207,7 @@ html[data-plus-style="clean"] .app-shell::before {
   pointer-events: none;
   backdrop-filter: var(--plus-glass-filter);
 }
-html[data-plus-style="clean"][data-plus-settings-open="1"]:not([data-plus-live-preview="1"]) .app-shell > :not(.settings-dialog-backdrop, .project-trust-backdrop) {
+html[data-plus-style="clean"][data-plus-standalone-settings="1"] .app-shell > :not(.settings-dialog-backdrop, .project-trust-backdrop) {
   content-visibility: hidden;
 }
 html[data-plus-style="clean"] .chat-scroll-container [data-entry-id] {
@@ -1647,32 +1647,76 @@ html[data-plus-style="clean"] .app-topbar-title > .app-topbar-running { order: 3
   @keyframes plus-dot-blink { 50% { opacity: 0.35; } }
 }
 html:not([data-plus-style="clean"]) .app-topbar-running { display: none !important; }
-/* ---- step 7: Settings as a page (Plus 1.8, after PI-Desktop) ------------- */
-/* Settings covers the window like the app it configures: the left column (on
-   the sidebar's surface) holds Back, the search box and the grouped sections;
-   the right is one rounded panel, the same kind as the chat, under a page
-   header. The page carries its own drag strip and window buttons. */
+/* ---- step 7: Settings as a floating / dockable / standalone window -------- */
 @media (min-width: 769px) {
   html[data-plus-style="clean"] .settings-dialog-backdrop.is-plus-page {
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    pointer-events: none;
+  }
+  html[data-plus-style="clean"] .is-plus-page .settings-dialog-surface {
+    pointer-events: auto;
+    display: grid;
+    grid-template-columns: 216px minmax(0, 1fr);
+    grid-template-rows: 42px auto minmax(0, 1fr);
+    width: min(920px, calc(100vw - 48px));
+    max-width: none;
+    height: min(680px, calc(100vh - 56px));
+    max-height: none;
+    border: 1px solid var(--plus-stroke-strong);
+    border-radius: var(--plus-r-overlay);
+    background: linear-gradient(to right, var(--bg-panel) 216px, var(--workbench-bg) 216px);
+    box-shadow: var(--shadow-dialog);
+    overflow: hidden;
+    animation: none;
+  }
+  html[data-plus-style="clean"][data-plus-settings-dock="right"] .settings-dialog-backdrop.is-plus-page {
+    align-items: stretch;
+    justify-content: flex-end;
+    padding: var(--plus-s2);
+  }
+  html[data-plus-style="clean"][data-plus-settings-dock="right"] .is-plus-page .settings-dialog-surface {
+    width: min(620px, 48vw);
+    height: calc(100vh - 16px);
+    transform: none;
+  }
+  html[data-plus-style="clean"][data-plus-settings-open="1"][data-plus-settings-dock="right"]:not([data-plus-settings-minimized="1"]) .app-shell .app-content-layer {
+    margin-right: min(628px, calc(48vw + 8px));
+  }
+  html[data-plus-style="clean"][data-plus-settings-minimized="1"] .settings-dialog-backdrop.is-plus-page {
+    align-items: flex-end;
+    justify-content: flex-end;
+    padding: var(--plus-s4);
+  }
+  html[data-plus-style="clean"][data-plus-settings-minimized="1"] .is-plus-page .settings-dialog-surface {
+    width: 360px;
+    height: 42px;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 42px;
+    background: var(--bg-panel);
+  }
+  html[data-plus-style="clean"][data-plus-settings-minimized="1"] .is-plus-page :is(.plus-settings-search, .settings-section-tabs, .settings-dialog-close, .settings-dialog-main) {
+    display: none;
+  }
+  html[data-plus-style="clean"][data-plus-settings-minimized="1"] .is-plus-page .plus-settings-titlebar {
+    grid-area: 1 / 1;
+  }
+  html[data-plus-style="clean"][data-plus-standalone-settings="1"] .settings-dialog-backdrop.is-plus-page {
     align-items: stretch;
     justify-content: stretch;
     background: var(--bg);
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
+    pointer-events: auto;
   }
-  html[data-plus-style="clean"] .is-plus-page .settings-dialog-surface {
-    display: grid;
-    grid-template-columns: 248px minmax(0, 1fr);
-    grid-template-rows: 48px auto minmax(0, 1fr);
+  html[data-plus-style="clean"][data-plus-standalone-settings="1"] .is-plus-page .settings-dialog-surface {
     width: 100%;
-    max-width: none;
     height: 100%;
-    max-height: none;
     border: 0;
     border-radius: 0;
-    background: linear-gradient(to right, var(--bg-panel) 248px, transparent 248px);
+    transform: none;
     box-shadow: none;
-    animation: none;
   }
   html[data-plus-style="clean"] .is-plus-page .settings-dialog-header { display: contents; }
   html[data-plus-style="clean"] .is-plus-page .settings-dialog-title {
@@ -1691,7 +1735,7 @@ html:not([data-plus-style="clean"]) .app-topbar-running { display: none !importa
     align-items: center;
     gap: 6px;
     width: auto;
-    height: 32px;
+    height: 30px;
     margin-left: var(--plus-s2);
     padding: 0 var(--plus-s3) 0 6px;
     border: 0;
@@ -1707,9 +1751,70 @@ html:not([data-plus-style="clean"]) .app-topbar-running { display: none !importa
   html[data-plus-style="clean"] .is-plus-page .plus-settings-titlebar {
     grid-area: 1 / 2;
     display: flex;
-    justify-content: flex-end;
+    align-items: center;
+    justify-content: space-between;
     min-width: 0;
-    height: 48px;
+    height: 42px;
+    border-bottom: 1px solid var(--plus-stroke);
+    background: color-mix(in srgb, var(--bg-panel) 75%, var(--workbench-bg));
+  }
+  html[data-plus-style="clean"] .plus-settings-window-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    height: 100%;
+    padding: 0 var(--plus-s2) 0 var(--plus-s3);
+    cursor: grab;
+    user-select: none;
+  }
+  html[data-plus-style="clean"] .plus-settings-window-bar:active {
+    cursor: grabbing;
+  }
+  html[data-plus-style="clean"] .plus-settings-window-drag-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--plus-s2);
+    min-width: 0;
+    color: var(--text-dim);
+    font-size: var(--plus-fs-1);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  html[data-plus-style="clean"] .plus-settings-window-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--plus-s1);
+    flex-shrink: 0;
+  }
+  html[data-plus-style="clean"] .plus-settings-win-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 26px;
+    padding: 0 var(--plus-s2);
+    border: 1px solid transparent;
+    border-radius: var(--plus-r-ctl);
+    background: transparent;
+    color: var(--text-muted);
+    font-size: var(--plus-fs-1);
+    cursor: pointer;
+  }
+  html[data-plus-style="clean"] .plus-settings-win-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--plus-stroke);
+    color: var(--text);
+  }
+  html[data-plus-style="clean"] .plus-settings-win-btn.is-active {
+    background: var(--accent-soft);
+    border-color: var(--accent-border);
+    color: var(--accent);
+  }
+  html[data-plus-style="clean"] .plus-settings-win-btn.is-close:hover {
+    background: color-mix(in srgb, var(--danger) 14%, transparent);
+    border-color: var(--danger);
+    color: var(--danger);
   }
   html[data-plus-style="clean"] .is-plus-page .plus-settings-search {
     grid-area: 2 / 1;

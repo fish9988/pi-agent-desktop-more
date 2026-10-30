@@ -271,6 +271,12 @@ export function AppShell() {
   }, []);
   const [explorerRefreshKey, setExplorerRefreshKey] = useState(0);
   const [settingsSection, setSettingsSection] = useState<SettingsSection | null>(null);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (new URLSearchParams(window.location.search).get("plusStandaloneSettings") === "1") {
+      setSettingsSection(getLastSettingsSection(null));
+    }
+  }, []);
   useNativeContextMenu();
   const [modelsRefreshKey, setModelsRefreshKey] = useState(0);
   const [topMoreOpen, setTopMoreOpen] = useState(false);
