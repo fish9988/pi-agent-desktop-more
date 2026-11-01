@@ -10,7 +10,7 @@ _最后更新：2026-10-27_
 - 上一版 v1.6.1：修复文件树下载按钮无反应、「在资源管理器中显示」打开错目录（正斜杠路径 + Rust 引号问题，改用 `raw_arg`）。v1.6.0 是上游周报 #1 的移植。
 - 用户的正式版 `D:\Pi Agent Plus` 是 **1.5.0**，用户会自己点「更新」升级到 1.6.0。
 - 测试版 `D:\Pi Agent Plus Test` 是 1.7.0-test.23（`plus-prefs.test.json` 里主题选了「Plus 分层」、深色），没在运行。
-- **最新发布：v1.16.0**（2026-10-28）：将「设置」从替换主界面的整页模式升级为**非模态可拖拽设置窗口 + 右侧并排分屏 + 弹出独立系统窗口**（`components/PlusSettingsWindowBar.tsx`、`components/SettingsPanel.tsx`、`app/plus-theme.css`），打开设置时不再隐藏 `.app-shell`，支持边调整设置边观看并操作正在进行的对话和子代理任务。上一版 v1.15.1（2026-10-28）：侧栏会话 `···` 菜单新增「复制会话 ID」与「复制跨对话引用 (`#ID`)」。
+- **最新发布：v1.17.0**（2026-11-01）：① 修复顶栏 `Agents` 子任务列表因 `.app-topbar` `useWindowDrag` 吞掉 `[role="option"]` 点击导致无法切换的 Bug，并升级悬停交互与快捷复制 `#ID`；② 为所有项目会话 `···` 菜单补齐「置顶会话 / 取消置顶」（置顶自动排到项目顶部）、「导出为 HTML」与「在资源管理器中定位」；③ 侧边栏新增 `localStorage` 0ms 首屏会话快照、修复 `prefetchSessionData` 未带 `tree=summary` 的双倍大文件阻塞并打通 `session-view-cache`、剔除消息 JSON 中的巨型 `thinkingSignature` 并将会话字节级瘦身门槛从 16MB 降至 2MB；④ 右侧文件预览新增 `.xls` / `.xlsx` / `.ods` / `.csv` / `.tsv` 多 Sheet 表格预览、`.doc` 老版 Word 预览、`.pptx` 幻灯片预览、SVG `Source/Preview` 切换与 `<symbol>` 图标集展开、图片 50MB 上限与缩放/底板切换，以及 HTML 默认沙箱脚本执行。上一版 v1.16.0（2026-10-28）：设置重构为非模态可拖拽/并排分屏/独立系统窗口。
 - 上游周报 #2（2026-10-27）已移植并标记为已看（`.github/upstream-reviewed.json` 指向 pi-web `e533d9b3`、abcwyc `56691c5a`）。
 
 ## 顶栏子代理下拉切换器与《纸枢 · Kami》视觉升级（1.10.0，2026-10-27）

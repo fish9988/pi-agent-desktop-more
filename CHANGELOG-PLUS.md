@@ -3,6 +3,29 @@
 Pi Agent Plus 是 [abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop) 的个人二次开发版（仅 Windows），
 与官方版可同时安装、互不覆盖。版本规则见 [VERSIONING-PLUS.md](./VERSIONING-PLUS.md)。
 
+## [1.17.0] - 2026-11-01
+
+基于 Pi Agent 0.7.5（底层 Pi SDK 1.4.0）。修复顶栏子任务面板点击被窗口拖拽劫持导致无法切换的 Bug 并全面增强交互；为所有项目会话菜单补齐「置顶会话 / 导出 HTML / 定位文件」；大幅提速应用冷启动与超大会话首次加载；并将右侧文件预览扩展至全套 Office（`.docx` / `.doc` / `.xlsx` / `.xls` / `.pptx` / `.csv`）及增强版 PNG / SVG / HTML 预览。
+
+### 1. 修复顶栏 `Agents` 子任务无法点击切换 & UI 交互升级（`components/AgentSessionPanel.tsx`、`components/AppShell.tsx`）
+- **根因修复**：顶栏下拉面板挂载在 `.app-topbar`（`data-tauri-drag-region`）内，而子任务行使用 `<div role="option">`，此前在 Windows Tauri 下点击会被 `useWindowDrag` 误识别为拖拽系统窗口而吞掉 `click` 事件；现已标记 `data-no-drag` 并隔离 `mousedown` 冒泡，单击任意子任务即可秒切。
+- **交互增强**：新增悬停高亮底色、图标圆角容器、当前会话胶囊徽标、悬停右侧 **「查看 →」** 引导，以及一键 **「复制 `#ID` 引用」** 快捷按钮。
+
+### 2. 项目会话 `···` 菜单补齐「置顶会话」等完整操作（`components/SessionSidebar.tsx`）
+- **全项目通用「置顶会话 / 取消置顶」**：项目分组与时间线视图下的所有会话现均支持置顶，置顶会话自动排在所属项目最顶部并显示图钉标记，折叠预览时也始终保持可见；
+- **菜单新增实用项**：补齐 **「导出为 HTML」** 与 **「在资源管理器中定位」**（一键打开 `.jsonl` 所在目录）。
+
+### 3. 应用打开速度与大体积会话初次加载大幅提速（`components/SessionSidebar.tsx`、`lib/session-data-cache.ts`、`lib/session-reader.ts`、`lib/session-slim-load.ts`）
+- **0ms 首屏会话树快照**：侧边栏冷启动直接从 `localStorage` 快照渲染项目与会话列表，消除启动白屏等待，并合并消除初始 SSE 重复拉取风暴；
+- **修复悬停死缓存并打通 `session-view-cache`**：修复旧版 `prefetchSessionData` 未带 `tree=summary` 导致每次滑过/点击都在服务端重复序列化几十 MB 全量会话树的严重性能损耗；现改为 160ms 防抖预热并直接写入 `session-view-cache`，悬停后再点会话 **0ms 秒开**；
+- **大文件加载瘦身 75%+**：将字节级裁剪器 `SLIM_LOAD_MIN_FILE_BYTES` 门槛从 `16MB` 降至 `2MB`，并在历史消息传输中剔除无用的巨型 Base64 `thinkingSignature` 与 `diagnostics` 字段，单次会话加载体积直降 70%~80%。
+
+### 4. 右侧文件预览全面支持 Office 全家桶及增强版 PNG / SVG / HTML（`lib/office-preview.ts`、`lib/file-types.ts`、`components/FileViewer.tsx`、`app/api/files/[...path]/route.ts`）
+- **新增 Excel / 表格多工作表预览（`.xlsx` / `.xls` / `.ods` / `.csv` / `.tsv`）**：原生解析新老 Excel 工作簿，支持顶栏多 Sheet 工作表切换、冻结行列标头（`A, B, C...`）；`.csv` / `.tsv` 支持一键切换 `Preview（表格）` 与 `Source（源码）`；
+- **新增老版 Word `.doc` 与 PowerPoint `.pptx` 预览**：支持直接阅读二进制 `.doc` 文档正文与表格，以及 `.pptx` 分页幻灯片（含内嵌图片与演讲者备注），加上原有 `.docx` 与 `.pdf`，实现 Office 文档全覆盖；
+- **增强 PNG / 图片与 SVG 预览**：图片上限从 10MB 提升至 **50MB**，工具栏新增 `- / Fit / +` 缩放与 **「棋盘 / 白底 / 暗底」** 背景切换；`.svg` 新增 **`Source / Preview`** 源码切换，并支持自动识别 `<symbol>` 图标集（Sprite）平铺展示所有内部图标；
+- **智能 HTML 预览**：带脚本的 HTML 页面默认在安全隔离沙箱（`srcDoc` `allow-scripts`）中直接运行渲染，不再因脚本拦截而空白报错。
+
 ## [1.16.0] - 2026-10-28
 
 基于 Pi Agent 0.7.5（底层 Pi SDK 1.4.0）。重构「设置」打开逻辑：取消整页替代主界面的显示方式，升级为 **非模态可拖拽设置窗口 + 右侧并排分屏 + 弹出独立系统窗口** 三合一窗口化架构，实现一边调整各项设置、一边实时查看并操作正在进行的对话与任务。

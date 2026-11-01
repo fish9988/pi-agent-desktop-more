@@ -6,6 +6,7 @@ import {
   listAllSessions,
   listSessionSummaries,
   mergeSessionLists,
+  openSessionManager,
 } from "@/lib/session-reader";
 import {
   getCompletionNotificationSuppressedRpcSessionIds,
@@ -41,6 +42,17 @@ export async function GET(req: Request) {
     allowFileRoot(chatWorkspaceCwd);
     perf?.span("scan+projects");
     const sessions = attachScheduledRelations(mergeSessionLists(persistedSessions, runtimeSessions));
+    if (!summary && !(globalThis as { __piPrewarmedTopSessions?: boolean }).__piPrewarmedTopSessions) {
+      (globalThis as { __piPrewarmedTopSessions?: boolean }).__piPrewarmedTopSessions = true;
+      const topWarmTargets = sessions
+        .filter((s) => s.path && s.relation?.kind !== "subagent" && s.relation?.kind !== "scheduled")
+        .slice(0, 2);
+      setTimeout(() => {
+        for (const s of topWarmTargets) {
+          try { openSessionManager(s.path); } catch { /* ignore */ }
+        }
+      }, 120).unref?.();
+    }
     const payload = {
       sessions,
       sessionListVersion,

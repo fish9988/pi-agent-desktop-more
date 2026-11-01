@@ -680,7 +680,8 @@ export async function GET(
         return streamFile(filePath, stat, videoMime, request.headers.get("range"));
       }
       const documentMime = getDocumentMime(filePath);
-      if (documentMime) {
+      const ext = getFileExt(filePath);
+      if (documentMime && ext !== "csv" && ext !== "tsv") {
         return streamFile(filePath, stat, documentMime, request.headers.get("range"));
       }
       const rawOffset = request.nextUrl.searchParams.get("offset");
@@ -734,22 +735,37 @@ export async function GET(
       if (!stat?.isFile()) {
         return NextResponse.json({ error: "Not a file" }, { status: 400 });
       }
-      if (getFileExt(filePath) !== "docx") {
+      const ext = getFileExt(filePath);
+      const supportedOffice = new Set(["docx", "doc", "xlsx", "xls", "ods", "csv", "tsv", "pptx"]);
+      if (!supportedOffice.has(ext)) {
         return NextResponse.json({ error: "Preview not available for this file type" }, { status: 400 });
       }
       if (stat.size > DOCX_PREVIEW_MAX_BYTES) {
-        return NextResponse.json({ error: "DOCX too large for preview (>10MB)" }, { status: 413 });
+        return NextResponse.json({ error: "Document too large for preview (>35MB)" }, { status: 413 });
       }
 
-      const mammoth = await import("mammoth");
-      const result = await mammoth.convertToHtml(
-        { path: filePath },
-        {
-          externalFileAccess: false,
-          convertImage: mammoth.images.dataUri,
-        }
-      );
-      const html = wrapDocxPreviewHtml(result.value, path.basename(filePath));
+      let html: string;
+      if (ext === "docx") {
+        const mammoth = await import("mammoth");
+        const result = await mammoth.convertToHtml(
+          { path: filePath },
+          {
+            externalFileAccess: false,
+            convertImage: mammoth.images.dataUri,
+          }
+        );
+        html = wrapDocxPreviewHtml(result.value, path.basename(filePath));
+      } else if (ext === "doc") {
+        const { renderLegacyDocPreviewHtml } = await import("@/lib/office-preview");
+        html = await renderLegacyDocPreviewHtml(filePath, path.basename(filePath));
+      } else if (ext === "pptx") {
+        const { renderPptxPreviewHtml } = await import("@/lib/office-preview");
+        html = await renderPptxPreviewHtml(filePath, path.basename(filePath));
+      } else {
+        const { renderSpreadsheetPreviewHtml } = await import("@/lib/office-preview");
+        html = await renderSpreadsheetPreviewHtml(filePath, path.basename(filePath));
+      }
+
       return new Response(html, {
         headers: {
           "Content-Type": "text/html; charset=utf-8",

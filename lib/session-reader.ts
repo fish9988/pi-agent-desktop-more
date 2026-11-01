@@ -265,7 +265,9 @@ function mapScannedSession(
     // real "(no messages)" session until the details arrive.
     firstMessage: detailsPending && !scanned.firstMessage
       ? ""
-      : scanned.firstMessage || "(no messages)",
+      : scanned.firstMessage
+        ? (scanned.firstMessage.length > 400 ? `${scanned.firstMessage.slice(0, 400)}…` : scanned.firstMessage)
+        : "(no messages)",
     parentSessionId: originSessionId,
     ...(subagent
       ? {
@@ -998,13 +1000,23 @@ function entryToUiMessage(
       }
       if (!options.deferThinking || message.role !== "assistant") return message;
       const content = message.content;
+      const slimAssistant = { ...message } as Record<string, unknown>;
+      delete slimAssistant.diagnostics;
       return {
-        ...message,
-        content: content.map((block) => (
-          block.type === "thinking" && block.thinking.trim() !== ""
-            ? { ...block, thinking: getThinkingPreview(block.thinking), deferred: true }
-            : block
-        )),
+        ...(slimAssistant as typeof message),
+        content: content.map((block) => {
+          if (block.type !== "thinking") return block;
+          const cleanBlock = { ...block } as Record<string, unknown>;
+          delete cleanBlock.thinkingSignature;
+          if (block.thinking.trim() !== "") {
+            return {
+              ...(cleanBlock as typeof block),
+              thinking: getThinkingPreview(block.thinking),
+              deferred: true,
+            };
+          }
+          return cleanBlock as typeof block;
+        }),
       };
     }
     case "compaction":

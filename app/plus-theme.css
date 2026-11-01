@@ -2292,3 +2292,39 @@ html[data-plus-style="clean"] .composer-outbox {
   max-height: min(180px, 25dvh);
   overflow-y: auto;
 }
+html[data-plus-style="clean"] .file-viewer-image-stage.is-light-backdrop {
+  background-image: none;
+  background-color: var(--accent-contrast);
+}
+html[data-plus-style="clean"] .file-viewer-image-stage.is-dark-backdrop {
+  background-image: none;
+  background-color: var(--bg);
+}
+html[data-plus-style="clean"] .plus-svg-symbol-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: var(--plus-s2);
+  width: 100%;
+  align-self: flex-start;
+}
+html[data-plus-style="clean"] .plus-svg-symbol-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--plus-s2);
+  padding: var(--plus-s3) var(--plus-s2);
+  border: 1px solid var(--plus-stroke);
+  border-radius: var(--plus-r-card);
+  background: var(--surface);
+  color: var(--text);
+  text-align: center;
+}
+html[data-plus-style="clean"] .plus-svg-symbol-card > span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-dim);
+  font-size: var(--plus-fs-1);
+}

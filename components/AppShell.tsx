@@ -2599,15 +2599,19 @@ export function AppShell() {
           )}
           {/* Top panel dropdown — shared, only one active at a time */}
           {activeTopPanel && topPanelPos && (
-            <div style={{
-              position: "fixed",
-              top: topPanelPos.top,
-              left: topPanelPos.left,
-              width: topPanelPos.width,
-              maxHeight: `calc(100dvh - ${topPanelPos.top}px)`,
-              overflowY: "auto",
-              zIndex: 500,
-            }}>
+            <div
+              data-no-drag
+              onMouseDown={(e) => e.stopPropagation()}
+              style={{
+                position: "fixed",
+                top: topPanelPos.top,
+                left: topPanelPos.left,
+                width: topPanelPos.width,
+                maxHeight: `calc(100dvh - ${topPanelPos.top}px)`,
+                overflowY: "auto",
+                zIndex: 500,
+              }}
+            >
               {activeTopPanel === "agents" && activeSessionFamily && selectedSession && (
                 <AgentSessionPanel
                   rootSession={activeSessionFamily.root}

@@ -66,6 +66,7 @@
     "@earendil-works/pi-ai": "^1.4.0",
     "@earendil-works/pi-coding-agent": "^1.4.0",
     "@earendil-works/pi-tui": "^1.4.0",
+    "@radix-ui/react-select": "^2.3.8",
     "@tauri-apps/api": "^2.12.1",
     "@tauri-apps/plugin-autostart": "^2.7.0",
     "@tauri-apps/plugin-clipboard-manager": "^2.4.1",
@@ -86,7 +87,8 @@
     "semver": "7.8.5",
     "undici": "8.11.0",
     "web-push": "^3.6.7",
-    "@radix-ui/react-select": "^2.3.8"
+    "word-extractor": "1.0.4",
+    "xlsx": "0.18.5"
   },
   "devDependencies": {
     "@tailwindcss/browser": "4.2.2",

@@ -34,7 +34,7 @@ export interface SessionViewSnapshot {
 	savedAt: number;
 }
 
-const MAX_SESSIONS = 8;
+const MAX_SESSIONS = 16;
 const MAX_TOTAL_BYTES = 32 * 1024 * 1024;
 const TTL_MS = 10 * 60_000;
 

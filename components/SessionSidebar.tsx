@@ -259,6 +259,33 @@ function buildSessionTree(sessions: SessionInfo[]): SessionTreeNode[] {
   return roots;
 }
 
+const SIDEBAR_SESSIONS_SNAPSHOT_KEY = "pi-plus-sidebar-sessions-v1";
+
+function readSidebarSessionsSnapshot(): SessionInfo[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(SIDEBAR_SESSIONS_SNAPSHOT_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? (parsed as SessionInfo[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeSidebarSessionsSnapshot(sessions: SessionInfo[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    const slim = sessions.slice(0, 120).map((s) => ({
+      ...s,
+      firstMessage: s.firstMessage ? s.firstMessage.slice(0, 160) : "",
+    }));
+    window.localStorage.setItem(SIDEBAR_SESSIONS_SNAPSHOT_KEY, JSON.stringify(slim));
+  } catch {
+    // ignore quota errors
+  }
+}
+
 function readIdSetPref(key: Parameters<typeof getPrefJson>[0]): Set<string> {
   const stored = getPrefJson<unknown>(key);
   return Array.isArray(stored)
@@ -268,7 +295,7 @@ function readIdSetPref(key: Parameters<typeof getPrefJson>[0]): Set<string> {
 
 export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, skipInitialProjectSelection, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onChatWorkspaceCwdChange, onProjectsChange, onBackgroundTaskDone, onRunningSessionIdsChange, onSessionsChange, headerControls, footer, onOpenTerminal, onOpenScheduled, scheduledOpen = false }: Props) {
   const { t } = useI18n();
-  const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
+  const [allSessions, setAllSessions] = useState<SessionInfo[]>(() => readSidebarSessionsSnapshot());
   const [chatWorkspaceCwd, setChatWorkspaceCwd] = useState<string | null>(null);
   // Same fold model as a project: folding drops the extra pages, so the next
   // unfold starts again from the first five chats.
@@ -288,7 +315,9 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   // decide whether the list needs reloading, and no render reads it.
   const sessionListVersionRef = useRef<number | null>(null);
   const sessionLoadIdRef = useRef(0);
-  const [loading, setLoading] = useState(true);
+  const hasSessionsRef = useRef(allSessions.length > 0);
+  hasSessionsRef.current = allSessions.length > 0;
+  const [loading, setLoading] = useState(() => allSessions.length === 0);
   const [error, setError] = useState<string | null>(null);
   const [selectedCwd, setSelectedCwd] = useState<string | null>(null);
   const [homeDir, setHomeDir] = useState<string>("");
@@ -481,7 +510,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const loadSessions = useCallback(async (showLoading = false, force = false, summary = false) => {
     const loadId = ++sessionLoadIdRef.current;
     try {
-      if (showLoading) setLoading(true);
+      if (showLoading && !hasSessionsRef.current) setLoading(true);
       const res = await fetch(sessionListUrl(summary, force), {
         cache: "no-store",
       });
@@ -496,6 +525,9 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       if (loadId !== sessionLoadIdRef.current) return;
       sessionListVersionRef.current = data.sessionListVersion;
       setAllSessions(data.sessions);
+      if (!summary) {
+        writeSidebarSessionsSnapshot(data.sessions);
+      }
       setChatWorkspaceCwd(data.chatWorkspaceCwd ?? null);
       // Treat the fetched running set as an initial fallback only. Once the
       // live SSE stream is connected, a slow session-list fetch cannot overwrite it.
@@ -617,11 +649,14 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             sseAuthoritativeRef.current = true;
             setRunningSessionIds(new Set(data.runningSessionIds ?? []));
           }
-          if (typeof data.sessionListVersion === "number"
-            && data.sessionListVersion !== sessionListVersionRef.current) {
-            // Another window/process changed the list; reuse the invalidated
-            // server cache instead of forcing a fresh scan.
-            await loadSessions();
+          if (typeof data.sessionListVersion === "number") {
+            if (sessionListVersionRef.current === null) {
+              sessionListVersionRef.current = data.sessionListVersion;
+            } else if (data.sessionListVersion !== sessionListVersionRef.current) {
+              // Another window/process changed the list; reuse the invalidated
+              // server cache instead of forcing a fresh scan.
+              await loadSessions();
+            }
           }
         } catch {
           // ignore malformed frames
@@ -1351,12 +1386,16 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     const isActive = group.projectRoot === projectRootFor(selectedCwd);
     const runningCount = group.runningIds.size;
     const unreadCount = group.unreadIds.size;
-    const groupTree = buildSessionTree(group.sessions);
+    const rawGroupTree = buildSessionTree(group.sessions);
+    const groupTree = [...rawGroupTree].sort(
+      (a, b) => Number(pinnedChats.has(b.session.id)) - Number(pinnedChats.has(a.session.id)),
+    );
     const extraPages = projectSessionPages[group.projectRoot] ?? 0;
+    const pinnedInGroupCount = groupTree.filter((node) => pinnedChats.has(node.session.id)).length;
     const visibleSessionLimit = MAX_VISIBLE_PROJECT_SESSIONS * (extraPages + 1);
     let visibleGroupTree = trimmedSessionQuery
       ? groupTree
-      : groupTree.slice(0, visibleSessionLimit);
+      : groupTree.slice(0, Math.max(visibleSessionLimit, pinnedInGroupCount));
     // Keep the selected session reachable even when it is older than the
     // collapsed preview window.
     if (!trimmedSessionQuery && selectedSessionId) {
@@ -1501,6 +1540,10 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                 unreadSessionIds={unreadSessionIds}
                 onSelectSession={handleSelectSessionFromList}
                 onRenamed={loadSessions}
+                chatActions={{
+                  pinned: pinnedChats.has(node.session.id),
+                  onTogglePin: () => setPinnedChats((current) => toggleId(current, node.session.id)),
+                }}
                 onSessionDeleted={(id) => {
                   onSessionDeleted?.(id);
                   loadSessions();
@@ -1547,6 +1590,10 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             unreadSessionIds={unreadSessionIds}
             onSelectSession={handleSelectSessionFromList}
             onRenamed={loadSessions}
+            chatActions={{
+              pinned: pinnedChats.has(family.root.id),
+              onTogglePin: () => setPinnedChats((current) => toggleId(current, family.root.id)),
+            }}
             onSessionDeleted={(id) => {
               onSessionDeleted?.(id);
               loadSessions();
@@ -2326,9 +2373,9 @@ function showProjectActivity(
 
 interface ChatRowActions {
   pinned: boolean;
-  archived: boolean;
   onTogglePin: () => void;
-  onToggleArchive: () => void;
+  archived?: boolean;
+  onToggleArchive?: () => void;
 }
 
 function SessionItem({
@@ -2457,8 +2504,12 @@ function SessionItem({
   }, [session.id, session.transient, onDeleted, reportActionError, t]);
 
   // "…" menu: fixed-position portal so the sidebar's overflow/backdrop-filter can't clip it
-  const MENU_WIDTH = 206;
+  const MENU_WIDTH = 212;
   const isZh = locale.startsWith("zh");
+  const hoverPrefetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (hoverPrefetchTimerRef.current) clearTimeout(hoverPrefetchTimerRef.current);
+  }, []);
   const copySessionId = useCallback(() => {
     void navigator.clipboard?.writeText(session.id).then(() => {
       appNotify.success({
@@ -2476,6 +2527,19 @@ function SessionItem({
       });
     }).catch(() => {});
   }, [isZh, session.id]);
+  const exportSessionHtml = useCallback(() => {
+    const url = `/api/sessions/${encodeURIComponent(session.id)}/export`;
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${(session.name || session.firstMessage || session.id).slice(0, 40)}.html`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }, [session.firstMessage, session.id, session.name]);
+  const revealSessionFile = useCallback(() => {
+    if (!session.path) return;
+    void revealItemInDirNative(session.path);
+  }, [session.path]);
 
   // Desktop shell: the same actions as the DOM menu below, as a native popup.
   // `menuOpen` stays true while it is up so the trailing "…" button does not
@@ -2484,16 +2548,20 @@ function SessionItem({
     if (session.transient || !canUseNativeMenu()) return false;
     setMenuOpen(true);
     const shown = await showNativeMenu([
+      ...(chatActions
+        ? [{ label: isZh ? (chatActions.pinned ? "取消置顶会话" : "置顶会话") : t(chatActions.pinned ? "sidebar.unpinChat" : "sidebar.pinChat"), onSelect: chatActions.onTogglePin }]
+        : []),
       { label: t("sidebar.rename"), onSelect: startRename },
       { label: isZh ? "复制会话 ID" : "Copy Session ID", onSelect: copySessionId },
       { label: isZh ? "复制跨对话引用 (#ID)" : "Copy Session Reference (#ID)", onSelect: copySessionRef },
-      ...(chatActions
-        ? [{ label: t(chatActions.pinned ? "sidebar.unpinChat" : "sidebar.pinChat"), onSelect: chatActions.onTogglePin }]
+      { label: isZh ? "导出为 HTML" : "Export as HTML", onSelect: exportSessionHtml },
+      ...(session.path && isTauriDesktop()
+        ? [{ label: isZh ? "在资源管理器中定位" : "Reveal Session File", onSelect: revealSessionFile }]
         : []),
       ...(onContinueInProject
         ? [{ label: t("sidebar.continueInProject"), onSelect: () => onContinueInProject(session) }]
         : []),
-      ...(chatActions
+      ...(chatActions?.onToggleArchive
         ? [{ label: t(chatActions.archived ? "sidebar.unarchiveChat" : "sidebar.archiveChat"), onSelect: chatActions.onToggleArchive }]
         : []),
       { label: t("sidebar.delete"), onSelect: beginDeleteConfirmation },
@@ -2513,7 +2581,7 @@ function SessionItem({
     ], at);
     setMenuOpen(false);
     return shown;
-  }, [beginDeleteConfirmation, chatActions, copySessionId, copySessionRef, isZh, onContinueInProject, session, locale, startRename, t]);
+  }, [beginDeleteConfirmation, chatActions, copySessionId, copySessionRef, exportSessionHtml, isZh, onContinueInProject, revealSessionFile, session, locale, startRename, t]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const handled = dispatchSessionRowContextMenu({
@@ -2545,10 +2613,10 @@ function SessionItem({
     if (menuOpen) { setMenuOpen(false); return; }
     const rect = e.currentTarget.getBoundingClientRect();
     const openDomMenu = () => {
-      const estHeight = 124 + (onContinueInProject ? 30 : 0) + (chatActions ? 60 : 0);
+      const estHeight = 250 + (onContinueInProject ? 30 : 0) + (chatActions?.onToggleArchive ? 30 : 0);
       const left = Math.max(8, Math.min(rect.right - MENU_WIDTH, window.innerWidth - MENU_WIDTH - 8));
       let top = rect.bottom + 4;
-      if (top + estHeight > window.innerHeight - 8) top = rect.top - estHeight - 4;
+      if (top + estHeight > window.innerHeight - 8) top = Math.max(8, rect.top - estHeight - 4);
       setMenuPos({ top, left });
       setMenuOpen(true);
     };
@@ -2620,13 +2688,22 @@ function SessionItem({
       onContextMenu={confirmDelete || renaming ? undefined : handleContextMenu}
       onMouseEnter={() => {
         setHovered(true);
-        if (!isRunning && !isSelected) prefetchSessionData(session.id);
-      }}
-      onPointerDown={() => {
-        if (!isRunning && !isSelected) prefetchSessionData(session.id);
+        if (!isRunning && !isSelected) {
+          if (hoverPrefetchTimerRef.current) clearTimeout(hoverPrefetchTimerRef.current);
+          hoverPrefetchTimerRef.current = setTimeout(() => {
+            hoverPrefetchTimerRef.current = null;
+            void prefetchSessionData(session.id);
+          }, 160);
+        }
       }}
       onFocus={() => setTreeFocused(true)}
-      onMouseLeave={() => { setHovered(false); }}
+      onMouseLeave={() => {
+        setHovered(false);
+        if (hoverPrefetchTimerRef.current) {
+          clearTimeout(hoverPrefetchTimerRef.current);
+          hoverPrefetchTimerRef.current = null;
+        }
+      }}
       style={{
         height: SESSION_LIST_ITEM_HEIGHT,
         display: "flex",
@@ -2838,6 +2915,24 @@ function SessionItem({
                 display: "flex", flexDirection: "column", gap: 1,
               }}
             >
+              {chatActions && (
+                <button
+                  role="menuitem"
+                  onClick={() => { setMenuOpen(false); chatActions.onTogglePin(); }}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 8,
+                    width: "100%", height: 30, padding: "0 8px",
+                    background: "transparent", border: 0, borderRadius: 7,
+                    color: chatActions.pinned ? "var(--accent)" : "var(--text)", cursor: "pointer",
+                    fontSize: 13, textAlign: "left",
+                  }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill={chatActions.pinned ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                    <path d="M12 17v5M9 3h6l-1 6 3 3v2H7v-2l3-3z" />
+                  </svg>
+                  {isZh ? (chatActions.pinned ? "取消置顶会话" : "置顶会话") : t(chatActions.pinned ? "sidebar.unpinChat" : "sidebar.pinChat")}
+                </button>
+              )}
               <button
                 role="menuitem"
                 onClick={() => { setMenuOpen(false); startRename(); }}
@@ -2892,10 +2987,28 @@ function SessionItem({
                 </svg>
                 {isZh ? "复制跨对话引用 (#ID)" : "Copy Reference (#ID)"}
               </button>
-              {chatActions && (
+              <button
+                role="menuitem"
+                onClick={() => { setMenuOpen(false); exportSessionHtml(); }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  width: "100%", height: 30, padding: "0 8px",
+                  background: "transparent", border: 0, borderRadius: 7,
+                  color: "var(--text)", cursor: "pointer",
+                  fontSize: 13, textAlign: "left",
+                }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                {isZh ? "导出为 HTML" : "Export as HTML"}
+              </button>
+              {Boolean(session.path) && isTauriDesktop() && (
                 <button
                   role="menuitem"
-                  onClick={() => { setMenuOpen(false); chatActions.onTogglePin(); }}
+                  onClick={() => { setMenuOpen(false); revealSessionFile(); }}
                   style={{
                     display: "flex", alignItems: "center", gap: 8,
                     width: "100%", height: 30, padding: "0 8px",
@@ -2905,9 +3018,9 @@ function SessionItem({
                   }}
                 >
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                    <path d="M12 17v5M9 3h6l-1 6 3 3v2H7v-2l3-3z" />
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
                   </svg>
-                  {t(chatActions.pinned ? "sidebar.unpinChat" : "sidebar.pinChat")}
+                  {isZh ? "在资源管理器中定位" : "Reveal Session File"}
                 </button>
               )}
               {onContinueInProject && (
@@ -2928,10 +3041,10 @@ function SessionItem({
                   {t("sidebar.continueInProject")}
                 </button>
               )}
-              {chatActions && (
+              {chatActions?.onToggleArchive && (
                 <button
                   role="menuitem"
-                  onClick={() => { setMenuOpen(false); chatActions.onToggleArchive(); }}
+                  onClick={() => { setMenuOpen(false); chatActions.onToggleArchive?.(); }}
                   style={{
                     display: "flex", alignItems: "center", gap: 8,
                     width: "100%", height: 30, padding: "0 8px",

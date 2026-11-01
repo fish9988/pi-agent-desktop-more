@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import type { SessionInfo, SubagentSessionStatus } from "@/lib/types";
 import { isImeComposing } from "@/lib/ime";
+import { appNotify } from "@/lib/notification-store";
 
 interface Props {
   rootSession: SessionInfo;
@@ -105,6 +106,8 @@ function AgentRow({
   onSteer: () => void;
 }) {
   const { locale, t } = useI18n();
+  const isZh = locale.startsWith("zh");
+  const [hovered, setHovered] = useState(false);
   const relation = session.relation?.kind === "subagent" ? session.relation : null;
   const status: SubagentSessionStatus = running ? "running" : relation?.status ?? "completed";
   const primary = main ? t("agentSwitcher.main") : relation?.description || sessionTitle(session);
@@ -130,6 +133,7 @@ function AgentRow({
       role="option"
       aria-selected={selected}
       tabIndex={0}
+      data-no-drag
       onClick={onSelect}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
@@ -137,55 +141,103 @@ function AgentRow({
           onSelect();
         }
       }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
         width: "100%",
-        minHeight: 56,
+        minHeight: 58,
         display: "grid",
-        gridTemplateColumns: "28px minmax(0, 1fr) auto",
+        gridTemplateColumns: "30px minmax(0, 1fr) auto",
         alignItems: "center",
-        gap: 9,
-        padding: "7px 12px",
+        gap: 10,
+        padding: "8px 12px",
         borderBottom: "var(--hairline) solid var(--border)",
-        borderLeft: selected ? "2px solid var(--accent)" : "2px solid transparent",
-        background: selected ? "var(--bg-selected)" : "transparent",
+        borderLeft: selected ? "3px solid var(--accent)" : "3px solid transparent",
+        background: selected ? "var(--bg-selected)" : hovered ? "var(--bg-hover)" : "transparent",
         color: "var(--text)",
         cursor: "pointer",
         textAlign: "left",
-      }}
-      onMouseEnter={(event) => {
-        if (!selected) event.currentTarget.style.background = "var(--bg-hover)";
-      }}
-      onMouseLeave={(event) => {
-        if (!selected) event.currentTarget.style.background = "transparent";
+        transition: "background 0.12s ease",
       }}
     >
-      <span style={{ width: 28, height: 28, display: "grid", placeItems: "center", color: main ? "var(--text-muted)" : "var(--accent)" }}>
+      <span style={{
+        width: 28,
+        height: 28,
+        display: "grid",
+        placeItems: "center",
+        borderRadius: "var(--plus-r-ctl, 6px)",
+        background: selected ? "var(--accent-soft)" : hovered ? "var(--surface)" : "transparent",
+        color: main ? "var(--text-muted)" : "var(--accent)",
+        transition: "background 0.12s ease",
+      }}>
         {main ? (
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" />
           </svg>
         ) : (
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <rect x="5" y="7" width="14" height="11" rx="2" /><path d="M9 11h.01M15 11h.01M9 15h6M12 7V4M10 4h4" />
           </svg>
         )}
       </span>
       <span style={{ minWidth: 0 }}>
-        <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12, fontWeight: selected ? 600 : 500 }} title={primary}>
-          {primary}
+        <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12, fontWeight: selected ? 600 : 500 }} title={primary}>
+            {primary}
+          </span>
+          {selected && (
+            <span style={{ flexShrink: 0, padding: "1px 6px", borderRadius: 999, background: "var(--accent-soft)", color: "var(--accent)", fontSize: 12, fontWeight: 600 }}>
+              {t("agentSwitcher.current")}
+            </span>
+          )}
         </span>
         <span style={{ display: "block", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-dim)", fontSize: 12 }} title={secondaryTitle}>
           {secondary}
         </span>
       </span>
       <span style={{ display: "flex", alignItems: "center", gap: 6, color: main && !running ? "var(--text-dim)" : statusColor(status), fontSize: 12, whiteSpace: "nowrap" }}>
-        {main && !running ? (
-          selected ? t("agentSwitcher.current") : null
-        ) : (
+        {!(main && !running) && (
           <>
             <StatusIcon status={status} />
             <span>{t(`agentSwitcher.status.${status}`)}</span>
           </>
+        )}
+        {hovered && (
+          <button
+            type="button"
+            title={isZh ? `复制跨对话引用 (#${session.id.slice(0, 8)}…)` : `Copy reference (#${session.id.slice(0, 8)}…)`}
+            aria-label={isZh ? "复制跨对话引用" : "Copy reference"}
+            onClick={(event) => {
+              event.stopPropagation();
+              const token = `#${session.id}`;
+              void navigator.clipboard?.writeText(token).then(() => {
+                appNotify.success({
+                  message: isZh ? `已复制子任务引用 ${token.slice(0, 9)}…` : `Copied ${token.slice(0, 9)}…`,
+                });
+              });
+            }}
+            style={{
+              display: "inline-grid",
+              placeItems: "center",
+              width: 22,
+              height: 22,
+              border: "var(--hairline) solid var(--border)",
+              borderRadius: 5,
+              background: "var(--bg)",
+              color: "var(--text-muted)",
+              cursor: "pointer",
+              padding: 0,
+            }}
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <line x1="4" y1="9" x2="20" y2="9" /><line x1="4" y1="15" x2="20" y2="15" /><line x1="10" y1="3" x2="8" y2="21" /><line x1="16" y1="3" x2="14" y2="21" />
+            </svg>
+          </button>
+        )}
+        {!selected && hovered && !controllable && (
+          <span style={{ display: "inline-flex", alignItems: "center", color: "var(--accent)", fontSize: 12, fontWeight: 500 }}>
+            {isZh ? "查看 →" : "Open →"}
+          </span>
         )}
         {controllable && (
           <span style={{ display: "inline-flex", gap: 4, marginLeft: 4 }}>
@@ -279,16 +331,17 @@ export function AgentSessionPanel({ rootSession, subagents, selectedSessionId, r
 
   return (
     <div
-      className="agent-session-panel"
+      className="agent-session-panel native-popover"
+      data-no-drag
+      onMouseDown={(e) => e.stopPropagation()}
       role="listbox"
       aria-label={t("agentSwitcher.title")}
       style={{
-        background: "var(--bg-panel)",
-        borderLeft: "var(--hairline) solid var(--border)",
-        borderRight: "var(--hairline) solid var(--border)",
-        borderBottom: "var(--hairline) solid var(--border)",
-        borderRadius: "0 0 6px 6px",
-        boxShadow: "0 10px 28px rgba(0,0,0,0.10)",
+        marginTop: 4,
+        background: "var(--surface)",
+        border: "var(--hairline) solid var(--border)",
+        borderRadius: "var(--plus-r-overlay, 12px)",
+        boxShadow: "var(--shadow-dialog)",
         overflow: "hidden",
       }}
     >

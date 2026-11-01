@@ -20,9 +20,9 @@ import { dirname, resolve } from "path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 
 /** Lines shorter than this are parsed as-is; the strip only pays off on big ones. */
-const SLIM_MIN_LINE_BYTES = 256 * 1024;
+const SLIM_MIN_LINE_BYTES = 32 * 1024;
 /** Files below this size keep the SDK's own open path. */
-export const SLIM_LOAD_MIN_FILE_BYTES = 16 * 1024 * 1024;
+export const SLIM_LOAD_MIN_FILE_BYTES = 2 * 1024 * 1024;
 /** Beyond this, a single Buffer is the wrong tool; let the SDK stream it. */
 const SLIM_LOAD_MAX_FILE_BYTES = 1024 * 1024 * 1024;
 /** `"role":"toolResult"` sits right after the first few short keys. */

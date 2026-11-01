@@ -705,17 +705,42 @@ function ImageLightbox({
   );
 }
 
-function ImageViewer({ filePath, cwd, sourceSessionId, watchEnabled = true }: Props) {
+function extractSvgSymbols(svgSource: string): Array<{ id: string; viewBox: string; inner: string }> {
+  const symbols: Array<{ id: string; viewBox: string; inner: string }> = [];
+  const regex = /<symbol\b([^>]*)>([\s\S]*?)<\/symbol>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(svgSource)) !== null) {
+    const attrs = match[1];
+    const id = /\bid=["']([^"']+)["']/i.exec(attrs)?.[1];
+    if (!id) continue;
+    const viewBox = /\bviewBox=["']([^"']+)["']/i.exec(attrs)?.[1] ?? "0 0 24 24";
+    // Strip any script or event handlers inside symbol inner markup
+    const safeInner = match[2]
+      .replace(/<script[\s\S]*?<\/script>/gi, "")
+      .replace(/\son[a-z]+\s*=\s*["'][^"']*["']/gi, "");
+    symbols.push({ id, viewBox, inner: safeInner });
+    if (symbols.length >= 200) break;
+  }
+  return symbols;
+}
+
+function ImageViewer(props: Props) {
+  const { filePath, cwd, sourceSessionId, watchEnabled = true } = props;
   const [watching, setWatching] = useState(false);
   const [bust, setBust] = useState(0);
   const [size, setSize] = useState<number | null>(null);
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [zoom, setZoom] = useState<number | null>(null);
+  const [backdrop, setBackdrop] = useState<"checker" | "light" | "dark">("checker");
+  const [svgMode, setSvgMode] = useState<"preview" | "source">("preview");
+  const [svgSymbols, setSvgSymbols] = useState<Array<{ id: string; viewBox: string; inner: string }> | null>(null);
   const esRef = useRef<EventSource | null>(null);
   const syncRequestRef = useRef(0);
 
   const ext = getFileName(filePath).toLowerCase().split(".").pop() ?? "";
+  const isSvg = ext === "svg";
 
   useEffect(() => {
     setBust(0);
@@ -723,7 +748,25 @@ function ImageViewer({ filePath, cwd, sourceSessionId, watchEnabled = true }: Pr
     setNaturalSize(null);
     setError(null);
     setWatching(false);
+    setZoom(null);
+    setSvgSymbols(null);
   }, [filePath, sourceSessionId]);
+
+  useEffect(() => {
+    if (!isSvg || svgMode !== "preview") return;
+    let cancelled = false;
+    fetch(getFileApiUrl(filePath, "read", sourceSessionId, bust ? { v: bust } : undefined))
+      .then((r) => (r.ok ? r.text() : ""))
+      .then((txt) => {
+        if (cancelled || !txt) return;
+        if (txt.includes("<symbol")) {
+          const parsed = extractSvgSymbols(txt);
+          if (parsed.length > 0) setSvgSymbols(parsed);
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [bust, filePath, isSvg, sourceSessionId, svgMode]);
 
   useEffect(() => {
     setWatching(false);
@@ -786,10 +829,19 @@ function ImageViewer({ filePath, cwd, sourceSessionId, watchEnabled = true }: Pr
 
   const src = getFileApiUrl(filePath, "read", sourceSessionId, bust ? { v: bust } : undefined);
 
+  if (isSvg && svgMode === "source") {
+    return (
+      <TextFileViewer
+        {...props}
+        initialDisplayMode="source"
+      />
+    );
+  }
+
   const formatSizeStr = size != null ? formatSize(size) : null;
   const metadata = [
-    ext || "image",
-    naturalSize ? `${naturalSize.w} × ${naturalSize.h}` : null,
+    svgSymbols ? `SVG 图标集 (${svgSymbols.length})` : (ext || "image"),
+    !svgSymbols && naturalSize ? `${naturalSize.w} × ${naturalSize.h}` : null,
     formatSizeStr,
   ].filter(Boolean).join(" · ");
 
@@ -802,28 +854,101 @@ function ImageViewer({ filePath, cwd, sourceSessionId, watchEnabled = true }: Pr
         watching={watching}
         sourceSessionId={sourceSessionId}
       >
-        {!error && (
-          <button
-            type="button"
-            className="file-viewer-icon-button plus-image-zoom-btn"
-            title="全屏放大预览"
-            aria-label="全屏放大预览"
-            onClick={() => setLightboxOpen(true)}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <polyline points="15 3 21 3 21 9" />
-              <polyline points="9 21 3 21 3 15" />
-              <line x1="21" y1="3" x2="14" y2="10" />
-              <line x1="3" y1="21" x2="10" y2="14" />
-            </svg>
-          </button>
+        {isSvg && (
+          <div className="file-viewer-mode-group" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={svgMode === "source"}
+              className="file-viewer-mode-button"
+              onClick={() => setSvgMode("source")}
+            >
+              Source
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={svgMode === "preview"}
+              className="file-viewer-mode-button is-active"
+              onClick={() => setSvgMode("preview")}
+            >
+              Preview
+            </button>
+          </div>
+        )}
+        {!error && !svgSymbols && (
+          <>
+            <button
+              type="button"
+              className="file-viewer-icon-button"
+              title="缩小"
+              aria-label="缩小"
+              onClick={() => setZoom((z) => Math.max(0.25, +((z ?? 1) - 0.25).toFixed(2)))}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12" /></svg>
+            </button>
+            <button
+              type="button"
+              className="file-viewer-mode-button"
+              title="重置缩放（适应窗口 / 100%）"
+              onClick={() => setZoom((z) => (z === null ? 1 : null))}
+            >
+              {zoom === null ? "Fit" : `${Math.round(zoom * 100)}%`}
+            </button>
+            <button
+              type="button"
+              className="file-viewer-icon-button"
+              title="放大"
+              aria-label="放大"
+              onClick={() => setZoom((z) => Math.min(5, +((z ?? 1) + 0.25).toFixed(2)))}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+            </button>
+            <button
+              type="button"
+              className="file-viewer-mode-button"
+              title="切换预览背景底板（棋盘格 / 亮底 / 暗底）"
+              onClick={() => setBackdrop((b) => (b === "checker" ? "light" : b === "light" ? "dark" : "checker"))}
+            >
+              {backdrop === "checker" ? "棋盘" : backdrop === "light" ? "白底" : "暗底"}
+            </button>
+            <button
+              type="button"
+              className="file-viewer-icon-button plus-image-zoom-btn"
+              title="全屏放大预览"
+              aria-label="全屏放大预览"
+              onClick={() => setLightboxOpen(true)}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="15 3 21 3 21 9" />
+                <polyline points="9 21 3 21 3 15" />
+                <line x1="21" y1="3" x2="14" y2="10" />
+                <line x1="3" y1="21" x2="10" y2="14" />
+              </svg>
+            </button>
+          </>
         )}
       </FileViewerToolbar>
       <div
-        className="file-viewer-image-stage"
+        className={`file-viewer-image-stage${backdrop === "light" ? " is-light-backdrop" : backdrop === "dark" ? " is-dark-backdrop" : ""}`}
       >
         {error ? (
           <div style={{ color: "var(--danger)", fontSize: 13 }}>{error}</div>
+        ) : svgSymbols ? (
+          <div className="plus-svg-symbol-grid">
+            {svgSymbols.map((sym) => (
+              <div key={sym.id} className="plus-svg-symbol-card" title={`#${sym.id}`}>
+                <svg
+                  viewBox={sym.viewBox}
+                  width="28"
+                  height="28"
+                  fill="currentColor"
+                  dangerouslySetInnerHTML={{ __html: sym.inner }}
+                />
+                <span>{sym.id}</span>
+              </div>
+            ))}
+          </div>
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -837,11 +962,12 @@ function ImageViewer({ filePath, cwd, sourceSessionId, watchEnabled = true }: Pr
             }}
             onError={() => setError("Failed to load image")}
             style={{
-              maxWidth: "100%",
-              maxHeight: "100%",
+              maxWidth: zoom === null ? "100%" : "none",
+              maxHeight: zoom === null ? "100%" : "none",
+              transform: zoom === null ? undefined : `scale(${zoom})`,
+              transformOrigin: "center center",
               objectFit: "contain",
               cursor: "zoom-in",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
             }}
           />
         )}
@@ -1196,8 +1322,34 @@ function DocumentViewer({ filePath, cwd, sourceSessionId, initialPage, watchEnab
     };
   }, [filePath, isPdf, sourceSessionId, watchEnabled]);
 
+  const docTypeLabel: Record<string, string> = {
+    pdf: "PDF",
+    docx: "Word (.docx)",
+    doc: "Word (.doc)",
+    xlsx: "Excel (.xlsx)",
+    xls: "Excel (.xls)",
+    ods: "Spreadsheet (.ods)",
+    csv: "CSV 表格",
+    tsv: "TSV 表格",
+    pptx: "PowerPoint (.pptx)",
+  };
+  const isTabularText = ext === "csv" || ext === "tsv";
+  const [tabularMode, setTabularMode] = useState<"preview" | "source">("preview");
+
+  if (isTabularText && tabularMode === "source") {
+    return (
+      <TextFileViewer
+        filePath={filePath}
+        cwd={cwd}
+        sourceSessionId={sourceSessionId}
+        initialDisplayMode="source"
+        watchEnabled={watchEnabled}
+      />
+    );
+  }
+
   const metadata = [
-    ext === "docx" ? "DOCX preview" : "PDF",
+    docTypeLabel[ext] ?? "Document",
     size != null ? formatSize(size) : null,
   ].filter(Boolean).join(" · ");
 
@@ -1209,7 +1361,30 @@ function DocumentViewer({ filePath, cwd, sourceSessionId, initialPage, watchEnab
         metadata={metadata}
         watching={watching}
         sourceSessionId={sourceSessionId}
-      />
+      >
+        {isTabularText && (
+          <div className="file-viewer-mode-group" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tabularMode === "source"}
+              className="file-viewer-mode-button"
+              onClick={() => setTabularMode("source")}
+            >
+              Source
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tabularMode === "preview"}
+              className="file-viewer-mode-button is-active"
+              onClick={() => setTabularMode("preview")}
+            >
+              Preview
+            </button>
+          </div>
+        )}
+      </FileViewerToolbar>
       <div className="file-viewer-document-stage">
         {error ? (
           <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, color: "var(--danger)", fontSize: 13, textAlign: "center" }}>
@@ -1294,7 +1469,7 @@ function TextFileViewer({
   // images and fonts load, which is only safe with scripts off (sandbox without
   // allow-scripts, plus the route's CSP). Pages that need JS can opt into an
   // isolated srcDoc sandbox instead, where scripts run but local files don't load.
-  const [htmlScriptsEnabled, setHtmlScriptsEnabled] = useState(false);
+  const [htmlScriptsEnabled, setHtmlScriptsEnabled] = useState(true);
   const [htmlPreviewRevision, setHtmlPreviewRevision] = useState(0);
   const esRef = useRef<EventSource | null>(null);
   const contentRequestRef = useRef(0);
