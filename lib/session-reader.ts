@@ -1000,22 +1000,22 @@ function entryToUiMessage(
       }
       if (!options.deferThinking || message.role !== "assistant") return message;
       const content = message.content;
-      const slimAssistant = { ...message } as Record<string, unknown>;
+      const slimAssistant = { ...(message as unknown as Record<string, unknown>) };
       delete slimAssistant.diagnostics;
       return {
-        ...(slimAssistant as typeof message),
+        ...(slimAssistant as unknown as typeof message),
         content: content.map((block) => {
           if (block.type !== "thinking") return block;
-          const cleanBlock = { ...block } as Record<string, unknown>;
+          const cleanBlock = { ...(block as unknown as Record<string, unknown>) };
           delete cleanBlock.thinkingSignature;
           if (block.thinking.trim() !== "") {
             return {
-              ...(cleanBlock as typeof block),
+              ...(cleanBlock as unknown as typeof block),
               thinking: getThinkingPreview(block.thinking),
               deferred: true,
             };
           }
-          return cleanBlock as typeof block;
+          return cleanBlock as unknown as typeof block;
         }),
       };
     }
