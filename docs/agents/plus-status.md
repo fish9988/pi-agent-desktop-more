@@ -10,7 +10,7 @@ _最后更新：2026-10-27_
 - 上一版 v1.6.1：修复文件树下载按钮无反应、「在资源管理器中显示」打开错目录（正斜杠路径 + Rust 引号问题，改用 `raw_arg`）。v1.6.0 是上游周报 #1 的移植。
 - 用户的正式版 `D:\Pi Agent Plus` 是 **1.5.0**，用户会自己点「更新」升级到 1.6.0。
 - 测试版 `D:\Pi Agent Plus Test` 是 1.7.0-test.23（`plus-prefs.test.json` 里主题选了「Plus 分层」、深色），没在运行。
-- **最新发布：v1.18.0**（2026-11-02）：① 会话压缩卡片默认折成一行动条（可展开，记住选择）；② 打开会话提速：去掉消息列表顶部哨兵的自动翻页风暴（实测重载 18 次 `/context`、约 5MB → 0）、滚动恢复最多翻 2 页、整回合补齐封顶 320 条、会话文件缓存 64MB→128MB，实测 69MB/4784 条会话首次打开 4.1s→1.5s、重载 6.1s→0.6s、切换 17ms、首屏 DOM 4618→666；③ 设置窗口收起后共享 store 记录状态，角落小窗 / 「展开」/ 侧栏设置 / `Ctrl+,` 均可恢复，且上移到输入框上方不挡发送按钮。上一版 v1.17.0（2026-11-01）：顶栏 Agents 点击被拖拽劫持、项目会话置顶/导出/定位、Office 与 SVG/PNG/HTML 预览。
+- **最新发布：v1.18.1**（2026-11-02）：修 1.18.0 的回归——向上滚动加载更早消息失效。根因两层：手势监听挂在了首屏渲染前还不存在的滚动容器上（监听永远没挂上），而哨兵的 IntersectionObserver 只在进/出视口那一瞬回调、打开时就已可见。现在监听改到 `document` 捕获阶段（`scroll` 不冒泡但捕获能收），并且 **`scrollTop ≤ 24` 就拉上一页**；顶部提示行本身也变成可点按钮（`.chat-load-earlier`）；拉页后的锚点回位产生的 scroll 用 600ms 窗口忽略。回归测试：`components/ChatWindow.older-history.test.mjs`。上一版 v1.18.0（2026-11-02）：压缩卡片可折叠、去掉打开时的自动翻页风暴、滚动恢复与整回合补齐封顶、设置窗口收起后可恢复。
 - 上游周报 #2（2026-10-27）已移植并标记为已看（`.github/upstream-reviewed.json` 指向 pi-web `e533d9b3`、abcwyc `56691c5a`）。
 
 ## 顶栏子代理下拉切换器与《纸枢 · Kami》视觉升级（1.10.0，2026-10-27）
@@ -135,7 +135,7 @@ _最后更新：2026-10-27_
 
 ### 性能/交互上的三个坑（1.18.0 踩过，别再踩）
 
-1. **消息列表顶部的哨兵必须等“用户真的动过对话”才翻页。** 它的 IntersectionObserver 在首屏、滚动恢复、短窗口时本来就直接可见，一旦无门槛加载就会链式抓完整个历史（实测一次重载 18 次 `/context`、约 5MB、首屏 4618 个 DOM 节点）。门闩是 `ChatWindow.tsx` 的 `userScrollIntentRef`（只由 wheel / touch / pointerdown / keydown 置位），外加「翻一页没变高就只重试一次」的 `stalledOlderLoadsRef`。
+1. **消息列表顶部的哨兵必须等“用户真的动过对话”才翻页。** 它的 IntersectionObserver 在首屏、滚动恢复、短窗口时本来就直接可见，一旦无门槛加载就会链式抓完整个历史（实测一次重载 18 次 `/context`、约 5MB、首屏 4618 个 DOM 节点）。门闩是 `ChatWindow.tsx` 的 `userScrollIntentRef`（只由 wheel / touch / pointerdown / keydown 置位）。**关键教训（1.18.1）**：这个门闩的监听必须挂在 `document` 捕获阶段，不能挂在 `scrollContainerRef.current` 上——那个容器首屏渲染前还不存在，而按 ref 做依赖的 effect 不会再跑，于是监听永远没挂上；而哨兵只在进/出视口那一瞬回调，打开时已可见就再也不会回调，两者叠加就是你看到的“滚完全没用”。真正触发拉页的是 `scrollTop ≤ 24` 的 scroll 监听。
 2. **滚动位置恢复只能翻有限页。** `pendingScrollRestore` 的循环上限是 `MAX_RESTORE_PAGES = 2`，找不到锚点就停在最新一屏；`lib/session-reader.ts` 的 `MAX_TURN_EXTENSION_ENTRIES` 也不再允许一页拉到 1500 条。上游 `lib/session-reader.pagination.test.mjs` 要求“长回合仍能回退到它的 user 消息”，所以这个上限不能低于 240。
 3. **设置窗口的收起状态属于 AppShell，不属于窗口栏。** 状态在 `lib/plus-settings-window.ts`（`useSyncExternalStore`）。如果把 `minimized` 放回 `PlusSettingsWindowBar` 的 `useState`，侧栏设置 / `Ctrl+,` / 原生菜单都会变成“把同一个已打开的设置再设一遍”，收起后彻底无法恢复。新增任何进入设置的入口，都要先调 `expandSettingsWindow()`。
 

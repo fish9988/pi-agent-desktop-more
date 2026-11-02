@@ -1477,3 +1477,25 @@ html[data-plus-live-preview="1"] .settings-dialog-backdrop.is-plus-page .setting
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* -- Plus: "load earlier messages" hint is a button ---------------------- */
+/* The row doubles as the sentinel the transcript observer watches; making it
+   clickable means reading older history does not depend on a wheel gesture
+   reaching the scrollport. */
+.chat-load-earlier {
+  padding: 2px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-panel);
+  color: var(--text-muted);
+  font: inherit;
+  cursor: pointer;
+  transition: background var(--plus-dur-1, 120ms) ease, color var(--plus-dur-1, 120ms) ease;
+}
+.chat-load-earlier:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.chat-load-earlier:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
