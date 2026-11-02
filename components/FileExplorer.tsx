@@ -1,6 +1,7 @@
 "use client";
 
 import { forwardRef, useState, useCallback, useEffect, useImperativeHandle, useMemo, useRef, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import { getFileIcon, FolderIcon } from "./FileIcons";
 import { DismissButton } from "./DismissButton";
 import {
@@ -14,6 +15,7 @@ import {
 import type { GitFileStatus, GitFileStatusKind, GitStatusResponse } from "@/lib/git-types";
 import type { FileIndexEntry } from "@/lib/file-fuzzy";
 import { buildSearchTree, type SearchTreeNode } from "@/lib/search-tree";
+import { scaleVar } from "@/lib/plus-design-scale";
 import { useI18n } from "@/hooks/useI18n";
 import { isImeComposing } from "@/lib/ime";
 import { openDomMenu } from "@/lib/dom-menu-store";
@@ -113,9 +115,36 @@ async function responseError(res: Response, fallback: string): Promise<Error> {
 
 const DIR_CACHE_TTL_MS = 30_000;
 const DIR_STORAGE_KEY = "pi-plus-dir-snapshots-v1";
+const CHANGES_VIEW_MODE_STORAGE_KEY = "pi-web:sidebar-changes-view-mode";
 const MAX_PERSISTED_DIRS = 20;
 const dirEntriesCache = new Map<string, { entries: FileNode[]; expiresAt: number }>();
 const dirInFlight = new Map<string, Promise<FileNode[]>>();
+
+export type ChangesViewMode = "list" | "tree";
+
+export function loadChangesViewMode(): ChangesViewMode {
+  if (typeof window === "undefined") return "list";
+  try {
+    return window.localStorage.getItem(CHANGES_VIEW_MODE_STORAGE_KEY) === "tree" ? "tree" : "list";
+  } catch {
+    return "list";
+  }
+}
+
+export function saveChangesViewMode(mode: ChangesViewMode): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(CHANGES_VIEW_MODE_STORAGE_KEY, mode);
+  } catch {
+    // Persistence is best-effort.
+  }
+}
+
+/** Strip control characters and replacement chars from display filenames to prevent garbled boxes. */
+export function sanitizeDisplayFileName(name: string): string {
+  const cleaned = name.replace(/[\u0000-\u001f\u007f-\u009f\ufffd]+/g, "");
+  return cleaned || name;
+}
 
 function readPersistedDirEntries(dirPath: string): FileNode[] | null {
   if (typeof window === "undefined") return null;
@@ -229,10 +258,10 @@ const GIT_STATUS_KEYS: Record<GitFileStatusKind, string> = {
 };
 
 const GIT_STATUS_COLORS: Record<GitFileStatusKind, string> = {
-  modified: "#d6a84b",
+  modified: "var(--warning)",
   added: "var(--success)",
   deleted: "var(--danger)",
-  renamed: "#60a5fa",
+  renamed: "var(--accent)",
   untracked: "var(--success)",
   conflict: "var(--danger)",
 };
@@ -327,6 +356,7 @@ export function TreeNode({
   gitStatusByPath,
   changedDirectoryPaths,
   t,
+  onStartSiblingCreate,
 }: {
   node: FileNode;
   depth: number;
@@ -340,6 +370,7 @@ export function TreeNode({
   gitStatusByPath: Map<string, GitFileStatus>;
   changedDirectoryPaths: Set<string>;
   t: Translate;
+  onStartSiblingCreate?: (kind: "file" | "folder") => void;
 }) {
   const open = expandedPaths.has(node.fullPath);
   const highlighted = highlightedPaths.has(node.fullPath);
@@ -438,6 +469,13 @@ export function TreeNode({
     if (!loaded && !pendingLinkTarget) void loadChildren();
     setCreating(kind);
   };
+  const startSiblingCreate = (kind: "file" | "folder") => {
+    if (onStartSiblingCreate) {
+      onStartSiblingCreate(kind);
+    } else if (ops) {
+      ops.startRootCreate(kind);
+    }
+  };
   const rowActions = {
     open: node.isDir ? undefined : () => onOpenFile(node.fullPath, node.name),
     rename: () => setRenaming(true),
@@ -445,6 +483,27 @@ export function TreeNode({
     newFile: node.isDir ? () => startCreate("file") : undefined,
     newFolder: node.isDir ? () => startCreate("folder") : undefined,
   };
+  const buildContextMenuEntries = () => {
+    if (!ops) return [];
+    const baseEntries = fileRowMenuEntries(t, ops, node, rowActions);
+    if (node.isDir) return baseEntries;
+    const newFileText = t("fileOps.newFile");
+    const isZhCN = newFileText === "新建文件";
+    const isZhTW = newFileText === "新增檔案";
+    const siblingNewFileLabel = isZhCN ? "在同级新建文件" : isZhTW ? "在同級新增檔案" : "New File Here";
+    const siblingNewFolderLabel = isZhCN ? "在同级新建文件夹" : isZhTW ? "在同級新增資料夾" : "New Folder Here";
+    const siblingItems = [
+      { label: siblingNewFileLabel, onSelect: () => startSiblingCreate("file") },
+      { label: siblingNewFolderLabel, onSelect: () => startSiblingCreate("folder") },
+      { kind: "separator" as const },
+    ];
+    // Insert right after "Open" + separator if present, otherwise at the top
+    if (baseEntries.length >= 2 && "kind" in baseEntries[1] && baseEntries[1].kind === "separator") {
+      return [baseEntries[0], baseEntries[1], ...siblingItems, ...baseEntries.slice(2)];
+    }
+    return [...siblingItems, ...baseEntries];
+  };
+  const displayName = sanitizeDisplayFileName(node.name);
 
   return (
     <div>
@@ -456,7 +515,7 @@ export function TreeNode({
         onContextMenu={ops ? (event) => {
           event.preventDefault();
           event.stopPropagation();
-          openDomMenu(fileRowMenuEntries(t, ops, node, rowActions), { x: event.clientX, y: event.clientY });
+          openDomMenu(buildContextMenuEntries(), { x: event.clientX, y: event.clientY });
         } : undefined}
         onKeyDown={(event) => {
           if (renaming) return;
@@ -525,7 +584,7 @@ export function TreeNode({
                 ops.onChanged();
               }}
             />
-          ) : node.name}
+          ) : displayName}
         </span>
         {!hovered && pendingLinkTarget && (
           <span
@@ -542,7 +601,7 @@ export function TreeNode({
             aria-label={t("files.newlyUploaded")}
             style={{ width: 14, height: 14, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}
           >
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#3b82f6" }} />
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--accent)" }} />
           </span>
         )}
         {!hovered && !node.isDir && gitStatus && (
@@ -561,7 +620,7 @@ export function TreeNode({
               justifyContent: "center",
             }}
           >
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#d6a84b" }} />
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--warning)" }} />
           </span>
         )}
         {loading && (
@@ -744,6 +803,7 @@ export function TreeNode({
               gitStatusByPath={gitStatusByPath}
               changedDirectoryPaths={changedDirectoryPaths}
               t={t}
+              onStartSiblingCreate={startCreate}
             />
           ))}
           {children.length === 0 && loaded && !loadError && (
@@ -772,20 +832,25 @@ function ChangeRow({
   onOpenFile,
   onAtMention,
   t,
+  depth = 0,
+  treeMode = false,
 }: {
   status: GitFileStatus;
   cwd: string;
   onOpenFile: OpenFileHandler;
   onAtMention?: (relativePath: string, isDir: boolean) => void;
   t: Translate;
+  depth?: number;
+  treeMode?: boolean;
 }) {
   const [hovered, setHovered] = useState(false);
   const name = getFileName(status.filePath);
   const rel = getRelativeFilePath(status.filePath, cwd);
   // Split the path so the directory part ellipsizes while the file name stays fully visible
   const lastSlash = rel.lastIndexOf("/");
-  const dirPart = lastSlash >= 0 ? rel.slice(0, lastSlash + 1) : "";
-  const baseName = lastSlash >= 0 ? rel.slice(lastSlash + 1) : rel;
+  const dirPart = !treeMode && lastSlash >= 0 ? rel.slice(0, lastSlash + 1) : "";
+  const rawBaseName = treeMode ? name : (lastSlash >= 0 ? rel.slice(lastSlash + 1) : rel);
+  const baseName = sanitizeDisplayFileName(rawBaseName);
   return (
     <div
       onClick={() => onOpenFile(status.filePath, name, { modeHint: "diff" })}
@@ -795,8 +860,8 @@ function ChangeRow({
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 6,
-        paddingLeft: 10,
+        gap: treeMode ? 4 : 6,
+        paddingLeft: treeMode ? 8 + depth * 14 : 10,
         paddingRight: 8,
         height: 24,
         cursor: "pointer",
@@ -807,6 +872,7 @@ function ChangeRow({
       }}
     >
       <GitStatusBadge status={status} t={t} />
+      {treeMode && <span style={{ width: 10, flexShrink: 0 }} />}
       <span style={{ flexShrink: 0, display: "flex", alignItems: "center", opacity: 0.85 }}>
         {getFileIcon(name, 13)}
       </span>
@@ -832,7 +898,7 @@ function ChangeRow({
               color: "var(--text-dim)",
             }}
           >
-            {dirPart}
+            {sanitizeDisplayFileName(dirPart)}
           </span>
         )}
         <span
@@ -840,7 +906,7 @@ function ChangeRow({
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
-            flexShrink: 0,
+            flexShrink: treeMode ? 1 : 0,
             maxWidth: "100%",
           }}
         >
@@ -883,6 +949,208 @@ function ChangeRow({
   );
 }
 
+function ChangesFolderRow({
+  node,
+  depth,
+  open,
+  onToggle,
+}: {
+  node: SearchTreeNode;
+  depth: number;
+  open: boolean;
+  onToggle: (path: string, open: boolean) => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div
+      onClick={() => onToggle(node.path, !open)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      title={node.path}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 4,
+        paddingLeft: 8 + depth * 14,
+        paddingRight: 8,
+        height: 24,
+        cursor: "pointer",
+        background: hovered ? "var(--bg-hover)" : "transparent",
+        borderRadius: 4,
+        userSelect: "none",
+      }}
+    >
+      <svg
+        width="10" height="10" viewBox="0 0 10 10" fill="none"
+        stroke="var(--text-dim)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+        style={{ flexShrink: 0, transform: open ? "rotate(90deg)" : "none", transition: "transform 0.1s" }}
+        aria-hidden="true"
+      >
+        <polyline points="3 2 7 5 3 8" />
+      </svg>
+      <span style={{ flexShrink: 0, display: "flex", alignItems: "center" }}>
+        <FolderIcon size={14} open={open} />
+      </span>
+      <span
+        style={{
+          fontSize: 12,
+          color: "var(--text)",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          flex: 1,
+        }}
+      >
+        {sanitizeDisplayFileName(node.name)}
+      </span>
+    </div>
+  );
+}
+
+function ChangesTreeRows({
+  nodes,
+  depth,
+  cwd,
+  statusByPath,
+  collapsedPaths,
+  onToggleExpanded,
+  onOpenFile,
+  onAtMention,
+  t,
+}: {
+  nodes: SearchTreeNode[];
+  depth: number;
+  cwd: string;
+  statusByPath: Map<string, GitFileStatus>;
+  collapsedPaths: Set<string>;
+  onToggleExpanded: (path: string, open: boolean) => void;
+  onOpenFile: OpenFileHandler;
+  onAtMention?: (relativePath: string, isDir: boolean) => void;
+  t: Translate;
+}) {
+  return (
+    <>
+      {nodes.map((node) => {
+        if (node.isDir) {
+          const open = !collapsedPaths.has(node.path);
+          return (
+            <div key={`dir:${node.path}`}>
+              <ChangesFolderRow
+                node={node}
+                depth={depth}
+                open={open}
+                onToggle={onToggleExpanded}
+              />
+              {open && (
+                <ChangesTreeRows
+                  nodes={node.children}
+                  depth={depth + 1}
+                  cwd={cwd}
+                  statusByPath={statusByPath}
+                  collapsedPaths={collapsedPaths}
+                  onToggleExpanded={onToggleExpanded}
+                  onOpenFile={onOpenFile}
+                  onAtMention={onAtMention}
+                  t={t}
+                />
+              )}
+            </div>
+          );
+        }
+        const status = statusByPath.get(node.path);
+        if (!status) return null;
+        return (
+          <ChangeRow
+            key={status.filePath}
+            status={status}
+            cwd={cwd}
+            onOpenFile={onOpenFile}
+            onAtMention={onAtMention}
+            t={t}
+            depth={depth}
+            treeMode
+          />
+        );
+      })}
+    </>
+  );
+}
+
+function ChangesViewToggleIcon({ mode }: { mode: ChangesViewMode }) {
+  if (mode === "tree") {
+    return (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M8 6h13" /><path d="M8 12h13" /><path d="M8 18h13" />
+        <path d="M3 6h.01" /><path d="M3 12h.01" /><path d="M3 18h.01" />
+      </svg>
+    );
+  }
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M6 3v12" /><path d="M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
+      <path d="M6 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
+      <path d="M18 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
+      <path d="M9 12h6" /><path d="M12 12v3" />
+    </svg>
+  );
+}
+
+function RootCreateButtons({
+  t,
+  onCreateFile,
+  onCreateFolder,
+}: {
+  t: Translate;
+  onCreateFile: () => void;
+  onCreateFolder: () => void;
+}) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+      <button
+        type="button"
+        onClick={onCreateFile}
+        title={t("fileOps.newFile")}
+        aria-label={t("fileOps.newFile")}
+        style={{
+          display: "flex", alignItems: "center", justifyContent: "center",
+          width: 24, height: 24, padding: 0,
+          background: "none", border: "none",
+          color: "var(--text-dim)", cursor: "pointer", borderRadius: 4,
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-dim)"; }}
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          <polyline points="14 2 14 8 20 8" />
+          <line x1="12" y1="18" x2="12" y2="12" />
+          <line x1="9" y1="15" x2="15" y2="15" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        onClick={onCreateFolder}
+        title={t("fileOps.newFolder")}
+        aria-label={t("fileOps.newFolder")}
+        style={{
+          display: "flex", alignItems: "center", justifyContent: "center",
+          width: 24, height: 24, padding: 0,
+          background: "none", border: "none",
+          color: "var(--text-dim)", cursor: "pointer", borderRadius: 4,
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-dim)"; }}
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+          <line x1="12" y1="11" x2="12" y2="17" />
+          <line x1="9" y1="14" x2="15" y2="14" />
+        </svg>
+      </button>
+    </span>
+  );
+}
+
 export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileExplorer({
   cwd,
   onOpenFile,
@@ -896,7 +1164,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
   onFileSearchOpenChange,
   externalQuery,
 }, ref) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [roots, setRoots] = useState<FileNode[]>(() => getCachedDirEntries(cwd) ?? []);
   const [loading, setLoading] = useState(() => getCachedDirEntries(cwd) === null);
   const [error, setError] = useState<string | null>(null);
@@ -905,6 +1173,12 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
   const [highlightedPaths, setHighlightedPaths] = useState<Set<string>>(new Set());
   const [gitFiles, setGitFiles] = useState<GitFileStatus[]>([]);
   const [gitLineStats, setGitLineStats] = useState({ additions: 0, deletions: 0 });
+  const [changesViewMode, setChangesViewMode] = useState<ChangesViewMode>("list");
+  // Folders stay open unless collapsed here, so a refresh or a newly changed folder never folds them.
+  const [collapsedChangeDirs, setCollapsedChangeDirs] = useState<Set<string>>(() => new Set());
+  const [localChangesCollapsed, setLocalChangesCollapsed] = useState(changesCollapsed);
+  const [toolbarMount, setToolbarMount] = useState<HTMLElement | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [uploadPhase, setUploadPhase] = useState<UploadPhase>("idle");
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -1023,6 +1297,12 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
     }
     return directories;
   }, [cwd, gitFiles]);
+
+  const changesByRelativePath = useMemo(() => new Map(gitFiles.map((status) => [
+    normalizeFilePathSlashes(getRelativeFilePath(status.filePath, cwd)).replace(/^\/+/, ""),
+    status,
+  ])), [cwd, gitFiles]);
+  const changesTree = useMemo(() => buildSearchTree([...changesByRelativePath.keys()]), [changesByRelativePath]);
 
   const handleToggleExpanded = useCallback((fullPath: string, open: boolean) => {
     setExpandedPaths((prev) => {
@@ -1198,6 +1478,74 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
     onChangesCountChange?.(gitFiles.length);
   }, [gitFiles, onChangesCountChange]);
 
+  useEffect(() => {
+    setChangesViewMode(loadChangesViewMode());
+  }, []);
+
+  useEffect(() => {
+    setLocalChangesCollapsed(changesCollapsed);
+  }, [changesCollapsed]);
+
+  useEffect(() => {
+    const toolbar = containerRef.current?.closest("#file-tree-panel")?.querySelector<HTMLElement>(".context-panel-files-toolbar") ?? null;
+    setToolbarMount(toolbar);
+  }, []);
+
+  useEffect(() => {
+    const handleOpenChangesPanel = () => {
+      setLocalChangesCollapsed(false);
+      const toggleBtn = document.querySelector<HTMLButtonElement>('.context-panel-files-toolbar button[aria-pressed="false"]');
+      if (toggleBtn) toggleBtn.click();
+    };
+    const handleOpenFileDiff = (event: Event) => {
+      const detail = (event as CustomEvent<{ filePath?: string }>).detail;
+      if (detail?.filePath) {
+        onOpenFile(detail.filePath, getFileName(detail.filePath), { modeHint: "diff" });
+      }
+    };
+    window.addEventListener("pi-plus:open-changes-panel", handleOpenChangesPanel);
+    window.addEventListener("pi-plus:open-file-diff", handleOpenFileDiff);
+    return () => {
+      window.removeEventListener("pi-plus:open-changes-panel", handleOpenChangesPanel);
+      window.removeEventListener("pi-plus:open-file-diff", handleOpenFileDiff);
+    };
+  }, [onOpenFile]);
+
+  const handleToggleChangesExpanded = useCallback((path: string, open: boolean) => {
+    setCollapsedChangeDirs((prev) => {
+      const next = new Set(prev);
+      if (open) next.delete(path); else next.add(path);
+      return next;
+    });
+  }, []);
+
+  const handleChangesViewModeToggle = useCallback(() => {
+    setChangesViewMode((prev) => {
+      const next: ChangesViewMode = prev === "list" ? "tree" : "list";
+      saveChangesViewMode(next);
+      return next;
+    });
+  }, []);
+
+  const startRootFileCreate = useCallback(() => {
+    setLocalChangesCollapsed(true);
+    setRootCreating("file");
+  }, []);
+
+  const startRootFolderCreate = useCallback(() => {
+    setLocalChangesCollapsed(true);
+    setRootCreating("folder");
+  }, []);
+
+  const rawViewAsTree = t("files.viewAsTree");
+  const viewAsTreeLabel = rawViewAsTree !== "files.viewAsTree"
+    ? rawViewAsTree
+    : locale === "zh-CN" ? "树状视图" : locale === "zh-TW" ? "樹狀檢視" : "View as Tree";
+  const rawViewAsList = t("files.viewAsList");
+  const viewAsListLabel = rawViewAsList !== "files.viewAsList"
+    ? rawViewAsList
+    : locale === "zh-CN" ? "列表视图" : locale === "zh-TW" ? "清單檢視" : "View as List";
+
   const showUploadFeedback = uploadBusy || pendingConflict !== null || uploadError !== null || uploadSummary !== null;
 
   const addUploadedFilesToChat = useCallback(() => {
@@ -1209,7 +1557,11 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
 
   return (
     <FileTreeOpsContext.Provider value={fileOps}>
-    <div style={{ minHeight: "100%" }}>
+    <div ref={containerRef} style={{ minHeight: "100%" }}>
+      {toolbarMount && createPortal(
+        <RootCreateButtons t={t} onCreateFile={startRootFileCreate} onCreateFolder={startRootFolderCreate} />,
+        toolbarMount,
+      )}
       <input ref={uploadInputRef} type="file" multiple hidden onChange={handleUploadInput} />
       {showUploadFeedback && (
         <div style={{ padding: "6px 8px", borderBottom: "var(--hairline) solid var(--border)" }}>
@@ -1227,7 +1579,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
                   <path d="M5 20h14" />
                 </svg>
               )}
-              {uploadPhase === "uploading" && <span style={{ fontSize: 10 }}>{uploadProgress}%</span>}
+              {uploadPhase === "uploading" && <span style={{ fontSize: scaleVar("fs", 1) }}>{uploadProgress}%</span>}
             </div>
             {uploadPhase === "uploading" && (
               <div style={{ height: 3, marginTop: 4, overflow: "hidden", borderRadius: 2, background: "var(--border)" }}>
@@ -1243,18 +1595,18 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
               {t("files.conflictSummary", { count: pendingConflict.conflicts.length, countSuffix: pendingConflict.conflicts.length === 1 ? "" : "s", files: pendingConflict.conflicts.join(", ") })}
             </div>
             {pendingConflict.nonReplaceable.length > 0 && (
-              <div style={{ marginTop: 3, fontSize: 10, color: "var(--warning)", lineHeight: 1.35, overflowWrap: "anywhere" }}>
+              <div style={{ marginTop: 3, fontSize: scaleVar("fs", 1), color: "var(--warning)", lineHeight: 1.35, overflowWrap: "anywhere" }}>
                 {t("files.cannotReplace", { files: pendingConflict.nonReplaceable.join(", ") })}
               </div>
             )}
             <div style={{ display: "flex", gap: 5, marginTop: 7 }}>
-              <button type="button" onClick={() => void performUpload(pendingConflict.files, "overwrite")} style={{ height: 22, padding: "0 7px", border: "var(--hairline) solid #ef4444", borderRadius: 4, background: "transparent", color: "var(--danger)", cursor: "pointer", fontSize: 10 }}>
+              <button type="button" onClick={() => void performUpload(pendingConflict.files, "overwrite")} style={{ height: 22, padding: "0 7px", border: "var(--hairline) solid var(--danger)", borderRadius: 4, background: "transparent", color: "var(--danger)", cursor: "pointer", fontSize: scaleVar("fs", 1) }}>
                 {t("files.replace")}
               </button>
-              <button type="button" onClick={() => void performUpload(pendingConflict.files, "skip")} style={{ height: 22, padding: "0 7px", border: "var(--hairline) solid var(--border)", borderRadius: 4, background: "var(--bg-panel)", color: "var(--text)", cursor: "pointer", fontSize: 10 }}>
+              <button type="button" onClick={() => void performUpload(pendingConflict.files, "skip")} style={{ height: 22, padding: "0 7px", border: "var(--hairline) solid var(--border)", borderRadius: 4, background: "var(--bg-panel)", color: "var(--text)", cursor: "pointer", fontSize: scaleVar("fs", 1) }}>
                 {t("files.skipExisting")}
               </button>
-              <button type="button" onClick={() => setPendingConflict(null)} style={{ height: 22, padding: "0 7px", border: "none", borderRadius: 4, background: "transparent", color: "var(--text-muted)", cursor: "pointer", fontSize: 10 }}>
+              <button type="button" onClick={() => setPendingConflict(null)} style={{ height: 22, padding: "0 7px", border: "none", borderRadius: 4, background: "transparent", color: "var(--text-muted)", cursor: "pointer", fontSize: scaleVar("fs", 1) }}>
                 {t("files.cancel")}
               </button>
             </div>
@@ -1273,7 +1625,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
             <div style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 22, fontSize: 12 }}>
               <div style={{ minWidth: 0, flex: 1, display: "flex", alignItems: "center", gap: 8 }}>
                 {uploadSummary.uploaded.length > 0 && (
-                  <span title={`${uploadSummary.uploaded.length} uploaded`} aria-label={`${uploadSummary.uploaded.length} uploaded`} style={{ display: "flex", alignItems: "center", gap: 3, color: "#22c55e" }}>
+                  <span title={`${uploadSummary.uploaded.length} uploaded`} aria-label={`${uploadSummary.uploaded.length} uploaded`} style={{ display: "flex", alignItems: "center", gap: 3, color: "var(--success)" }}>
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="m5 12 4 4L19 6" />
                     </svg>
@@ -1315,7 +1667,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
               <DismissButton onClick={() => setUploadSummary(null)} title={t("files.dismissUploadResults")} />
             </div>
             {uploadSummary.errors.map((item) => (
-              <div key={item.name} title={item.error} style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 3, minWidth: 0, fontSize: 10, color: "var(--danger)" }}>
+              <div key={item.name} title={item.error} style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 3, minWidth: 0, fontSize: scaleVar("fs", 1), color: "var(--danger)" }}>
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }} aria-hidden="true">
                   <circle cx="12" cy="12" r="9" />
                   <path d="M12 8v5" />
@@ -1356,6 +1708,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
                   gitStatusByPath={gitStatusByPath}
                   changedDirectoryPaths={changedDirectoryPaths}
                   t={t}
+                  onStartSiblingCreate={(kind) => setRootCreating(kind)}
                 />
               ))}
             </div>
@@ -1364,40 +1717,45 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
       )}
       {fileSearchOpen && (
       <div style={{ padding: "6px 8px", borderBottom: "var(--hairline) solid var(--border)" }}>
-        <div style={{ position: "relative" }}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: "var(--text-dim)", pointerEvents: "none" }}>
-            <circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" />
-          </svg>
-          <input
-            ref={searchInputRef}
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            onKeyDown={(event) => { if (event.key === "Escape" && !isImeComposing(event)) onFileSearchOpenChange?.(false); }}
-            placeholder={t("sidebar.searchFilesPlaceholder")}
-            aria-label={t("sidebar.searchFiles")}
-            style={{ width: "100%", boxSizing: "border-box", padding: "6px 24px", border: "var(--hairline) solid var(--border)", borderRadius: 5, outline: "none", background: "var(--bg)", color: "var(--text)", fontFamily: "var(--font-mono)", fontSize: 12 }}
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => setSearchQuery("")}
-              title={t("sidebar.clearSearch")}
-              aria-label={t("sidebar.clearSearch")}
-              style={{ position: "absolute", right: 4, top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center", justifyContent: "center", width: 18, height: 18, padding: 0, border: "none", borderRadius: 4, background: "none", color: "var(--text-dim)", cursor: "pointer" }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-dim)"; }}
-            >
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M18 6 6 18" /><path d="m6 6 12 12" />
-              </svg>
-            </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <div style={{ position: "relative", flex: 1, minWidth: 0 }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: "var(--text-dim)", pointerEvents: "none" }}>
+              <circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" />
+            </svg>
+            <input
+              ref={searchInputRef}
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              onKeyDown={(event) => { if (event.key === "Escape" && !isImeComposing(event)) onFileSearchOpenChange?.(false); }}
+              placeholder={t("sidebar.searchFilesPlaceholder")}
+              aria-label={t("sidebar.searchFiles")}
+              style={{ width: "100%", boxSizing: "border-box", padding: "6px 24px", border: "var(--hairline) solid var(--border)", borderRadius: 5, outline: "none", background: "var(--bg)", color: "var(--text)", fontFamily: "var(--font-mono)", fontSize: 12 }}
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                title={t("sidebar.clearSearch")}
+                aria-label={t("sidebar.clearSearch")}
+                style={{ position: "absolute", right: 4, top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center", justifyContent: "center", width: 18, height: 18, padding: 0, border: "none", borderRadius: 4, background: "none", color: "var(--text-dim)", cursor: "pointer" }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-dim)"; }}
+              >
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+          {!toolbarMount && (
+            <RootCreateButtons t={t} onCreateFile={startRootFileCreate} onCreateFolder={startRootFolderCreate} />
           )}
         </div>
         {hasSearchQuery && (
           <div style={{ paddingTop: 3 }}>
-            {searchLoading && <div role="status" style={{ padding: "6px 2px", fontSize: 10, color: "var(--text-dim)" }}>{t("sidebar.searchingFiles")}</div>}
-            {!searchLoading && searchError && <div role="alert" style={{ padding: "6px 2px", fontSize: 10, color: "var(--danger)" }}>{t("i18n.networkError")}</div>}
-            {!searchLoading && !searchError && searchPaths.length === 0 && <div style={{ padding: "6px 2px", fontSize: 10, color: "var(--text-dim)" }}>{t("sidebar.noMatchingFiles")}</div>}
+            {searchLoading && <div role="status" style={{ padding: "6px 2px", fontSize: scaleVar("fs", 1), color: "var(--text-dim)" }}>{t("sidebar.searchingFiles")}</div>}
+            {!searchLoading && searchError && <div role="alert" style={{ padding: "6px 2px", fontSize: scaleVar("fs", 1), color: "var(--danger)" }}>{t("i18n.networkError")}</div>}
+            {!searchLoading && !searchError && searchPaths.length === 0 && <div style={{ padding: "6px 2px", fontSize: scaleVar("fs", 1), color: "var(--text-dim)" }}>{t("sidebar.noMatchingFiles")}</div>}
             {!searchLoading && !searchError && searchPaths.length > 0 && (
               <div>
                 {searchRoots.map((node) => (
@@ -1420,6 +1778,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
                     gitStatusByPath={gitStatusByPath}
                     changedDirectoryPaths={changedDirectoryPaths}
                     t={t}
+                    onStartSiblingCreate={(kind) => setRootCreating(kind)}
                   />
                 ))}
               </div>
@@ -1429,7 +1788,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
       </div>
       )}
 
-      {!changesCollapsed && gitFiles.length > 0 && (
+      {!localChangesCollapsed && gitFiles.length > 0 && (
         <div style={{ padding: "0 4px 2px" }}>
           <div
             aria-label={t("files.changeStats", {
@@ -1437,33 +1796,78 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
               additions: gitLineStats.additions,
               deletions: gitLineStats.deletions,
             })}
-            style={{ display: "flex", alignItems: "center", gap: 6, height: 24, padding: "0 10px", fontSize: 12 }}
+            style={{ display: "flex", alignItems: "center", gap: 6, height: 24, padding: "0 6px 0 10px", fontSize: 12 }}
           >
             <span style={{ color: "var(--text-dim)" }}>
               {t("files.changedCount", { count: gitFiles.length })}
             </span>
             <span style={{ color: GIT_STATUS_COLORS.added, fontFamily: "var(--font-mono)" }}>+{gitLineStats.additions}</span>
             <span style={{ color: GIT_STATUS_COLORS.deleted, fontFamily: "var(--font-mono)" }}>-{gitLineStats.deletions}</span>
+            <span style={{ flex: 1 }} />
+            <button
+              type="button"
+              onClick={handleChangesViewModeToggle}
+              title={changesViewMode === "list" ? viewAsTreeLabel : viewAsListLabel}
+              aria-label={changesViewMode === "list" ? viewAsTreeLabel : viewAsListLabel}
+              aria-pressed={changesViewMode === "tree"}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 22,
+                height: 22,
+                padding: 0,
+                border: "none",
+                borderRadius: 4,
+                background: "transparent",
+                color: "var(--text-dim)",
+                cursor: "pointer",
+                flexShrink: 0,
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-dim)"; }}
+            >
+              <ChangesViewToggleIcon mode={changesViewMode} />
+            </button>
           </div>
-          {gitFiles.map((status) => (
-            <ChangeRow
-              key={status.filePath}
-              status={status}
+          {changesViewMode === "tree" ? (
+            <ChangesTreeRows
+              nodes={changesTree}
+              depth={0}
               cwd={cwd}
+              statusByPath={changesByRelativePath}
+              collapsedPaths={collapsedChangeDirs}
+              onToggleExpanded={handleToggleChangesExpanded}
               onOpenFile={onOpenFile}
               onAtMention={onAtMention}
               t={t}
             />
-          ))}
+          ) : (
+            gitFiles.map((status) => (
+              <ChangeRow
+                key={status.filePath}
+                status={status}
+                cwd={cwd}
+                onOpenFile={onOpenFile}
+                onAtMention={onAtMention}
+                t={t}
+              />
+            ))
+          )}
         </div>
       )}
 
-      {(changesCollapsed || gitFiles.length === 0) && !hasSearchQuery && (
+      {(localChangesCollapsed || gitFiles.length === 0) && !hasSearchQuery && (
         <div
           className="file-tree-root"
           style={{ padding: "2px 4px", minHeight: 120 }}
           onContextMenu={(event) => openRootMenu(event, t, fileOps)}
         >
+          {!toolbarMount && !fileSearchOpen && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", padding: "0 4px 2px" }}>
+              <RootCreateButtons t={t} onCreateFile={startRootFileCreate} onCreateFolder={startRootFolderCreate} />
+            </div>
+          )}
           {rootCreating && (
             <NewEntryRow t={t} dir={cwd} kind={rootCreating} depth={-1} onClose={() => setRootCreating(null)} />
           )}
@@ -1502,6 +1906,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
                 gitStatusByPath={gitStatusByPath}
                 changedDirectoryPaths={changedDirectoryPaths}
                 t={t}
+                onStartSiblingCreate={(kind) => setRootCreating(kind)}
               />
             ))
           )}

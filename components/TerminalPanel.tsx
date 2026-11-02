@@ -2,13 +2,72 @@
 
 import { useEffect, useRef, useState } from "react";
 import { FitAddon } from "@xterm/addon-fit";
-import { Terminal } from "@xterm/xterm";
+import { Terminal, type ITheme } from "@xterm/xterm";
 import { terminalFontSize, useChatAppearance } from "@/hooks/useChatAppearance";
 import { useI18n } from "@/hooks/useI18n";
+import { useTheme } from "@/hooks/useTheme";
+import type { TerminalSettingsResponse } from "@/lib/api-types";
+import { scaleVar } from "@/lib/plus-design-scale";
 import { createTerminalWriter, terminalRequest } from "@/lib/terminal-client";
 import type { TerminalEvent } from "@/lib/terminal-manager";
-import type { TerminalBackendInfo } from "@/lib/wsl-types";
+import type { TerminalBackendInfo, WslSettingsFields } from "@/lib/wsl-types";
+import { AppSelect } from "./AppSelect";
 import type { TerminalTab } from "./terminal-tab-state";
+
+type TerminalSettingsWithWsl = TerminalSettingsResponse & WslSettingsFields;
+
+function parseCssColor(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (/^#[0-9a-fA-F]{3,8}$/.test(trimmed)) return trimmed;
+  if (/^rgba?\([^)]+\)$/i.test(trimmed) && trimmed !== "rgba(0, 0, 0, 0)" && trimmed !== "transparent") {
+    return trimmed;
+  }
+  return null;
+}
+
+export function resolveTerminalTheme(container: HTMLElement | null, isDark: boolean): ITheme {
+  const rootStyle = typeof document !== "undefined" ? getComputedStyle(document.documentElement) : null;
+  const hostStyle = container && typeof getComputedStyle === "function" ? getComputedStyle(container) : null;
+
+  const background =
+    parseCssColor(rootStyle?.getPropertyValue("--plus-code-bg")) ??
+    parseCssColor(hostStyle?.getPropertyValue("--plus-code-bg")) ??
+    parseCssColor(rootStyle?.getPropertyValue("--bg-panel")) ??
+    parseCssColor(hostStyle?.backgroundColor) ??
+    (isDark ? "#111318" : "#f7f5f0");
+  const foreground =
+    parseCssColor(rootStyle?.getPropertyValue("--text")) ??
+    parseCssColor(hostStyle?.getPropertyValue("--text")) ??
+    parseCssColor(hostStyle?.color) ??
+    (isDark ? "#d7dce5" : "#1f2328");
+  const cursor =
+    parseCssColor(rootStyle?.getPropertyValue("--accent")) ??
+    (isDark ? "#60a5fa" : "#2563eb");
+
+  return {
+    background,
+    foreground,
+    cursor,
+    selectionBackground: isDark ? "#365b8a" : "rgba(37, 99, 235, 0.18)",
+    black: "#1d222b",
+    red: isDark ? "#f87171" : "#dc2626",
+    green: isDark ? "#4ade80" : "#16a34a",
+    yellow: isDark ? "#facc15" : "#ca8a04",
+    blue: isDark ? "#60a5fa" : "#2563eb",
+    magenta: isDark ? "#c084fc" : "#9333ea",
+    cyan: isDark ? "#22d3ee" : "#0891b2",
+    white: isDark ? "#e5e7eb" : "#4b5563",
+    brightBlack: "#6b7280",
+    brightRed: isDark ? "#fca5a5" : "#ef4444",
+    brightGreen: isDark ? "#86efac" : "#22c55e",
+    brightYellow: isDark ? "#fde047" : "#eab308",
+    brightBlue: isDark ? "#93c5fd" : "#3b82f6",
+    brightMagenta: isDark ? "#d8b4fe" : "#a855f7",
+    brightCyan: isDark ? "#67e8f9" : "#06b6d4",
+    brightWhite: isDark ? "#ffffff" : "#111827",
+  };
+}
 
 interface Props {
   tab: TerminalTab;
@@ -19,7 +78,10 @@ interface Props {
 }
 
 export function TerminalPanel({ tab, active, onRestart, onClosed, onCloseError }: Props) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const { isDark } = useTheme();
+  const isDarkRef = useRef(isDark);
+  isDarkRef.current = isDark;
   const { id, cwd, restored } = tab;
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
@@ -34,6 +96,8 @@ export function TerminalPanel({ tab, active, onRestart, onClosed, onCloseError }
   const [backend, setBackend] = useState<TerminalBackendInfo | null>(null);
   const [exitCode, setExitCode] = useState<number | null>(null);
   const [reconnectKey, setReconnectKey] = useState(0);
+  const [shellSettings, setShellSettings] = useState<TerminalSettingsWithWsl | null>(null);
+  const [switchingShell, setSwitchingShell] = useState(false);
   // Plus: ported pi-web 35af7102 (#1329) — the terminal follows the chat font
   // size (13px at the 14px default). A slider move updates the live xterm and
   // refits, whose onResize sends the new cols/rows to the shell.
@@ -41,6 +105,26 @@ export function TerminalPanel({ tab, active, onRestart, onClosed, onCloseError }
   const fontSizeRef = useRef(fontSize);
   fontSizeRef.current = fontSize;
   const refitRef = useRef<() => void>(() => {});
+
+  useEffect(() => {
+    if (typeof fetch !== "function") return;
+    let cancelled = false;
+    const load = () => {
+      fetch("/api/terminal/settings", { cache: "no-store" })
+        .then(async (res) => {
+          if (!res.ok) return;
+          const data = await res.json() as TerminalSettingsWithWsl;
+          if (!cancelled && Array.isArray(data.options)) setShellSettings(data);
+        })
+        .catch(() => {});
+    };
+    load();
+    window.addEventListener("pi-plus:terminal-settings-changed", load);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("pi-plus:terminal-settings-changed", load);
+    };
+  }, []);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -64,15 +148,7 @@ export function TerminalPanel({ tab, active, onRestart, onClosed, onCloseError }
       scrollback: 8000,
       screenReaderMode: true,
       disableStdin: true,
-      theme: {
-        background: "#111318", foreground: "#d7dce5", cursor: "#60a5fa",
-        selectionBackground: "#365b8a",
-        black: "#1d222b", red: "#f87171", green: "#4ade80", yellow: "#facc15",
-        blue: "#60a5fa", magenta: "#c084fc", cyan: "#22d3ee", white: "#e5e7eb",
-        brightBlack: "#6b7280", brightRed: "#fca5a5", brightGreen: "#86efac",
-        brightYellow: "#fde047", brightBlue: "#93c5fd", brightMagenta: "#d8b4fe",
-        brightCyan: "#67e8f9", brightWhite: "#ffffff",
-      },
+      theme: resolveTerminalTheme(container, isDarkRef.current),
     });
     terminalRef.current = terminal;
     const fit = new FitAddon();
@@ -197,6 +273,24 @@ export function TerminalPanel({ tab, active, onRestart, onClosed, onCloseError }
 
   useEffect(() => {
     const terminal = terminalRef.current;
+    if (!terminal) return;
+    const applyTheme = () => {
+      if (terminalRef.current) {
+        terminalRef.current.options.theme = resolveTerminalTheme(containerRef.current, isDark);
+      }
+    };
+    applyTheme();
+    if (typeof MutationObserver === "undefined" || typeof document === "undefined") return;
+    const observer = new MutationObserver(applyTheme);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class", "data-plus-theme", "data-plus-style", "style"],
+    });
+    return () => observer.disconnect();
+  }, [isDark]);
+
+  useEffect(() => {
+    const terminal = terminalRef.current;
     if (!terminal || terminal.options.fontSize === fontSize) return;
     // A refit sends the new cols/rows to the shell through onResize, as a font change does.
     terminal.options.fontSize = fontSize;
@@ -221,8 +315,67 @@ export function TerminalPanel({ tab, active, onRestart, onClosed, onCloseError }
     return () => { cancelled = true; };
   }, [id, tab.closing]);
 
+  const defaultShellSuffix = shellSettings?.defaultShell ? ` (${shellSettings.defaultShell})` : "";
+  const autoOptionLabel = locale === "zh-CN"
+    ? `跟随默认${defaultShellSuffix}`
+    : locale === "zh-TW"
+      ? `跟隨預設${defaultShellSuffix}`
+      : `Default${defaultShellSuffix}`;
+  const wslOptionLabel = shellSettings?.wslDistro ? `WSL (${shellSettings.wslDistro})` : "WSL";
+  const shellSelectOptions = [
+    { value: "auto", label: autoOptionLabel },
+    ...(shellSettings?.options ?? []),
+    { value: "wsl", label: wslOptionLabel },
+  ];
+  const currentShellChoice = shellSettings?.backend === "wsl"
+    ? "wsl"
+    : (shellSettings?.shell && shellSelectOptions.some((opt) => opt.value === shellSettings.shell)
+        ? shellSettings.shell
+        : "auto");
+  const shellSwitcherLabel = locale === "zh-CN"
+    ? "切换终端 Shell / WSL"
+    : locale === "zh-TW"
+      ? "切換終端機 Shell / WSL"
+      : "Switch terminal shell / WSL";
+
+  const handleShellQuickSwitch = async (nextValue: string) => {
+    if (switchingShell || tab.closing || nextValue === currentShellChoice) return;
+    setSwitchingShell(true);
+    try {
+      const putSetting = async (patch: Record<string, unknown>) => {
+        const res = await fetch("/api/terminal/settings", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(patch),
+        });
+        if (!res.ok) throw new Error("Failed to update terminal settings");
+        return await res.json() as TerminalSettingsWithWsl;
+      };
+      let updated: TerminalSettingsWithWsl;
+      if (nextValue === "wsl") {
+        updated = await putSetting({ backend: "wsl" });
+      } else {
+        if (shellSettings?.backend === "wsl") {
+          await putSetting({ backend: "native" });
+        }
+        updated = await putSetting({ shell: nextValue });
+      }
+      setShellSettings(updated);
+      window.dispatchEvent(new CustomEvent("pi-plus:terminal-settings-changed"));
+      onRestart();
+    } catch {
+      // ignore failed quick-switch
+    } finally {
+      setSwitchingShell(false);
+    }
+  };
+
   return (
-    <section className="terminal-panel" aria-label={t("terminal.title")}>
+    <section
+      className="terminal-panel"
+      aria-label={t("terminal.title")}
+      style={{ background: "var(--plus-code-bg, var(--bg-panel))", color: "var(--text)" }}
+    >
       <header className="terminal-panel-header">
         <div className="terminal-panel-path">
           <span className={`terminal-status-dot is-${status}`} title={t(`terminal.${status}`)} />
@@ -231,6 +384,22 @@ export function TerminalPanel({ tab, active, onRestart, onClosed, onCloseError }
           )}
           <span title={cwd}>{backend?.kind === "wsl" ? backend.linuxCwd ?? cwd : cwd}</span>
         </div>
+        <AppSelect
+          value={currentShellChoice}
+          options={shellSelectOptions}
+          onValueChange={(next) => void handleShellQuickSwitch(next)}
+          disabled={switchingShell || Boolean(tab.closing)}
+          aria-label={shellSwitcherLabel}
+          title={shellSwitcherLabel}
+          className="terminal-shell-switcher"
+          style={{
+            height: 24,
+            minHeight: 24,
+            padding: "0 8px",
+            fontSize: scaleVar("fs", 1),
+            maxWidth: 190,
+          }}
+        />
         {status === "error" && (
           <button type="button" onClick={() => setReconnectKey((key) => key + 1)} disabled={Boolean(tab.closing)} title={t("terminal.reconnect")} aria-label={t("terminal.reconnect")}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -249,7 +418,9 @@ export function TerminalPanel({ tab, active, onRestart, onClosed, onCloseError }
         {!error && backend?.warning && <div className="terminal-panel-exit" role="status">{backend.warning}</div>}
         {status === "exited" && <div className="terminal-panel-exit" role="status">{exitCode === null ? t("terminal.exited") : t("terminal.exitCode", { code: exitCode })}</div>}
       </div>
-      <div className="terminal-xterm"><div ref={containerRef} className="terminal-xterm-host" /></div>
+      <div className="terminal-xterm" style={{ background: "var(--plus-code-bg, var(--bg-panel))" }}>
+        <div ref={containerRef} className="terminal-xterm-host" />
+      </div>
     </section>
   );
 }

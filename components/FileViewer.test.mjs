@@ -42,7 +42,7 @@ test("lightweight source rows are skipped for highlighted, diff, and preview vie
   const viewer = file.statements.find((node) => ts.isFunctionDeclaration(node) && node.name?.text === "TextFileViewer");
   const calculations = viewer.body.statements.filter((node) =>
     ts.isVariableStatement(node) && node.declarationList.declarations.some((declaration) =>
-      ["viewerContent", "sourceLines", "language", "isHtml", "isMarkdown", "hasPreview", "effectiveDisplayMode", "useLightweightSource", "lightweightSourceLines"].includes(declaration.name.getText(file)),
+      ["isBinary", "viewerContent", "sourceLines", "language", "isHtml", "isMarkdown", "hasPreview", "effectiveDisplayMode", "useLightweightSource", "lightweightSourceLines"].includes(declaration.name.getText(file)),
     ),
   ).map((node) => node.getText(file)).join("\n");
   const { outputText } = ts.transpileModule(`
@@ -62,6 +62,9 @@ test("lightweight source rows are skipped for highlighted, diff, and preview vie
   for (const language of ["html", "markdown"]) {
     assert.equal(render({ ...large, language }, "preview"), null);
   }
+  // A binary file has no Preview, whatever its language (#1401).
+  assert.equal(render({ ...large, language: "html", binary: true }, "preview").length, 1_001);
+  assert.equal(render({ ...large, language: "markdown", binary: true }, "preview").length, 1_001);
   for (const mode of ["source", "diff", "preview"]) {
     const rows = render(large, mode);
     assert.equal(rows.length, 1_001, `${mode} must retain its source fallback`);
@@ -69,6 +72,24 @@ test("lightweight source rows are skipped for highlighted, diff, and preview vie
     assert.equal(rows[0].props.children[1].props.children, "line");
   }
   assert.equal(render(large, "source", false, false, true)[0].props.children[1].props.style.whiteSpace, "pre-wrap");
+});
+
+test("the diff view wraps when the viewer wraps, and the key reaches the diff", () => {
+  const diffView = source.slice(source.indexOf("function DiffView"), source.indexOf("function ImageLightbox"));
+  assert.notEqual(source.indexOf("function DiffView"), -1);
+
+  assert.match(diffView, /width: wrapLines \? "100%" : "max-content"/);
+  assert.match(diffView, /whiteSpace: wrapLines \? "pre-wrap" : "pre"/);
+  assert.match(diffView, /overflowWrap: wrapLines \? "anywhere" : "normal"/);
+  assert.match(diffView, /flexShrink: wrapLines \? 1 : 0/);
+  assert.match(source, /<DiffView patch=\{gitDiff\.patch!\} wrapLines=\{wrapLines\} \/>/);
+  assert.match(source, /\(effectiveDisplayMode === "source" \|\| effectiveDisplayMode === "diff"\) && !isBinary/);
+});
+
+test("SVG and CSV/TSV source views pass onRequestPreview so Preview stays reachable", () => {
+  assert.match(source, /onRequestPreview=\{\(\) => setSvgMode\("preview"\)\}/);
+  assert.match(source, /onRequestPreview=\{\(\) => setTabularMode\("preview"\)\}/);
+  assert.match(source, /const canPreview = hasPreview \|\| Boolean\(onRequestPreview\);/);
 });
 
 test("markdown preview links carry PDF page fragments", () => {

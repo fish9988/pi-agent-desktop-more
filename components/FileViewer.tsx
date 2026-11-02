@@ -18,6 +18,7 @@ import {
   isVideoPath,
 } from "@/lib/file-types";
 import { encodeFilePathForApi, getFileDirectory, getFileName, getRelativeFilePath } from "@/lib/file-paths";
+import { injectSandboxedHtmlPolyfill } from "@/lib/html-sandbox-polyfill";
 import { parsePdfPageFragment, resolveLocalFileHref, shouldOpenLocalFileInApp } from "@/lib/file-links";
 import { parseFrontmatter } from "@/lib/frontmatter";
 import { handleExternalLinkClick } from "@/lib/desktop-native";
@@ -51,6 +52,7 @@ interface Props {
   initialState?: FileViewerState;
   onStateChange?: (state: FileViewerState) => void;
   watchEnabled?: boolean;
+  onRequestPreview?: () => void;
 }
 
 interface FileData {
@@ -59,6 +61,8 @@ interface FileData {
   size: number;
   nextOffset: number;
   truncated: boolean;
+  // A NUL in the first bytes (lib/text-preview.ts): no text view, only the download.
+  binary?: boolean;
 }
 
 const SOURCE_HIGHLIGHT_MAX_LINES = 1_000;
@@ -67,6 +71,61 @@ const DISPLAY_MODE_LABELS: Record<DisplayMode, string> = {
   preview: "Preview",
   diff: "Diff",
 };
+
+const PROSE_EXTENSIONS = new Set(["md", "markdown", "mdx", "mdown", "mkd", "rst", "adoc", "txt"]);
+
+export function wrapsByDefault(filePath?: string): boolean {
+  if (!filePath) return false;
+  const base = filePath.replace(/\\/g, "/").split("/").pop() ?? "";
+  const ext = base.toLowerCase().split(".").pop() ?? "";
+  return PROSE_EXTENSIONS.has(ext);
+}
+
+export function resolveInitialWrapLines(
+  initialState?: { displayMode?: DisplayMode; wrapLines?: boolean },
+  filePath?: string,
+): boolean {
+  if (initialState?.wrapLines !== undefined) {
+    if (initialState.displayMode === "diff" && initialState.wrapLines === false && wrapsByDefault(filePath)) {
+      return true;
+    }
+    return initialState.wrapLines;
+  }
+  return wrapsByDefault(filePath);
+}
+
+function getDisplayModeLabel(mode: DisplayMode, locale: string): string {
+  if (locale === "zh-CN") {
+    return mode === "source" ? "源码" : mode === "preview" ? "预览" : "对比";
+  }
+  if (locale === "zh-TW") {
+    return mode === "source" ? "原始碼" : mode === "preview" ? "預覽" : "對比";
+  }
+  return DISPLAY_MODE_LABELS[mode];
+}
+
+function describeFileError(error: string, t: ReturnType<typeof useI18n>["t"], locale: string): string {
+  if (error === "Not found") {
+    const translated = t("files.notFound");
+    if (translated !== "files.notFound") return translated;
+    return locale === "zh-CN"
+      ? "该文件已被后续操作删除或移动。"
+      : locale === "zh-TW"
+        ? "此檔案已被後續操作刪除或移動。"
+        : "This file no longer exists. It may have been moved or deleted after it was written.";
+  }
+  return error;
+}
+
+function consumePendingDiffFile(filePath: string): boolean {
+  if (typeof window === "undefined") return false;
+  const win = window as Window & { __piPlusPendingDiffFile?: string };
+  if (win.__piPlusPendingDiffFile === filePath) {
+    delete win.__piPlusPendingDiffFile;
+    return true;
+  }
+  return false;
+}
 
 const FILE_CODE_STYLE: CSSProperties = {
   fontFamily: "var(--font-mono)",
@@ -264,6 +323,7 @@ function DownloadLink({ filePath, sourceSessionId }: { filePath: string; sourceS
 }
 
 function DesktopPathActions({ filePath }: { filePath: string }) {
+  const { t, locale } = useI18n();
   const [desktop, setDesktop] = useState(false);
   useEffect(() => {
     void import("@/lib/desktop-native").then(({ isTauriDesktop }) => {
@@ -272,12 +332,21 @@ function DesktopPathActions({ filePath }: { filePath: string }) {
   }, []);
   if (!desktop) return null;
 
+  const rawOpenLabel = t("i18n.openDefaultApp");
+  const openLabel = rawOpenLabel !== "i18n.openDefaultApp"
+    ? rawOpenLabel
+    : locale === "zh-CN" ? "用默认应用打开" : locale === "zh-TW" ? "用預設應用程式開啟" : "Open with default app";
+  const rawRevealLabel = t("i18n.revealInFileManager");
+  const revealLabel = rawRevealLabel !== "i18n.revealInFileManager"
+    ? rawRevealLabel
+    : locale === "zh-CN" ? "在资源管理器中显示" : locale === "zh-TW" ? "在檔案總管中顯示" : "Show in file manager";
+
   return (
     <>
       <button
         type="button"
-        title="Open with default app"
-        aria-label="Open with default app"
+        title={openLabel}
+        aria-label={openLabel}
         className="file-viewer-icon-button"
         onClick={() => {
           void import("@/lib/desktop-native").then(({ openPathNative }) => openPathNative(filePath));
@@ -291,8 +360,8 @@ function DesktopPathActions({ filePath }: { filePath: string }) {
       </button>
       <button
         type="button"
-        title="Reveal in Finder"
-        aria-label="Reveal in Finder"
+        title={revealLabel}
+        aria-label={revealLabel}
         className="file-viewer-icon-button"
         onClick={() => {
           void import("@/lib/desktop-native").then(({ revealItemInDirNative }) => revealItemInDirNative(filePath));
@@ -321,7 +390,12 @@ function FileViewerToolbar({
   sourceSessionId?: string | null;
   children?: ReactNode;
 }) {
+  const { t, locale } = useI18n();
   const relativePath = getRelativeFilePath(filePath, cwd);
+  const liveLabel = watching
+    ? (locale === "zh-CN" ? "实时同步" : locale === "zh-TW" ? "即時同步" : "Live")
+    : (locale === "zh-CN" ? "静态" : locale === "zh-TW" ? "靜態" : "Static");
+  const liveTitle = watching ? t("i18n.liveSync") : t("i18n.notWatching");
   return (
     <div className="file-viewer-toolbar">
       <div className="file-viewer-identity">
@@ -332,12 +406,12 @@ function FileViewerToolbar({
         {metadata && <span className="file-viewer-meta" title={metadata}>{metadata}</span>}
       </div>
       <span
-        title={watching ? "Live sync active" : "Live sync unavailable"}
-        aria-label={watching ? "Live sync active" : "Live sync unavailable"}
+        title={liveTitle}
+        aria-label={liveTitle}
         className={`file-viewer-live-status${watching ? " is-live" : ""}`}
       >
         <span className="file-viewer-live-indicator" />
-        <span>{watching ? "Live" : "Static"}</span>
+        <span>{liveLabel}</span>
       </span>
       <div className="file-viewer-controls">
         {children}
@@ -402,7 +476,7 @@ function diffLines(patch: string): Array<DiffLine | DiffGap> {
   }));
 }
 
-function DiffView({ patch }: { patch: string }) {
+function DiffView({ patch, wrapLines = false }: { patch: string; wrapLines?: boolean }) {
   const { t } = useI18n();
   const diff = diffLines(patch);
 
@@ -456,7 +530,7 @@ function DiffView({ patch }: { patch: string }) {
     <div
       className="file-diff-view"
       style={{
-        width: "max-content",
+        width: wrapLines ? "100%" : "max-content",
         minWidth: "100%",
         ...FILE_CODE_STYLE,
       }}
@@ -486,9 +560,9 @@ function DiffView({ patch }: { patch: string }) {
         const lines = seg.lines.map((line, li) => {
           const bg =
             line.type === "added"
-              ? "rgba(0,200,80,0.12)"
+              ? "color-mix(in srgb, var(--success) 14%, transparent)"
               : line.type === "removed"
-              ? "rgba(240,60,60,0.14)"
+              ? "color-mix(in srgb, var(--danger) 14%, transparent)"
               : "transparent";
           const prefix =
             line.type === "added" ? "+" : line.type === "removed" ? "-" : " ";
@@ -530,9 +604,11 @@ function DiffView({ patch }: { patch: string }) {
               <span
                 className="file-diff-line-content"
                 style={{
-                  flexShrink: 0,
+                  flexShrink: wrapLines ? 1 : 0,
+                  minWidth: 0,
                   padding: "0 8px 0 0",
-                  whiteSpace: "pre",
+                  whiteSpace: wrapLines ? "pre-wrap" : "pre",
+                  overflowWrap: wrapLines ? "anywhere" : "normal",
                   color: "var(--text)",
                 }}
               >
@@ -560,6 +636,7 @@ function ImageLightbox({
   filePath?: string;
   onClose: () => void;
 }) {
+  const { t, locale } = useI18n();
   const [scale, setScale] = useState(1);
   const [rotate, setRotate] = useState(0);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -587,6 +664,18 @@ function ImageLightbox({
 
   if (typeof document === "undefined") return null;
 
+  const zoomOutLabel = t("i18n.zoomOut");
+  const zoomInLabel = t("i18n.zoomIn");
+  const resetZoomTitle = locale === "zh-CN" ? "重置缩放 (0)" : locale === "zh-TW" ? "重設縮放 (0)" : "Reset zoom (0)";
+  const rotateTitle = locale === "zh-CN" ? "顺时针旋转 90°" : locale === "zh-TW" ? "順時針旋轉 90°" : "Rotate 90° clockwise";
+  const rotateAria = locale === "zh-CN" ? "旋转" : locale === "zh-TW" ? "旋轉" : "Rotate";
+  const rawOpenDefault = t("i18n.openDefaultApp");
+  const openDefaultTitle = rawOpenDefault !== "i18n.openDefaultApp"
+    ? rawOpenDefault
+    : locale === "zh-CN" ? "用默认应用打开" : locale === "zh-TW" ? "用預設應用程式開啟" : "Open with default app";
+  const closeTitle = locale === "zh-CN" ? "关闭 (Esc)" : locale === "zh-TW" ? "關閉 (Esc)" : "Close (Esc)";
+  const closeAria = locale === "zh-CN" ? "关闭" : locale === "zh-TW" ? "關閉" : "Close";
+
   return createPortal(
     <div
       className="plus-image-lightbox"
@@ -611,8 +700,8 @@ function ImageLightbox({
           <button
             type="button"
             className="plus-image-lightbox-btn"
-            title="缩小 (-)"
-            aria-label="缩小"
+            title={`${zoomOutLabel} (-)`}
+            aria-label={zoomOutLabel}
             onClick={() => setScale((s) => Math.max(0.25, +(s - 0.25).toFixed(2)))}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12" /></svg>
@@ -620,7 +709,7 @@ function ImageLightbox({
           <button
             type="button"
             className="plus-image-lightbox-btn is-readout"
-            title="重置缩放 (0)"
+            title={resetZoomTitle}
             onClick={() => {
               setScale(1);
               setRotate(0);
@@ -632,8 +721,8 @@ function ImageLightbox({
           <button
             type="button"
             className="plus-image-lightbox-btn"
-            title="放大 (+)"
-            aria-label="放大"
+            title={`${zoomInLabel} (+)`}
+            aria-label={zoomInLabel}
             onClick={() => setScale((s) => Math.min(5, +(s + 0.25).toFixed(2)))}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
@@ -641,8 +730,8 @@ function ImageLightbox({
           <button
             type="button"
             className="plus-image-lightbox-btn"
-            title="顺时针旋转 90°"
-            aria-label="旋转"
+            title={rotateTitle}
+            aria-label={rotateAria}
             onClick={() => setRotate((r) => (r + 90) % 360)}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /></svg>
@@ -651,8 +740,8 @@ function ImageLightbox({
             <button
               type="button"
               className="plus-image-lightbox-btn"
-              title="使用系统默认看图软件打开"
-              aria-label="系统打开"
+              title={openDefaultTitle}
+              aria-label={openDefaultTitle}
               onClick={() => {
                 void import("@/lib/desktop-native").then(({ openPathNative }) => openPathNative(filePath));
               }}
@@ -663,8 +752,8 @@ function ImageLightbox({
           <button
             type="button"
             className="plus-image-lightbox-btn is-close"
-            title="关闭 (Esc)"
-            aria-label="关闭"
+            title={closeTitle}
+            aria-label={closeAria}
             onClick={onClose}
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
@@ -726,7 +815,8 @@ function extractSvgSymbols(svgSource: string): Array<{ id: string; viewBox: stri
 }
 
 function ImageViewer(props: Props) {
-  const { filePath, cwd, sourceSessionId, watchEnabled = true } = props;
+  const { filePath, cwd, sourceSessionId, initialDisplayMode, watchEnabled = true } = props;
+  const { t, locale } = useI18n();
   const [watching, setWatching] = useState(false);
   const [bust, setBust] = useState(0);
   const [size, setSize] = useState<number | null>(null);
@@ -735,7 +825,9 @@ function ImageViewer(props: Props) {
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [zoom, setZoom] = useState<number | null>(null);
   const [backdrop, setBackdrop] = useState<"checker" | "light" | "dark">("checker");
-  const [svgMode, setSvgMode] = useState<"preview" | "source">("preview");
+  const [svgMode, setSvgMode] = useState<"preview" | "source">(() => (
+    initialDisplayMode === "source" || initialDisplayMode === "diff" ? "source" : "preview"
+  ));
   const [svgSymbols, setSvgSymbols] = useState<Array<{ id: string; viewBox: string; inner: string }> | null>(null);
   const esRef = useRef<EventSource | null>(null);
   const syncRequestRef = useRef(0);
@@ -834,17 +926,34 @@ function ImageViewer(props: Props) {
     return (
       <TextFileViewer
         {...props}
-        initialDisplayMode="source"
+        initialDisplayMode={initialDisplayMode === "diff" ? "diff" : "source"}
+        onRequestPreview={() => setSvgMode("preview")}
       />
     );
   }
 
   const formatSizeStr = size != null ? formatSize(size) : null;
+  const svgIconsLabel = svgSymbols
+    ? (locale === "zh-CN" ? `SVG 图标集 (${svgSymbols.length})` : locale === "zh-TW" ? `SVG 圖示集 (${svgSymbols.length})` : `SVG icons (${svgSymbols.length})`)
+    : null;
   const metadata = [
-    svgSymbols ? `SVG 图标集 (${svgSymbols.length})` : (ext || "image"),
+    svgIconsLabel ?? (ext || "image"),
     !svgSymbols && naturalSize ? `${naturalSize.w} × ${naturalSize.h}` : null,
     formatSizeStr,
   ].filter(Boolean).join(" · ");
+
+  const zoomOutLabel = t("i18n.zoomOut");
+  const zoomInLabel = t("i18n.zoomIn");
+  const fitLabel = locale === "zh-CN" ? "适应" : locale === "zh-TW" ? "適應" : "Fit";
+  const resetZoomTitle = locale === "zh-CN" ? "重置缩放（适应窗口 / 100%）" : locale === "zh-TW" ? "重設縮放（適應視窗 / 100%）" : "Reset zoom (Fit / 100%)";
+  const backdropTitle = locale === "zh-CN" ? "切换预览背景底板（棋盘格 / 亮底 / 暗底）" : locale === "zh-TW" ? "切換預覽背景底板（棋盤格 / 亮底 / 暗底）" : "Switch backdrop (Checkerboard / Light / Dark)";
+  const backdropLabel = backdrop === "checker"
+    ? (locale === "zh-CN" ? "棋盘" : locale === "zh-TW" ? "棋盤" : "Checker")
+    : backdrop === "light"
+      ? (locale === "zh-CN" || locale === "zh-TW" ? "白底" : "Light")
+      : (locale === "zh-CN" || locale === "zh-TW" ? "暗底" : "Dark");
+  const fullscreenTitle = locale === "zh-CN" ? "全屏放大预览" : locale === "zh-TW" ? "全螢幕放大預覽" : "Full screen preview";
+  const clickFullscreenTitle = locale === "zh-CN" ? "点击全屏放大查看" : locale === "zh-TW" ? "點擊全螢幕放大檢視" : "Click to view full screen";
 
   return (
     <div className="file-viewer-shell">
@@ -864,7 +973,7 @@ function ImageViewer(props: Props) {
               className="file-viewer-mode-button"
               onClick={() => setSvgMode("source")}
             >
-              Source
+              {getDisplayModeLabel("source", locale)}
             </button>
             <button
               type="button"
@@ -873,7 +982,7 @@ function ImageViewer(props: Props) {
               className="file-viewer-mode-button is-active"
               onClick={() => setSvgMode("preview")}
             >
-              Preview
+              {getDisplayModeLabel("preview", locale)}
             </button>
           </div>
         )}
@@ -882,8 +991,8 @@ function ImageViewer(props: Props) {
             <button
               type="button"
               className="file-viewer-icon-button"
-              title="缩小"
-              aria-label="缩小"
+              title={zoomOutLabel}
+              aria-label={zoomOutLabel}
               onClick={() => setZoom((z) => Math.max(0.25, +((z ?? 1) - 0.25).toFixed(2)))}
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12" /></svg>
@@ -891,16 +1000,16 @@ function ImageViewer(props: Props) {
             <button
               type="button"
               className="file-viewer-mode-button"
-              title="重置缩放（适应窗口 / 100%）"
+              title={resetZoomTitle}
               onClick={() => setZoom((z) => (z === null ? 1 : null))}
             >
-              {zoom === null ? "Fit" : `${Math.round(zoom * 100)}%`}
+              {zoom === null ? fitLabel : `${Math.round(zoom * 100)}%`}
             </button>
             <button
               type="button"
               className="file-viewer-icon-button"
-              title="放大"
-              aria-label="放大"
+              title={zoomInLabel}
+              aria-label={zoomInLabel}
               onClick={() => setZoom((z) => Math.min(5, +((z ?? 1) + 0.25).toFixed(2)))}
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
@@ -908,16 +1017,16 @@ function ImageViewer(props: Props) {
             <button
               type="button"
               className="file-viewer-mode-button"
-              title="切换预览背景底板（棋盘格 / 亮底 / 暗底）"
+              title={backdropTitle}
               onClick={() => setBackdrop((b) => (b === "checker" ? "light" : b === "light" ? "dark" : "checker"))}
             >
-              {backdrop === "checker" ? "棋盘" : backdrop === "light" ? "白底" : "暗底"}
+              {backdropLabel}
             </button>
             <button
               type="button"
               className="file-viewer-icon-button plus-image-zoom-btn"
-              title="全屏放大预览"
-              aria-label="全屏放大预览"
+              title={fullscreenTitle}
+              aria-label={fullscreenTitle}
               onClick={() => setLightboxOpen(true)}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -934,7 +1043,7 @@ function ImageViewer(props: Props) {
         className={`file-viewer-image-stage${backdrop === "light" ? " is-light-backdrop" : backdrop === "dark" ? " is-dark-backdrop" : ""}`}
       >
         {error ? (
-          <div style={{ color: "var(--danger)", fontSize: 13 }}>{error}</div>
+          <div style={{ color: "var(--danger)", fontSize: 13 }}>{describeFileError(error, t, locale)}</div>
         ) : svgSymbols ? (
           <div className="plus-svg-symbol-grid">
             {svgSymbols.map((sym) => (
@@ -955,7 +1064,7 @@ function ImageViewer(props: Props) {
           <img
             src={src}
             alt={filePath}
-            title="点击全屏放大查看"
+            title={clickFullscreenTitle}
             onClick={() => setLightboxOpen(true)}
             onLoad={(e) => {
               const img = e.currentTarget;
@@ -995,6 +1104,7 @@ function formatDuration(seconds: number): string {
 }
 
 function AudioViewer({ filePath, cwd, sourceSessionId, watchEnabled = true }: Props) {
+  const { t, locale } = useI18n();
   const [watching, setWatching] = useState(false);
   const [bust, setBust] = useState(0);
   const [size, setSize] = useState<number | null>(null);
@@ -1077,7 +1187,7 @@ function AudioViewer({ filePath, cwd, sourceSessionId, watchEnabled = true }: Pr
         <div style={{ width: "min(680px, 100%)" }}>
           {error && (
             <div style={{ color: "var(--danger)", fontSize: 13, marginBottom: 12, textAlign: "center" }}>
-              {error}
+              {describeFileError(error, t, locale)}
             </div>
           )}
           <audio
@@ -1096,7 +1206,7 @@ function AudioViewer({ filePath, cwd, sourceSessionId, watchEnabled = true }: Pr
 }
 
 function VideoViewer({ filePath, cwd, sourceSessionId, watchEnabled = true }: Props) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [watching, setWatching] = useState(false);
   const [bust, setBust] = useState(0);
   const [size, setSize] = useState<number | null>(null);
@@ -1210,11 +1320,12 @@ function VideoViewer({ filePath, cwd, sourceSessionId, watchEnabled = true }: Pr
               borderRadius: "50%",
               background: watching ? "var(--success)" : "var(--border)",
               display: "inline-block",
-              boxShadow: watching ? "0 0 4px #4ade80" : "none",
+              boxShadow: watching ? "0 0 4px var(--success)" : "none",
             }}
           />
-          {watching ? "live" : "static"}
+          {watching ? (locale === "zh-CN" ? "实时同步" : locale === "zh-TW" ? "即時同步" : "Live") : (locale === "zh-CN" ? "静态" : locale === "zh-TW" ? "靜態" : "Static")}
         </span>
+        <DesktopPathActions filePath={filePath} />
         <DownloadLink filePath={filePath} sourceSessionId={sourceSessionId} />
       </div>
       <div
@@ -1231,7 +1342,7 @@ function VideoViewer({ filePath, cwd, sourceSessionId, watchEnabled = true }: Pr
         <div style={{ width: "min(960px, 100%)", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 0 }}>
           {error && (
             <div style={{ color: "var(--danger)", fontSize: 13, marginBottom: 12, textAlign: "center" }}>
-              {error}
+              {describeFileError(error, t, locale)}
             </div>
           )}
           <video
@@ -1250,8 +1361,8 @@ function VideoViewer({ filePath, cwd, sourceSessionId, watchEnabled = true }: Pr
   );
 }
 
-function DocumentViewer({ filePath, cwd, sourceSessionId, initialPage, watchEnabled = true }: Props) {
-  const { t } = useI18n();
+function DocumentViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionLines, onAtMention, gitRefreshKey, initialDisplayMode, initialState, onStateChange, initialPage, watchEnabled = true }: Props) {
+  const { t, locale } = useI18n();
   const [watching, setWatching] = useState(false);
   const [bust, setBust] = useState(0);
   const [size, setSize] = useState<number | null>(null);
@@ -1330,12 +1441,14 @@ function DocumentViewer({ filePath, cwd, sourceSessionId, initialPage, watchEnab
     xlsx: "Excel (.xlsx)",
     xls: "Excel (.xls)",
     ods: "Spreadsheet (.ods)",
-    csv: "CSV 表格",
-    tsv: "TSV 表格",
+    csv: locale === "zh-CN" || locale === "zh-TW" ? "CSV 表格" : "CSV Table",
+    tsv: locale === "zh-CN" || locale === "zh-TW" ? "TSV 表格" : "TSV Table",
     pptx: "PowerPoint (.pptx)",
   };
   const isTabularText = ext === "csv" || ext === "tsv";
-  const [tabularMode, setTabularMode] = useState<"preview" | "source">("preview");
+  const [tabularMode, setTabularMode] = useState<"preview" | "source">(() => (
+    initialDisplayMode === "source" || initialDisplayMode === "diff" ? "source" : "preview"
+  ));
 
   if (isTabularText && tabularMode === "source") {
     return (
@@ -1343,8 +1456,15 @@ function DocumentViewer({ filePath, cwd, sourceSessionId, initialPage, watchEnab
         filePath={filePath}
         cwd={cwd}
         sourceSessionId={sourceSessionId}
-        initialDisplayMode="source"
+        onOpenFile={onOpenFile}
+        onMentionLines={onMentionLines}
+        onAtMention={onAtMention}
+        gitRefreshKey={gitRefreshKey}
+        initialDisplayMode={initialDisplayMode === "diff" ? "diff" : "source"}
+        initialState={initialState}
+        onStateChange={onStateChange}
         watchEnabled={watchEnabled}
+        onRequestPreview={() => setTabularMode("preview")}
       />
     );
   }
@@ -1372,7 +1492,7 @@ function DocumentViewer({ filePath, cwd, sourceSessionId, initialPage, watchEnab
               className="file-viewer-mode-button"
               onClick={() => setTabularMode("source")}
             >
-              Source
+              {getDisplayModeLabel("source", locale)}
             </button>
             <button
               type="button"
@@ -1381,7 +1501,7 @@ function DocumentViewer({ filePath, cwd, sourceSessionId, initialPage, watchEnab
               className="file-viewer-mode-button is-active"
               onClick={() => setTabularMode("preview")}
             >
-              Preview
+              {getDisplayModeLabel("preview", locale)}
             </button>
           </div>
         )}
@@ -1389,7 +1509,7 @@ function DocumentViewer({ filePath, cwd, sourceSessionId, initialPage, watchEnab
       <div className="file-viewer-document-stage">
         {error ? (
           <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, color: "var(--danger)", fontSize: 13, textAlign: "center" }}>
-            {error}
+            {describeFileError(error, t, locale)}
           </div>
         ) : (
           <iframe
@@ -1397,7 +1517,7 @@ function DocumentViewer({ filePath, cwd, sourceSessionId, initialPage, watchEnab
             src={previewUrl}
             sandbox={isPdf ? undefined : "allow-same-origin"}
             title={t("i18n.previewFile", { file: getFileName(filePath) })}
-            style={{ width: "100%", height: "100%", border: "none", background: isPdf ? "var(--bg)" : "#eef1f5" }}
+            style={{ width: "100%", height: "100%", border: "none", background: isPdf ? "var(--bg)" : "var(--surface)" }}
           />
         )}
       </div>
@@ -1420,7 +1540,7 @@ export function FileViewer({
   watchEnabled = true,
 }: Props) {
   if (isImagePath(filePath)) {
-    return <ImageViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} watchEnabled={watchEnabled} />;
+    return <ImageViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} onOpenFile={onOpenFile} onMentionLines={onMentionLines} onAtMention={onAtMention} gitRefreshKey={gitRefreshKey} initialDisplayMode={initialDisplayMode} initialState={initialState} onStateChange={onStateChange} watchEnabled={watchEnabled} />;
   }
   if (isAudioPath(filePath)) {
     return <AudioViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} watchEnabled={watchEnabled} />;
@@ -1429,7 +1549,7 @@ export function FileViewer({
     return <VideoViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} watchEnabled={watchEnabled} />;
   }
   if (isDocumentPreviewPath(filePath)) {
-    return <DocumentViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} initialPage={initialPage} watchEnabled={watchEnabled} />;
+    return <DocumentViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} onOpenFile={onOpenFile} onMentionLines={onMentionLines} onAtMention={onAtMention} gitRefreshKey={gitRefreshKey} initialDisplayMode={initialDisplayMode} initialState={initialState} onStateChange={onStateChange} initialPage={initialPage} watchEnabled={watchEnabled} />;
   }
   return <TextFileViewer filePath={filePath} cwd={cwd} sourceSessionId={sourceSessionId} onOpenFile={onOpenFile} onMentionLines={onMentionLines} onAtMention={onAtMention} gitRefreshKey={gitRefreshKey} initialDisplayMode={initialDisplayMode} initialState={initialState} onStateChange={onStateChange} watchEnabled={watchEnabled} />;
 }
@@ -1446,9 +1566,10 @@ function TextFileViewer({
   initialState,
   onStateChange,
   watchEnabled = true,
+  onRequestPreview,
 }: Props) {
   const { isDark } = useTheme();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [data, setData] = useState<FileData | null>(null);
   const [gitDiff, setGitDiff] = useState<GitFileDiffResponse | null>(null);
   const [gitDiffLoading, setGitDiffLoading] = useState(false);
@@ -1459,8 +1580,11 @@ function TextFileViewer({
   // The path default is resolved here, before the first fetch, so a markdown or
   // HTML file renders its preview as the first thing painted. Deciding it after
   // the contents load painted the source view for a frame first.
-  const requestedInitialDisplayMode = resolveInitialFileDisplayMode(initialState, initialDisplayMode, filePath);
-  const initialWrapLines = initialState?.wrapLines ?? false;
+  const pendingDiffMode = consumePendingDiffFile(filePath);
+  const requestedInitialDisplayMode = pendingDiffMode
+    ? "diff"
+    : resolveInitialFileDisplayMode(initialState, initialDisplayMode, filePath);
+  const initialWrapLines = resolveInitialWrapLines(initialState, filePath);
   const initialScrollTop = initialState?.scrollTop ?? 0;
   const initialScrollLeft = initialState?.scrollLeft ?? 0;
   const [displayMode, setDisplayMode] = useState<DisplayMode>(requestedInitialDisplayMode);
@@ -1661,6 +1785,17 @@ function TextFileViewer({
     }
   }, [requestedInitialDisplayMode, hasGitDiff, updateDisplayMode]);
 
+  useEffect(() => {
+    const handleOpenDiff = (event: Event) => {
+      const detail = (event as CustomEvent<{ filePath?: string }>).detail;
+      if (detail?.filePath === filePath) {
+        updateDisplayMode("diff");
+      }
+    };
+    window.addEventListener("pi-plus:open-file-diff", handleOpenDiff);
+    return () => window.removeEventListener("pi-plus:open-file-diff", handleOpenDiff);
+  }, [filePath, updateDisplayMode]);
+
   const markdownPreview = useMemo(
     () => (data?.language === "markdown" ? normalizeDisplayMath(data.content) : ""),
     [data],
@@ -1671,11 +1806,12 @@ function TextFileViewer({
     [data],
   );
 
+  const isBinary = data?.binary === true;
   const viewerContent = data?.content ?? "";
   const sourceLines = useMemo(() => viewerContent.split("\n"), [viewerContent]);
   const language = data?.language ?? "text";
-  const isHtml = language === "html";
-  const isMarkdown = language === "markdown";
+  const isHtml = !isBinary && language === "html";
+  const isMarkdown = !isBinary && language === "markdown";
   const htmlHasScripts = isHtml && /<script\b/i.test(viewerContent);
   const htmlPreviewUrl = getFileApiUrl(filePath, "serve", sourceSessionId, { v: htmlPreviewRevision });
   const hasPreview = !data?.truncated && (isHtml || isMarkdown);
@@ -1688,6 +1824,10 @@ function TextFileViewer({
     : displayMode === "preview" && !hasPreview
       ? "source"
       : displayMode;
+  const htmlPreview = useMemo(
+    () => isHtml && effectiveDisplayMode === "preview" ? injectSandboxedHtmlPolyfill(viewerContent) : "",
+    [isHtml, effectiveDisplayMode, viewerContent],
+  );
   const useLightweightSource = sourceLines.length > SOURCE_HIGHLIGHT_MAX_LINES
     && !(effectiveDisplayMode === "diff" && hasGitDiff)
     && !(effectiveDisplayMode === "preview" && hasPreview);
@@ -1844,26 +1984,41 @@ function TextFileViewer({
   if (error && !isDeletedDiff) {
     return (
       <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--danger)", fontSize: 13 }}>
-        {error}
+        {describeFileError(error, t, locale)}
       </div>
     );
   }
 
   if (!data && !isDeletedDiff) return null;
 
-  const content = viewerContent;
   const markdownDirectory = getFileDirectory(filePath);
   const lines = sourceLines;
+  const canPreview = hasPreview || Boolean(onRequestPreview);
   const displayModes: DisplayMode[] = isDeletedDiff
     ? ["diff"]
     : [
         "source",
-        ...(hasPreview ? ["preview" as const] : []),
+        ...(canPreview ? ["preview" as const] : []),
         ...(hasGitDiff ? ["diff" as const] : []),
       ];
+  const linesLabel = locale === "zh-CN" || locale === "zh-TW" ? `${lines.length} 行` : `${lines.length} lines`;
+  const rawBinaryLabel = t("files.binary");
+  const binaryLabel = rawBinaryLabel !== "files.binary"
+    ? rawBinaryLabel
+    : locale === "zh-CN" ? "二进制" : locale === "zh-TW" ? "二進位" : "binary";
+  const rawBinaryNoPreview = t("files.binaryNoPreview");
+  const binaryNoPreviewLabel = rawBinaryNoPreview !== "files.binaryNoPreview"
+    ? rawBinaryNoPreview
+    : locale === "zh-CN"
+      ? "二进制文件，无法预览。下载后打开。"
+      : locale === "zh-TW"
+        ? "二進位檔案，無法預覽。下載後開啟。"
+        : "Binary file: no preview. Download it to open it.";
   const metadata = isDeletedDiff
     ? t("files.deleted")
-    : `${language} · ${lines.length} lines · ${formatSize(data!.size)}`;
+    : isBinary
+      ? `${binaryLabel} · ${formatSize(data!.size)}`
+      : `${language} · ${linesLabel} · ${formatSize(data!.size)}`;
 
   return (
     <div className="file-viewer-shell" style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden", position: "relative" }}>
@@ -1881,11 +2036,18 @@ function TextFileViewer({
           flexShrink: 0,
         }}
       >
-        <span className="file-viewer-path" style={{ fontFamily: "var(--font-mono)" }} title={filePath}>
-          {getRelativeFilePath(filePath, cwd)}
+        <span
+          className="file-viewer-meta"
+          title={`${getRelativeFilePath(filePath, cwd)} · ${metadata}`}
+          style={{
+            maxWidth: "none",
+            borderLeft: "none",
+            paddingLeft: 0,
+            flex: "0 1 auto",
+          }}
+        >
+          {metadata}
         </span>
-
-        <span className="file-viewer-meta" title={metadata}>{metadata}</span>
         {!isDeletedDiff && (
           <span
             title={watching ? t("i18n.liveSync") : t("i18n.notWatching")}
@@ -1893,12 +2055,12 @@ function TextFileViewer({
             className="file-viewer-live-indicator"
             style={{
               background: watching ? "var(--success)" : "var(--border)",
-              boxShadow: watching ? "0 0 4px #4ade80" : "none",
+              boxShadow: watching ? "0 0 4px var(--success)" : "none",
             }}
           />
         )}
 
-        <div className="file-viewer-controls">
+        <div className="file-viewer-controls" style={{ marginLeft: "auto" }}>
           {displayModes.length > 1 && (
             <div className="file-viewer-mode-switch" aria-label={t("i18n.fileViewMode")}>
               {displayModes.map((mode) => {
@@ -1907,7 +2069,13 @@ function TextFileViewer({
                   <button
                     key={mode}
                     type="button"
-                    onClick={() => updateDisplayMode(mode)}
+                    onClick={() => {
+                      if (mode === "preview" && onRequestPreview && !hasPreview) {
+                        onRequestPreview();
+                        return;
+                      }
+                      updateDisplayMode(mode);
+                    }}
                     title={mode === "diff" ? t("i18n.compareHead") : undefined}
                     aria-pressed={active}
                     className="file-viewer-mode-button"
@@ -1916,7 +2084,7 @@ function TextFileViewer({
                       color: active ? "var(--text)" : "var(--text-muted)",
                     }}
                   >
-                    {DISPLAY_MODE_LABELS[mode]}
+                    {getDisplayModeLabel(mode, locale)}
                   </button>
                 );
               })}
@@ -1965,7 +2133,7 @@ function TextFileViewer({
                 <MentionIcon />
               </button>
             )}
-            {effectiveDisplayMode === "source" && (
+            {(effectiveDisplayMode === "source" || effectiveDisplayMode === "diff") && !isBinary && (
               <>
                 <button
                   type="button"
@@ -1990,6 +2158,7 @@ function TextFileViewer({
             )}
           </div>
 
+          {!isDeletedDiff && <DesktopPathActions filePath={filePath} />}
           {!isDeletedDiff && <DownloadLink filePath={filePath} sourceSessionId={sourceSessionId} />}
         </div>
       </div>
@@ -2035,12 +2204,12 @@ function TextFileViewer({
         style={{ flex: 1, overflow: "auto", background: "var(--bg)", paddingBottom: data?.truncated ? 48 : undefined }}
       >
         {effectiveDisplayMode === "diff" && hasGitDiff ? (
-          <DiffView patch={gitDiff.patch!} />
+          <DiffView patch={gitDiff.patch!} wrapLines={wrapLines} />
         ) : isHtml && effectiveDisplayMode === "preview" ? (
           htmlScriptsEnabled && htmlHasScripts ? (
             <iframe
               key="html-preview-scripts"
-              srcDoc={content}
+              srcDoc={htmlPreview}
               sandbox="allow-scripts"
               style={{ width: "100%", height: "100%", border: "none", background: "var(--bg)" }}
               title={t("i18n.htmlPreview")}
@@ -2132,6 +2301,18 @@ function TextFileViewer({
             >
               {markdownPreview}
             </ReactMarkdown>
+          </div>
+        ) : isBinary ? (
+          <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, padding: 24, color: "var(--text-muted)", fontSize: 13, textAlign: "center" }}>
+            <span>{binaryNoPreviewLabel}</span>
+            <a
+              href={getFileApiUrl(filePath, "download", sourceSessionId)}
+              download={getFileName(filePath)}
+              className="file-viewer-mode-button"
+              style={{ display: "inline-flex", alignItems: "center", border: "var(--hairline) solid var(--border)", borderRadius: 6, color: "var(--text)", textDecoration: "none" }}
+            >
+              {t("files.download")}
+            </a>
           </div>
         ) : useLightweightSource ? (
           <div

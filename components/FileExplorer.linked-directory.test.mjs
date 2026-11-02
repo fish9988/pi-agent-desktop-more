@@ -9,7 +9,7 @@ const jiti = createJiti(import.meta.url, {
 });
 const React = await jiti.import("react");
 const { renderToStaticMarkup } = await jiti.import("react-dom/server");
-const { TreeNode } = await jiti.import("./FileExplorer.tsx");
+const { TreeNode, sanitizeDisplayFileName } = await jiti.import("./FileExplorer.tsx");
 const { englishMessages } = await jiti.import("@/lib/i18n/locale-plugins.ts");
 const { translateMessage } = await jiti.import("@/lib/i18n/format.ts");
 
@@ -82,4 +82,16 @@ test("a link that encloses the project or home folder warns before allowing", ()
   assert.doesNotMatch(source, /window\.confirm/);
   assert.match(source, /setConfirmEnclosingLink\(true\)/);
   assert.match(source, /\{confirmEnclosingLink && \(\s*<span>\{t\("files\.allowEnclosingLinkConfirm"/);
+});
+
+test("sanitizeDisplayFileName strips control characters while preserving printable names", () => {
+  assert.equal(sanitizeDisplayFileName("hello\u0007\u001bworld.ts"), "helloworld.ts");
+  assert.equal(sanitizeDisplayFileName("normal-file_名.md"), "normal-file_名.md");
+});
+
+test("FileExplorer uses CSS variables instead of hardcoded hex colors and supports list/tree changes toggle", () => {
+  assert.doesNotMatch(source, /#d6a84b|#60a5fa|#3b82f6|#ef4444|#22c55e/);
+  assert.match(source, /pi-plus:open-changes-panel/);
+  assert.match(source, /ChangesTreeRows/);
+  assert.match(source, /ChangesViewToggleIcon/);
 });
