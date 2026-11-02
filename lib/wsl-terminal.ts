@@ -1,7 +1,13 @@
 import { resolveTerminalShell } from "./terminal-settings";
 import type { TerminalShell } from "./terminal-shells";
 import { listWslDistros } from "./wsl-distros";
-import { decodeWslOutput, runWsl, WSL_EXECUTABLE } from "./wsl-process";
+import {
+  decodeWslOutput,
+  runWsl,
+  wslCommandArgs,
+  wslInteractiveArgs,
+  WSL_EXECUTABLE,
+} from "./wsl-process";
 import { windowsToWslPath } from "./wsl-paths";
 import { readWslPreferences } from "./wsl-preferences";
 import type { TerminalBackendInfo, TerminalLaunchPlan, WslDistroList, WslPreferences } from "./wsl-types";
@@ -49,14 +55,7 @@ export function clearWslReadyCache(): void {
   globalThis.__piWslReadyCache = undefined;
 }
 
-export function wslInteractiveArgs(distro: string | null | undefined, linuxCwd: string): string[] {
-  return [...(distro ? ["-d", distro] : []), "--cd", linuxCwd];
-}
-
-/** One-shot command form: `wsl.exe --cd <dir> --exec bash -lc <cmd>`. */
-export function wslCommandArgs(distro: string | null | undefined, linuxCwd: string, command: string): string[] {
-  return [...(distro ? ["-d", distro] : []), "--cd", linuxCwd, "--exec", "bash", "-lc", command];
-}
+export { wslCommandArgs, wslInteractiveArgs };
 
 export function defaultWslProbe(options: {
   listTimeoutMs?: number;

@@ -265,9 +265,7 @@ function mapScannedSession(
     // real "(no messages)" session until the details arrive.
     firstMessage: detailsPending && !scanned.firstMessage
       ? ""
-      : scanned.firstMessage
-        ? (scanned.firstMessage.length > 400 ? `${scanned.firstMessage.slice(0, 400)}…` : scanned.firstMessage)
-        : "(no messages)",
+      : scanned.firstMessage || "(no messages)",
     parentSessionId: originSessionId,
     ...(subagent
       ? {

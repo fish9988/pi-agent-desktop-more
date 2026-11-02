@@ -12,11 +12,13 @@ import {
   getCompletionNotificationSuppressedRpcSessionIds,
   getRpcSessionInfos,
   getRunningRpcSessionIds,
+  withSubagentDisplayStatus,
 } from "@/lib/rpc-manager";
 import { startServerPerf } from "@/lib/perf";
 import { attachScheduledRelations } from "@/lib/scheduled-tasks/run-index";
 import { ensureChatWorkspace } from "@/lib/chat-workspace";
 import { allowFileRoot } from "@/lib/file-access";
+import { sessionListFirstMessage } from "@/lib/slash-display";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +43,13 @@ export async function GET(req: Request) {
     ]);
     allowFileRoot(chatWorkspaceCwd);
     perf?.span("scan+projects");
-    const sessions = attachScheduledRelations(mergeSessionLists(persistedSessions, runtimeSessions));
+    const sessions = attachScheduledRelations(
+      withSubagentDisplayStatus(mergeSessionLists(persistedSessions, runtimeSessions)),
+    )
+      .map((session) => {
+        const firstMessage = sessionListFirstMessage(session.firstMessage);
+        return firstMessage === session.firstMessage ? session : { ...session, firstMessage };
+      });
     if (!summary && !(globalThis as { __piPrewarmedTopSessions?: boolean }).__piPrewarmedTopSessions) {
       (globalThis as { __piPrewarmedTopSessions?: boolean }).__piPrewarmedTopSessions = true;
       const topWarmTargets = sessions

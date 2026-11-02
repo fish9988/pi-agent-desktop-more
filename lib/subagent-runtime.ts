@@ -25,6 +25,7 @@ import {
   SUBAGENT_STATUS_TYPE,
   SUBAGENT_RESULT_TYPE,
   selectSubagentExtensionTools,
+  settleOrphanedSubagentStatus,
   withSubagentExtensionTools,
   type SubagentMetadata,
   type SubagentResultMetadata,
@@ -67,6 +68,8 @@ export interface SubagentController {
   get(sessionId: string): Promise<SubagentRunInfo | null>;
   steer(sessionId: string, message: string): Promise<void>;
   abort(sessionId: string): Promise<void>;
+  /** A turn in a child's own chat ended: settles the run a restart cut off, if that is what the file holds. */
+  settleDirectTurn(sessionId: string, aborted: boolean): void;
 }
 
 type StoredSubagentExecution = {
@@ -94,6 +97,25 @@ function lastAssistantError(sessionManager: { getEntries?: () => unknown }): str
     if (entry?.type !== "message" || entry.message?.role !== "assistant") continue;
     if (entry.message.stopReason !== "error") return undefined;
     return typeof entry.message.errorMessage === "string" && entry.message.errorMessage ? entry.message.errorMessage : "Provider returned an error";
+  }
+  return undefined;
+}
+
+function lastAssistantStop(sessionManager: { getEntries?: () => unknown }): { aborted?: boolean; error?: string } | undefined {
+  const entries = sessionManager.getEntries?.();
+  if (!Array.isArray(entries)) return undefined;
+  for (let i = entries.length - 1; i >= 0; i -= 1) {
+    const entry = entries[i] as { type?: unknown; message?: { role?: unknown; stopReason?: unknown; errorMessage?: unknown } };
+    if (entry?.type !== "message" || entry.message?.role !== "assistant") continue;
+    if (entry.message.stopReason === "aborted") return { aborted: true };
+    if (entry.message.stopReason === "error") {
+      return {
+        error: typeof entry.message.errorMessage === "string" && entry.message.errorMessage
+          ? entry.message.errorMessage
+          : "Provider returned an error",
+      };
+    }
+    return undefined;
   }
   return undefined;
 }
@@ -148,7 +170,12 @@ function takeResultConsumed(run: SubagentRunIdentity): boolean {
  * `resume` can pick the session up again.
  */
 function settleOrphanedRun(run: SubagentRunInfo): SubagentRunInfo {
-  return run.status === "running" || run.status === "queued" ? { ...run, status: "interrupted" } : run;
+  return { ...run, status: settleOrphanedSubagentStatus(run.status) };
+}
+
+/** The status of a run this process still holds, so a listing does not have to guess from its file. */
+export function getLiveSubagentStatus(sessionId: string): SubagentRunInfo["status"] | undefined {
+  return getSubagentRuns().get(sessionId)?.run.status;
 }
 
 function parseSubagentModel(runtime: ModelRuntime, value: string | undefined) {
@@ -371,7 +398,10 @@ export function createSubagentController(
         if (stored.run.status === "queued") stored.cancelQueued?.();
         else void inner.abort();
       };
-      if (!runInBackground) request.signal?.addEventListener("abort", handleParentAbort, { once: true });
+      if (!runInBackground) {
+        if (request.signal?.aborted) handleParentAbort();
+        else request.signal?.addEventListener("abort", handleParentAbort, { once: true });
+      }
 
       const execute = async (): Promise<SubagentRunInfo> => {
         if (stored.abortRequested) {
@@ -463,6 +493,7 @@ export function createSubagentController(
         finishQueuedAbort,
       );
       stored.cancelQueued = queued.cancel;
+      if (stored.abortRequested) queued.cancel();
       void queued.promise.then(resolveCompletion, (error) => {
         resolveCompletion({ ...initialRun, status: "failed", completedAt: new Date().toISOString(), error: error instanceof Error ? error.message : String(error) });
       });
@@ -518,7 +549,10 @@ export function createSubagentController(
       if (stored.run.status === "queued") stored.cancelQueued?.();
       else void wrapper!.inner.abort();
     };
-    if (!runInBackground) request.signal?.addEventListener("abort", handleParentAbort, { once: true });
+    if (!runInBackground) {
+      if (request.signal?.aborted) handleParentAbort();
+      else request.signal?.addEventListener("abort", handleParentAbort, { once: true });
+    }
 
     const execute = async (): Promise<SubagentRunInfo> => {
       if (stored.abortRequested) {
@@ -584,6 +618,7 @@ export function createSubagentController(
       dependencies.invalidateSessionList();
     }, finishQueuedAbort);
     stored.cancelQueued = queued.cancel;
+    if (stored.abortRequested) queued.cancel();
     void queued.promise.then(resolveCompletion, (error) => resolveCompletion({ ...initialRun, status: "failed", completedAt: new Date().toISOString(), error: error instanceof Error ? error.message : String(error) }));
     return { run: stored.run, completion };
   }
@@ -655,10 +690,33 @@ export function createSubagentController(
     await wrapper.inner.abort();
   }
 
+  function settleDirectTurn(sessionId: string, aborted: boolean): void {
+    // A run in the map records its own result, and a settled run keeps its report.
+    if (getSubagentRuns().has(sessionId)) return;
+    const wrapper = dependencies.getSession(sessionId);
+    if (!wrapper?.isAlive()) return;
+    const manager = wrapper.inner.sessionManager;
+    const run = readSubagentRun(manager.getEntries() as unknown as SessionEntry[], sessionId, wrapper.sessionFile);
+    if (!run || (run.status !== "running" && run.status !== "queued")) return;
+    const text = wrapper.inner.getLastAssistantText()?.trim();
+    const stop = aborted ? undefined : lastAssistantStop(manager);
+    const status = aborted || stop?.aborted ? "aborted" : stop?.error ? "failed" : "completed";
+    const completedAt = new Date().toISOString();
+    manager.appendCustomEntry(SUBAGENT_RESULT_TYPE, {
+      version: 1,
+      status,
+      completedAt,
+      ...(text ? { result: text } : {}),
+      ...(stop?.error ? { error: stop.error } : {}),
+    });
+    dependencies.invalidateSessionList();
+  }
+
   return {
     extensionRuntime: { start, resume, get, steer, notifyParent, markResultConsumed },
     get,
     steer,
     abort,
+    settleDirectTurn,
   };
 }

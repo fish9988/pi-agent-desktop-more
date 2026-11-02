@@ -7,6 +7,9 @@ import {
   type LoadExtensionsResult,
 } from "@earendil-works/pi-coding-agent";
 import { join } from "node:path";
+import { readWslPreferences, usesWslShellCommands } from "./wsl-preferences";
+import { createWslBashOperations } from "./wsl-process";
+import type { WslPreferences } from "./wsl-types";
 
 const HOST_EXTENSION_NAME = "pi-web-project-command-environment";
 const HOST_EXTENSION_PATH = `<inline:${HOST_EXTENSION_NAME}>`;
@@ -56,6 +59,7 @@ function withAgentBinDirectory(
   agentBinDir: string,
   platform: NodeJS.Platform,
 ): NodeJS.ProcessEnv {
+  if (!agentBinDir) return environment;
   const pathKey = platform === "win32"
     ? Object.keys(environment).find((name) => name.toUpperCase() === "PATH") ?? "PATH"
     : "PATH";
@@ -141,9 +145,26 @@ export function createProjectCommandBashOperations(
   };
 }
 
+export function resolveProjectBashOperations(
+  options: { shellPath?: string; preferences?: WslPreferences } = {},
+): BashOperations {
+  const preferences = options.preferences ?? readWslPreferences();
+  if (!usesWslShellCommands(preferences)) {
+    return createProjectCommandBashOperations({ shellPath: options.shellPath });
+  }
+  return createProjectCommandBashOperations({
+    shellPath: options.shellPath,
+    // Inside WSL a Windows `\.pi\agent\bin` entry on PATH would be a junk
+    // directory; commands reach Windows binaries through WSL interop instead.
+    agentBinDir: "",
+    localOperations: createWslBashOperations({ distro: preferences.distro || null }),
+  });
+}
+
 export function createProjectCommandBashExtension(options: {
   cwd: string;
   settings: ProjectShellSettings;
+  preferences?: WslPreferences;
 }): InlineExtension {
   return {
     name: HOST_EXTENSION_NAME,
@@ -155,8 +176,9 @@ export function createProjectCommandBashExtension(options: {
         execute(toolCallId, params, signal, onUpdate, context) {
           const executionDefinition = createBashToolDefinition(options.cwd, {
             commandPrefix: options.settings.getShellCommandPrefix(),
-            operations: createProjectCommandBashOperations({
+            operations: resolveProjectBashOperations({
               shellPath: options.settings.getShellPath(),
+              preferences: options.preferences,
             }),
           });
           return executionDefinition.execute(toolCallId, params, signal, onUpdate, context);

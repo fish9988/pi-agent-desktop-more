@@ -1,4 +1,4 @@
-import { createModelRuntimeWithExtensions } from "@/lib/model-runtime";
+import { getModelRuntimeWithExtensions } from "@/lib/model-runtime";
 import { readCodemodePreference } from "@/lib/codemode-settings";
 import { listNonChatModels, type NonChatModelRuntime } from "@/lib/nonchat-models";
 
@@ -11,7 +11,7 @@ export const runtime = "nodejs";
  */
 export async function GET() {
   try {
-    const modelRuntime = await createModelRuntimeWithExtensions();
+    const modelRuntime = await getModelRuntimeWithExtensions();
     const [models, codemode] = await Promise.all([
       listNonChatModels(modelRuntime as unknown as NonChatModelRuntime),
       readCodemodePreference(),

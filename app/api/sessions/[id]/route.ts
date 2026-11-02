@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { existsSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "fs";
+import { existsSync, readdirSync, readFileSync, statSync, unlinkSync } from "fs";
 import { dirname, join } from "path";
 import {
   attachSessionProjectInfo,
@@ -18,7 +18,7 @@ import {
   readSessionHeader,
 } from "@/lib/session-reader";
 import { sessionPathKey } from "@/lib/session-path";
-import { abortSubagent, getRpcSession, getRpcSessionInfos } from "@/lib/rpc-manager";
+import { abortSubagent, getRpcSession, getRpcSessionInfos, renameRpcSession, subagentDisplayStatus } from "@/lib/rpc-manager";
 import { projectTreeForResponse, toSummaryTree } from "@/lib/project-tree";
 import { computeSessionTotalActiveMs } from "@/lib/session-timing";
 import { computeSessionStats } from "@/lib/session-stats";
@@ -28,6 +28,7 @@ import type { SessionEntry } from "@/lib/types";
 import { readSubagentRun, readSubagentSessionResources, SUBAGENT_META_TYPE } from "@/lib/subagents";
 import { readSessionToolSelection } from "@/lib/session-tool-selection";
 import { jsonResponse } from "@/lib/json-response";
+import { replaceFileAtomicSync } from "@/lib/atomic-file";
 
 export async function GET(
   req: Request,
@@ -166,7 +167,7 @@ export async function GET(
       firstMessage: firstUserMessageText,
       parentSessionId,
       ...(subagent
-        ? { relation: { kind: "subagent" as const, parentSessionId: subagent.parentSessionId, profile: subagent.profile, description: subagent.description, status: liveRpc?.isRunning() ? "running" as const : subagent.status } }
+        ? { relation: { kind: "subagent" as const, parentSessionId: subagent.parentSessionId, profile: subagent.profile, description: subagent.description, status: subagentDisplayStatus(header.id, subagent.status) } }
         : header.parentSession
           ? { relation: { kind: "fork" as const, ...(parentSessionId ? { originSessionId: parentSessionId } : {}) } }
           : {}),
@@ -206,26 +207,20 @@ export async function PATCH(
       return NextResponse.json({ error: "name is required" }, { status: 400 });
     }
     const filePath = await resolveSessionPath(id);
-    if (!filePath) {
+    const trimmed = name.trim();
+    // A session a wrapper holds is renamed in it, never on disk behind its back (#1388).
+    const renamed = await renameRpcSession(id, trimmed, () => {
+      if (!filePath || !existsSync(filePath)) return false;
+      // No wrapper: appendSessionInfo on a fresh manager, bypassing the cache.
+      const sm = openSessionManager(filePath, { mutable: true });
+      sm.appendSessionInfo(trimmed);
+      invalidateSessionManagerCache(filePath);
+      invalidateSessionListCache();
+      return true;
+    });
+    if (!renamed) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
-
-    // Not flushed yet: appending to the file would strand the name in a stub
-    // the live runtime is about to write over. Let the runtime record it.
-    if (!existsSync(filePath)) {
-      const live = getRpcSession(id);
-      if (!live?.isAlive()) {
-        return NextResponse.json({ error: "Session not found" }, { status: 404 });
-      }
-      await live.send({ type: "set_session_name", name: name.trim() });
-      return NextResponse.json({ ok: true });
-    }
-
-    // PATCH writes via appendSessionInfo — open fresh, bypassing the cache.
-    const sm = openSessionManager(filePath, { mutable: true });
-    sm.appendSessionInfo(name.trim());
-    invalidateSessionManagerCache(filePath);
-    invalidateSessionListCache();
     return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
@@ -369,7 +364,7 @@ export async function DELETE(
                 break;
               }
             }
-            writeFileSync(childPath, lines.join("\n"));
+            replaceFileAtomicSync(childPath, lines.join("\n"));
           }
         } catch { /* skip malformed */ }
       }

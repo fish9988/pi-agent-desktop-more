@@ -1,8 +1,12 @@
 import { configureHttpDispatcher } from "@/lib/http-dispatcher";
 import { closeAllAgentEventStreams } from "@/lib/agent-event-stream";
+import { applyCodemodeWorkerDefault } from "@/lib/codemode-workers";
 import { startScheduler } from "@/lib/scheduled-tasks";
 
 export function registerNodeInstrumentation(): void {
+  // Before any session can run a codemode script (lib/codemode-workers.ts).
+  applyCodemodeWorkerDefault();
+
   configureHttpDispatcher();
 
   // Scheduled tasks must fire without anyone having opened a page, and the

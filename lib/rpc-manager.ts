@@ -2,11 +2,12 @@ import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { createAgentSessionFromServices, createAgentSessionServices, getAgentDir, initTheme, SessionManager, SettingsManager, Theme } from "@earendil-works/pi-coding-agent";
 import { KeybindingsManager as TuiKeybindingsManager, TUI_KEYBINDINGS } from "@earendil-works/pi-tui";
 import { randomUUID } from "crypto";
-import { existsSync, realpathSync, writeFileSync } from "fs";
+import { existsSync, realpathSync, statSync, writeFileSync } from "fs";
 import { resolve } from "path";
 import { isDeepStrictEqual } from "util";
 import { validateAgentImages } from "./image-attachments";
 import { invalidateModelsCache } from "./models-cache";
+import { invalidateModelRuntimeWithExtensions } from "./model-runtime";
 import { resolveVisibleModels, selectInitialModelScope } from "./model-scope";
 import {
   createProjectCommandBashExtension,
@@ -18,6 +19,7 @@ import { getProjectTrustStatus, projectTrustReloadOptions } from "./project-trus
 import { computeLiveSessionTotalActiveMs } from "./session-timing";
 import { notifySessionComplete } from "./web-push";
 import { hasActiveSessionLivenessProvider } from "./session-liveness";
+import { IDLE_SESSION_CAP_GRACE_MS, selectIdleSessionsToEvict, type IdleSessionCandidate } from "./idle-session-cap";
 import type { SlashCommandInfo } from "@earendil-works/pi-coding-agent";
 import { PRODUCT_NAME } from "./branding";
 import type { AgentSessionLike, ExtensionUiContextLike, NavigateTreeOptions, ToolInfo } from "./pi-types";
@@ -30,6 +32,7 @@ import type {
   SessionEntry,
   SessionInfo,
   SessionMessageEntry,
+  SubagentSessionStatus,
 } from "./types";
 import { getUsageCostBreakdown } from "./usage-breakdown";
 import {
@@ -47,9 +50,10 @@ import {
   listSubagentProfiles,
   readSubagentRun,
   readSubagentSessionResources,
+  settleOrphanedSubagentStatus,
   SUBAGENT_CONTROL_TOOL_NAMES,
 } from "./subagents";
-import { createSubagentController } from "./subagent-runtime";
+import { createSubagentController, getLiveSubagentStatus } from "./subagent-runtime";
 import { isBuiltInSubagentsEnabled } from "./subagent-settings";
 import { resolveShellTools } from "./powershell-settings";
 import { CHAT_ONLY_RESOURCE_LOADER_OPTIONS, contextFilesSystemPrompt } from "./chat-only";
@@ -143,6 +147,8 @@ type AgentSessionWrapperOptions = {
   chatWorkspace?: boolean;
   onAgentRunComplete?: AgentRunCompleteListener;
   suppressCompletionNotifications?: boolean;
+  /** A subagent's wrapper: a run ended and nothing is left to do. */
+  onDirectTurnSettled?: (aborted: boolean) => void;
   /** Connects the session's MCP servers before a prompt starts a run, and lets go of them when it closes (lib/mcp-host.ts). */
   mcpHost?: Pick<McpHost, "prepareForPrompt" | "dispose">;
 };
@@ -283,6 +289,10 @@ const SESSION_TOOL_NAMES = new Set<string>(["codemode", "tool_search", ...SUBAGE
  * tool one switched off stays off. Nothing else is added: pi itself activates the extension
  * tools it registers (all of them when it builds or reloads a session, then each new one), so
  * `carry` already holds them. An empty selection is Chat only.
+ *
+ * Order follows `carry`, the order the `pi` CLI declares for the same set: regrouping the
+ * coding tools ahead rewrites the prompt's `<tools>` section and drops the provider's prompt
+ * cache on every harness switch (#1405). Newly selected coding tools go at the end.
  */
 export function resolveActiveToolNames(
   session: AgentSessionLike,
@@ -298,11 +308,12 @@ export function resolveActiveToolNames(
     session.settingsManager.getDefaultTools(),
   );
   const carriedToolNames = carry.filter((name) => {
+    if (codingToolNames.has(name)) return selectedToolNames.includes(name);
     const tool = registered.get(name);
-    return tool !== undefined && !codingToolNames.has(name) && tool.exposure !== "hidden";
+    return tool !== undefined && tool.exposure !== "hidden";
   });
 
-  return [...new Set([...selectedToolNames, ...carriedToolNames])];
+  return [...new Set([...carriedToolNames, ...selectedToolNames])];
 }
 
 // ============================================================================
@@ -330,6 +341,7 @@ export class AgentSessionWrapper {
   private activeMutatingCommands = 0;
   private sessionReplacement: "fork" | "clone" | null = null;
   private agentRunNeedsCompletion = false;
+  private lastRunAborted = false;
   private promptAdmissionTail: Promise<void> = Promise.resolve();
   private extensionsBound = false;
   private extensionBindingPromise: Promise<void> | null = null;
@@ -338,6 +350,7 @@ export class AgentSessionWrapper {
   /** What this session may reach; computed once at start (lib/session-policy.ts). */
   private readonly policy: SessionPolicy;
   private readonly onAgentRunComplete?: AgentRunCompleteListener;
+  private readonly onDirectTurnSettled?: (aborted: boolean) => void;
   private readonly suppressCompletionNotifications: boolean;
   private readonly mcpHost?: Pick<McpHost, "prepareForPrompt" | "dispose">;
   private mcpHostDisposed = false;
@@ -345,6 +358,9 @@ export class AgentSessionWrapper {
   private mcpPromptWait: { controller: AbortController; done: Promise<void> } | null = null;
   private unsubscribe: (() => void) | null = null;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
+  // Last time a listener was attached or left, or a command/event reset the idle timer.
+  private lastUsedAt = Date.now();
+  private onUnwatchedCallback: (() => void) | null = null;
   private onDestroyCallback: (() => void) | null = null;
   private shutdownPromise: Promise<void> | null = null;
   private sessionShutdownEmitted = false;
@@ -366,6 +382,7 @@ export class AgentSessionWrapper {
     this.exactSystemPrompt = options.exactSystemPrompt;
     this.policy = deriveSessionPolicy({ chatOnly: options.chatOnly, chatWorkspace: options.chatWorkspace });
     this.onAgentRunComplete = options.onAgentRunComplete;
+    this.onDirectTurnSettled = options.onDirectTurnSettled;
     this.suppressCompletionNotifications = options.suppressCompletionNotifications ?? false;
     this.mcpHost = options.mcpHost;
     this.composerQueue = new ComposerQueue(inner.sessionId, {
@@ -472,9 +489,13 @@ export class AgentSessionWrapper {
     this.unsubscribe = this.inner.subscribe((event: AgentEvent) => {
       if (event.type === "agent_start") {
         this.agentRunNeedsCompletion = true;
+        this.lastRunAborted = false;
         // Cross-window liveness: idle → running must reach other windows'
         // sidebars through the running-events stream, not just this one's SSE.
         notifyRunningChange();
+      }
+      if (event.type === "agent_settled") {
+        this.lastRunAborted = event.aborted === true;
       }
       if (event.type === "agent_end") {
         invalidateSessionListCache();
@@ -541,6 +562,11 @@ export class AgentSessionWrapper {
   private notifyAgentRunCompleteIfIdle(): void {
     if (!this.agentRunNeedsCompletion || this.isRunning() || this.composerQueue.snapshot().length) return;
     this.agentRunNeedsCompletion = false;
+    try {
+      this.onDirectTurnSettled?.(this.lastRunAborted);
+    } catch (error) {
+      console.error("[pi-web] could not settle the subagent turn:", error instanceof Error ? error.message : error);
+    }
     if (this.suppressCompletionNotifications) return;
     try {
       this.onAgentRunComplete?.(this.sessionId);
@@ -686,10 +712,14 @@ export class AgentSessionWrapper {
     const entries = this.inner.sessionManager.getEntries() as unknown as SessionEntry[];
     if (!readSubagentSessionResources(entries)) {
       const activeAfter = this.inner.getActiveToolNames();
-      this.setActiveToolSelection(
-        readSessionToolSelection(entries) ?? activeAfter,
-        [...activeAfter, ...activeBefore.filter((name) => SESSION_TOOL_NAMES.has(name))],
-      );
+      const isToolChanged = activeBefore.length !== activeAfter.length
+        || activeBefore.some((name) => !activeAfter.includes(name));
+      if (isToolChanged) {
+        this.setActiveToolSelection(
+          readSessionToolSelection(entries) ?? activeAfter,
+          [...activeAfter, ...activeBefore.filter((name) => SESSION_TOOL_NAMES.has(name))],
+        );
+      }
     }
     return { cancelled: false };
   }
@@ -718,6 +748,7 @@ export class AgentSessionWrapper {
   }
 
   private resetIdleTimer(): void {
+    this.lastUsedAt = Date.now();
     if (!this._alive) {
       if (this.idleTimer) clearTimeout(this.idleTimer);
       return;
@@ -771,11 +802,42 @@ export class AgentSessionWrapper {
 
   onEvent(listener: EventListener): () => void {
     this.listeners.add(listener);
+    this.lastUsedAt = Date.now();
     for (const event of this.pendingUiRequests.values()) listener(event);
     for (const event of this.activeToolEvents.values()) listener(event);
     return () => {
-      this.listeners.delete(listener);
+      if (!this.listeners.delete(listener)) return;
+      this.lastUsedAt = Date.now();
+      if (this.listeners.size === 0) this.onUnwatchedCallback?.();
     };
+  }
+
+  onUnwatched(cb: () => void): void {
+    this.onUnwatchedCallback = cb;
+  }
+
+  /**
+   * This wrapper as a candidate for the idle-session cap (lib/idle-session-cap.ts),
+   * or null while anything still needs it loaded: a run (isRunning()), an SSE
+   * listener, a pending extension dialog, queued composer messages, an extension
+   * liveness provider, or use within the grace period. A session with no file on
+   * disk yet is never a candidate: shutting it down would lose it.
+   */
+  idleCapCandidate(now: number = Date.now()): IdleSessionCandidate | null {
+    if (!this.isAlive() || this.isRunning() || this.forceShutdownOnIdle) return null;
+    if (this.listeners.size > 0 || this.pendingUiRequests.size > 0 || this.activeCustomUis.size > 0) return null;
+    if (this.composerQueue.snapshot().length > 0) return null;
+    if (now - this.lastUsedAt < IDLE_SESSION_CAP_GRACE_MS) return null;
+    const sessionFile = this.sessionFile;
+    if (!sessionFile) return null;
+    let bytes: number;
+    try {
+      bytes = statSync(sessionFile).size;
+    } catch {
+      return null;
+    }
+    if (hasActiveSessionLivenessProvider({ sessionId: this.sessionId, sessionFile })) return null;
+    return { id: this.sessionId, idleSince: this.lastUsedAt, bytes };
   }
 
   onDestroy(cb: () => void): void {
@@ -1357,6 +1419,7 @@ export class AgentSessionWrapper {
           this.inner.extensionRunner.setUIContext?.(this.createExtensionUiContext(), "rpc");
         }
         invalidateModelsCache();
+        invalidateModelRuntimeWithExtensions();
         return { success: true };
       }
 
@@ -2148,6 +2211,7 @@ export class AgentSessionWrapper {
             this.inner.extensionRunner.setUIContext?.(this.createExtensionUiContext(), "rpc");
           },
         });
+        invalidateModelRuntimeWithExtensions();
       },
     };
   }
@@ -2206,8 +2270,50 @@ function registerRpcWrapper(wrapper: AgentSessionWrapper): void {
     previous.onDestroy(() => {});
   }
   registry.set(sessionId, wrapper);
+  wrapper.onUnwatched(scheduleIdleSessionCap);
   wrapper.start();
   if (!wrapper.isChatOnly()) wrapper.beginExtensionBinding();
+  enforceIdleSessionCap();
+}
+
+let idleSessionCapTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Re-check the cap once a session that just lost its last listener is past the grace period. */
+function scheduleIdleSessionCap(): void {
+  if (idleSessionCapTimer) clearTimeout(idleSessionCapTimer);
+  idleSessionCapTimer = setTimeout(() => {
+    idleSessionCapTimer = null;
+    enforceIdleSessionCap();
+  }, IDLE_SESSION_CAP_GRACE_MS + 1_000);
+  idleSessionCapTimer.unref?.();
+}
+
+/**
+ * Shut down the oldest unwatched idle wrappers beyond the cap in
+ * lib/idle-session-cap.ts. PI_WEB_IDLE_TIMEOUT_MS=0 asks to keep sessions
+ * loaded, so it turns the cap off too. Returns the ids shut down.
+ */
+export function enforceIdleSessionCap(now: number = Date.now()): string[] {
+  if (SESSION_IDLE_TIMEOUT_MS === 0) return [];
+  const registry = getRegistry();
+  const candidates: IdleSessionCandidate[] = [];
+  const wrappers = new Map<string, AgentSessionWrapper>();
+  for (const [key, wrapper] of registry) {
+    // A wrapper registered before a hot reload may lack the method.
+    const candidate = typeof wrapper.idleCapCandidate === "function" ? wrapper.idleCapCandidate(now) : null;
+    if (!candidate) continue;
+    candidates.push({ ...candidate, id: key });
+    wrappers.set(key, wrapper);
+  }
+  const evicted: string[] = [];
+  for (const id of selectIdleSessionsToEvict(candidates)) {
+    const wrapper = wrappers.get(id)!;
+    evicted.push(id);
+    void wrapper.shutdown().catch((error) => {
+      console.error("[pi-web] failed to shut down capped idle session:", error instanceof Error ? error.message : error);
+    });
+  }
+  return evicted;
 }
 
 const SUBAGENT_CONTROLLER = createSubagentController({
@@ -2219,6 +2325,7 @@ const SUBAGENT_CONTROLLER = createSubagentController({
         : {}),
       chatOnly: options?.chatOnly,
       suppressCompletionNotifications: true,
+      onDirectTurnSettled: (aborted) => SUBAGENT_CONTROLLER.settleDirectTurn(inner.sessionId, aborted),
     });
     registerRpcWrapper(wrapper);
   },
@@ -2304,6 +2411,31 @@ function trackStartingSession(cwd: string): () => void {
 
 export function getRpcSession(sessionId: string): AgentSessionWrapper | undefined {
   return getRegistry().get(sessionId);
+}
+
+/**
+ * The sidebar's rename (#1388). A session a wrapper holds is renamed through
+ * `AgentSession.setSessionName()`, as pi's `/name`, so the `session_info` entry hangs off the live
+ * leaf and extensions get `session_info_changed`; appended to the file from outside, it was a dead
+ * branch the running session never saw. Like the `set_session_name` command it does not wait for
+ * session_start: handlers are registered at load, and a session_start that never settles (an
+ * unanswered dialog) must not hold the rename. A start in flight is awaited (its `SessionManager`
+ * has already read the file), as is a wrapper shutting down (its extensions may still append from
+ * its leaf). With no wrapper and no start, `writeToDisk` runs synchronously right after that check,
+ * so nothing can open the file between the two. Resolves what `writeToDisk` returns, or true.
+ */
+export async function renameRpcSession(sessionId: string, name: string, writeToDisk: () => boolean): Promise<boolean> {
+  for (;;) {
+    const wrapper = getRegistry().get(sessionId);
+    if (wrapper?.isAlive()) {
+      wrapper.inner.setSessionName(name);
+      invalidateSessionListCache();
+      return true;
+    }
+    const pending = getLocks().get(sessionId) ?? closingRpcSessionWait(sessionId);
+    if (!pending) return writeToDisk();
+    await pending.catch(() => undefined);
+  }
 }
 
 export interface SetRpcSessionToolsResult {
@@ -2413,6 +2545,26 @@ function runtimeMessageActivityMs(entry: SessionMessageEntry): number | undefine
   if (typeof entry.message.timestamp === "number") return entry.message.timestamp;
   const timestamp = new Date(entry.timestamp).getTime();
   return Number.isNaN(timestamp) ? undefined : timestamp;
+}
+
+/**
+ * A subagent's status as the session list and viewer show it. Only this process can finish a
+ * run, so a running wrapper or the live run map decides; a persisted `running` / `queued` with
+ * neither was left by a process that stopped mid-run and reads as `interrupted`, as
+ * `get_subagent_result` reports it. Applied per response, never to the cached scan.
+ */
+export function subagentDisplayStatus(sessionId: string, persisted: SubagentSessionStatus): SubagentSessionStatus {
+  if (getRegistry().get(sessionId)?.isRunning()) return "running";
+  return getLiveSubagentStatus(sessionId) ?? settleOrphanedSubagentStatus(persisted);
+}
+
+export function withSubagentDisplayStatus(sessions: SessionInfo[]): SessionInfo[] {
+  return sessions.map((session) => {
+    const relation = session.relation;
+    if (relation?.kind !== "subagent") return session;
+    const status = subagentDisplayStatus(session.id, relation.status);
+    return status === relation.status ? session : { ...session, relation: { ...relation, status } };
+  });
 }
 
 /**
@@ -2836,6 +2988,9 @@ export async function startRpcSession(
         });
       },
       suppressCompletionNotifications: Boolean(subagentResources),
+      ...(subagentResources
+        ? { onDirectTurnSettled: (aborted: boolean) => SUBAGENT_CONTROLLER.settleDirectTurn(inner.sessionId, aborted) }
+        : {}),
       ...(builtins?.mcpHost ? { mcpHost: builtins.mcpHost } : {}),
     });
     const realSessionId = inner.sessionId as string;
