@@ -3,7 +3,7 @@ import { registerAbortHandler } from "@/hooks/useKeyboardShortcuts";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { UnavailableWorkspace } from "@/lib/workspace-availability";
-import { getBranchDecisions } from "@/lib/branch-decisions";
+import { getBranchDecisions, resolveBranchDecisionAnchors } from "@/lib/branch-decisions";
 import type { AgentMessage, AssistantContentBlock, AssistantMessage, BashExecutionMessage, BlockingExtensionUiRequest, ExtensionUiRequest, LeafChangeOptions, SessionInfo, SessionTreeNode, SessionWorkspaceKind, ToolResultMessage } from "@/lib/types";
 import { normalizeCustomPanelLines } from "@/lib/ansi";
 import { asBracketedPaste, toTerminalKeyData } from "@/lib/terminal-input";
@@ -437,8 +437,18 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
   });
   const branchSwitchLocked = agentRunning || bashRunning || isCompacting || branchSummaryPending;
   const branchDecisions = useMemo(
-    () => (data?.tree ? getBranchDecisions(data.tree, activeLeafId) : []),
-    [data?.tree, activeLeafId],
+    () => (
+      data?.tree
+        ? resolveBranchDecisionAnchors(
+            getBranchDecisions(data.tree, activeLeafId),
+            data.tree,
+            activeLeafId,
+            entryIds,
+            messages,
+          )
+        : []
+    ),
+    [data?.tree, activeLeafId, entryIds, messages],
   );
   const handleLeafChangeRef = useRef(handleLeafChange);
   handleLeafChangeRef.current = handleLeafChange;

@@ -554,6 +554,8 @@ html.is-resizing-chat-column * {
   color: var(--text-dim);
   font-size: var(--plus-fs-1, 12px);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
   cursor: pointer;
 }
 .composer-extensions-chip:hover,

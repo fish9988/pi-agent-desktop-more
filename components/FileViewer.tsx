@@ -1655,7 +1655,22 @@ function TextFileViewer({
   const fetchContent = useCallback((filePath: string, offset = 0) => {
     const requestId = ++contentRequestRef.current;
     return fetch(getFileApiUrl(filePath, "read", sourceSessionId, { offset: offset || undefined }))
-      .then((r) => r.json())
+      .then(async (r): Promise<FileData & { error?: string }> => {
+        const contentType = r.headers.get("content-type") ?? "";
+        if (!contentType.includes("application/json")) {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          const text = await r.text();
+          const byteSize = new Blob([text]).size;
+          return {
+            content: text,
+            language: getFileExt(filePath) === "svg" ? "xml" : "text",
+            size: byteSize,
+            truncated: false,
+            nextOffset: byteSize,
+          };
+        }
+        return (await r.json()) as FileData & { error?: string };
+      })
       .then((d: FileData & { error?: string }) => {
         if (requestId !== contentRequestRef.current) return null;
         if (d.error) {

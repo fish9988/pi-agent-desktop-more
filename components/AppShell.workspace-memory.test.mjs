@@ -132,6 +132,7 @@ test("New restores the draft after session navigation and workspace auto-restore
       const makeCleanup = vm.runInContext(stripTypeScriptTypes(`((isNew, newSessionDraftKey) => {
         const sessionHookMountedRef = { current: true };
         const newSessionPromotedRef = { current: false };
+        const releaseUnconfirmedSendRef = { current() {} };
         const sessionIdRef = { current: null };
         const dataRef = { current: null };
         const messagesRef = { current: [] };

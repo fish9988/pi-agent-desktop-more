@@ -297,7 +297,7 @@ function readIdSetPref(key: Parameters<typeof getPrefJson>[0]): Set<string> {
 
 export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, skipInitialProjectSelection, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onChatWorkspaceCwdChange, onProjectsChange, onBackgroundTaskDone, onRunningSessionIdsChange, onSessionsChange, headerControls, footer, onOpenTerminal, onOpenScheduled, scheduledOpen = false }: Props) {
   const { t } = useI18n();
-  const [allSessions, setAllSessions] = useState<SessionInfo[]>(() => readSidebarSessionsSnapshot());
+  const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
   const [chatWorkspaceCwd, setChatWorkspaceCwd] = useState<string | null>(null);
   // Same fold model as a project: folding drops the extra pages, so the next
   // unfold starts again from the first five chats.
@@ -323,7 +323,15 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   // first server listing is. Without this, a deep link to a session missing from
   // the snapshot was reported missing before the real list arrived.
   const loadedFromServerRef = useRef(false);
-  const [loading, setLoading] = useState(() => allSessions.length === 0);
+  const [loading, setLoading] = useState(true);
+  useLayoutEffect(() => {
+    const cached = readSidebarSessionsSnapshot();
+    if (cached.length > 0 && !loadedFromServerRef.current) {
+      hasSessionsRef.current = true;
+      setAllSessions(cached);
+      setLoading(false);
+    }
+  }, []);
   const [error, setError] = useState<string | null>(null);
   const [selectedCwd, setSelectedCwd] = useState<string | null>(null);
   const [homeDir, setHomeDir] = useState<string>("");
@@ -1339,8 +1347,14 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     const [rootNode] = buildSessionTree([family.root, ...family.subagents]);
     if (rootNode) timelineRootNodes.set(family.root.id, rootNode);
   }
+  const lastNotifiedProjectRootsRef = useRef<string[] | null>(null);
   useEffect(() => {
     const projectRoots = activeProjects.map((group) => group.projectRoot);
+    const prev = lastNotifiedProjectRootsRef.current;
+    if (prev && prev.length === projectRoots.length && prev.every((root, index) => root === projectRoots[index])) {
+      return;
+    }
+    lastNotifiedProjectRootsRef.current = projectRoots;
     onProjectsChange?.(projectRoots);
   }, [activeProjects, onProjectsChange]);
   // Sessions of every worktree in the selected project are shown together

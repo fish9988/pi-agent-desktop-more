@@ -1591,8 +1591,8 @@ html[data-plus-style="clean"] .message-assistant-footer { margin-top: var(--plus
 .model-selector-dot, .composer-extensions-label { display: none; }
 @media (min-width: 769px) {
   html[data-plus-style="clean"] .chat-composer-controls:has(> .composer-send-group) { display: flex !important; align-items: center; gap: 2px !important; }
-  html[data-plus-style="clean"] .chat-composer-controls:has(> .composer-send-group) > div:not(.composer-send-group, .composer-controls-spacer),
-  html[data-plus-style="clean"] .chat-composer-controls:has(> .composer-send-group) > div > div:not([class]) { display: contents !important; }
+  html[data-plus-style="clean"] .chat-composer-controls:has(> .composer-send-group) > div:not(.composer-send-group, .composer-controls-spacer, .model-selector),
+  html[data-plus-style="clean"] .chat-composer-controls:has(> .composer-send-group) > div > div:not([class]):not([style*="display: none"]) { display: contents !important; }
   html[data-plus-style="clean"] .chat-composer-controls .chat-project-context { display: none !important; }
   html[data-plus-style="clean"] .chat-composer-controls .composer-thinking { order: 1; }
   html[data-plus-style="clean"] .composer-thinking .composer-run-menu { left: 0 !important; right: auto !important; }
@@ -1600,6 +1600,7 @@ html[data-plus-style="clean"] .message-assistant-footer { margin-top: var(--plus
   html[data-plus-style="clean"] .chat-composer-controls .composer-controls-spacer { order: 3; flex: 1 1 auto !important; }
   html[data-plus-style="clean"] .chat-composer-controls .context-usage-ring { order: 4; }
   html[data-plus-style="clean"] .chat-composer-controls .composer-tool-preset { order: 5; }
+  html[data-plus-style="clean"] .chat-composer-controls .composer-quick-phrases { order: 5; }
   html[data-plus-style="clean"] .chat-composer-controls .composer-automation { order: 6; }
   html[data-plus-style="clean"] .chat-composer-controls > .composer-send-group { order: 7; }
   html[data-plus-style="clean"] .composer-tool-preset-label { display: none; }
@@ -1717,14 +1718,14 @@ html:not([data-plus-style="clean"]) .app-topbar-running { display: none !importa
   html[data-plus-style="clean"][data-plus-settings-minimized="1"] .settings-dialog-backdrop.is-plus-page {
     align-items: flex-end;
     justify-content: flex-start;
-    /*Anchored at the bottom-left above the sidebar footer so it never covers
-       the chat composer or its top-right expand / prompt-optimizer buttons. */
-    padding: var(--plus-s3) var(--plus-s3) 56px var(--plus-s3);
+    /* Anchored at the bottom-left inside the sidebar width above the footer so
+       it neither crosses the sidebar divider nor covers the chat composer. */
+    padding: var(--plus-s3) var(--plus-s3) 48px var(--plus-s3);
   }
   /* Folded: a recognisable little window in the corner, not an empty strip.
      Its bar is the whole visible surface, so it reads as the restore control. */
   html[data-plus-style="clean"][data-plus-settings-minimized="1"] .is-plus-page .settings-dialog-surface {
-    width: min(320px, calc(100vw - 32px));
+    width: min(236px, calc(100vw - 24px));
     height: 40px;
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: 40px;

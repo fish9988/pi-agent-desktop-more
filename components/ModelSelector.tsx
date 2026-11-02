@@ -100,7 +100,9 @@ export function ModelSelector({
   );
   const showScopeToggle = Boolean(onShowAll || (sortedAllOptions && sortedAllOptions.length > sortedOptions.length));
   const listed = showAll ? sortedAllOptions : sortedOptions;
-  const filteredOptions = filterModelOptions(listed ?? [], filter);
+  const filteredOptions = showAll
+    ? filterModelOptions(sortedAllOptions ?? [], filter)
+    : filterModelOptions(sortedOptions, filter);
   const showFilter = showScopeToggle || (listed?.length ?? sortedOptions.length) > MODEL_FILTER_THRESHOLD;
   const isListed = (list: ModelSelectorOption[] | null | undefined, ref: { provider: string; modelId: string }) => (
     list?.find((option) => option.modelId === ref.modelId && option.provider === ref.provider)

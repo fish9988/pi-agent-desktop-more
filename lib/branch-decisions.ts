@@ -79,12 +79,18 @@ export function buildActivePath(nodes: SessionTreeNode[], targetId: string | nul
   return new Set();
 }
 
+function nodeHasConversation(node: SessionTreeNode): boolean {
+  if (isConversationEntry(node.entry)) return true;
+  const previewRole = node.branchPreview?.role;
+  return previewRole === "user" || previewRole === "assistant";
+}
+
 /** Does this branch (down its single-child chain) hold a real message? */
 export function chainHasConversation(node: SessionTreeNode): boolean {
   const stack: SessionTreeNode[] = [node];
   while (stack.length > 0) {
     const current = stack.pop()!;
-    if (isConversationEntry(current.entry)) return true;
+    if (nodeHasConversation(current)) return true;
     if (current.children.length === 1) stack.push(current.children[0]);
   }
   return false;
@@ -266,6 +272,8 @@ function activeSegmentAnchor(
     if (isConversationEntry(current.entry)) {
       lastConversation = current.entry.id;
       if (roleOf(current.entry) === "assistant") lastAssistant = current.entry.id;
+    } else if (nodeHasConversation(current)) {
+      lastConversation = current.compressedEntryIds?.at(-1) ?? current.entry.id;
     }
     // The leaf is the tip of the viewed branch: a node that carries it as a
     // compressed id (or is the leaf itself) is where this segment ends, even
@@ -371,4 +379,82 @@ export function findBranchDecision(
 ): BranchDecisionPoint | undefined {
   if (!decisions || !entryId) return undefined;
   return decisions.find((decision) => decision.anchorEntryId === entryId);
+}
+
+/**
+ * Resolve decision anchors against the rendered transcript's entryIds/messages
+ * when a projected branch ends at a non-message leaf (e.g. `plan-mode-state`
+ * custom entry) whose conversation entries live in `compressedEntryIds`, or
+ * when `tree=summary` stripped `entry.message`.
+ */
+export function resolveBranchDecisionAnchors(
+  decisions: BranchDecisionPoint[],
+  tree: SessionTreeNode[] | undefined,
+  activeLeafId: string | null,
+  entryIds: readonly string[],
+  messages: readonly { role?: string }[],
+): BranchDecisionPoint[] {
+  if (decisions.length === 0 || !tree || tree.length === 0 || !activeLeafId || entryIds.length === 0) {
+    return decisions;
+  }
+  const roleByEntryId = new Map<string, string>();
+  for (let i = 0; i < entryIds.length; i += 1) {
+    const id = entryIds[i];
+    const role = messages[i]?.role;
+    if (id && role) roleByEntryId.set(id, role);
+  }
+  if (decisions.every((d) => d.anchorEntryId && roleByEntryId.get(d.anchorEntryId) === "assistant")) {
+    return decisions;
+  }
+
+  const parents = collectDecisionParents(tree);
+  const decisionParents = new Set(parents.map((node) => node.entry.id));
+  const activePath = buildActivePath(tree, activeLeafId);
+  const parentMap = new Map<string | null, SessionTreeNode[]>();
+  const rootBranches = tree.length > 1 ? tree.filter(chainHasConversation) : [];
+  if (rootBranches.length > 1) parentMap.set(null, rootBranches);
+  for (const parent of parents) {
+    const branches = parent.children.filter(chainHasConversation);
+    if (branches.length > 1) parentMap.set(parent.entry.id, branches);
+  }
+
+  return decisions.map((decision) => {
+    if (decision.anchorEntryId && roleByEntryId.get(decision.anchorEntryId) === "assistant") {
+      return decision;
+    }
+    const branches = parentMap.get(decision.parentEntryId);
+    const branch = branches?.[decision.activeIndex];
+    if (!branch) return decision;
+
+    let lastRendered: string | null = null;
+    let lastAssistant: string | null = null;
+    let current: SessionTreeNode | undefined = branch;
+    let isStart = true;
+    while (current) {
+      if (!isStart && decisionParents.has(current.entry.id)) break;
+      const candidateIds = current.compressedEntryIds?.length
+        ? [...current.compressedEntryIds, current.entry.id]
+        : [current.entry.id];
+      for (const id of candidateIds) {
+        const role = roleByEntryId.get(id);
+        if (role) {
+          lastRendered = id;
+          if (role === "assistant") lastAssistant = id;
+        }
+        if (id === activeLeafId) break;
+      }
+      if (current.entry.id === activeLeafId || current.compressedEntryIds?.includes(activeLeafId)) break;
+      const next: SessionTreeNode | undefined = current.children.find((child) => activePath.has(child.entry.id));
+      if (next) {
+        current = next;
+      } else if (current.children.length === 1) {
+        current = current.children[0];
+      } else {
+        current = undefined;
+      }
+      isStart = false;
+    }
+    const resolved = lastAssistant ?? lastRendered ?? decision.anchorEntryId;
+    return resolved === decision.anchorEntryId ? decision : { ...decision, anchorEntryId: resolved };
+  });
 }

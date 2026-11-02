@@ -249,11 +249,14 @@ test("provider rows carry the scope badge", () => {
   assert.match(cssSource, /\.enabled-models-row \+ \.enabled-models-row \{/);
 });
 
-test("the saved-model slots mirror every move the draft makes", () => {
+test("the saved-model slots mirror every move the draft makes", async () => {
+  const helpersSource = await readFile(new URL("./models-config-helpers.ts", import.meta.url), "utf8");
   assert.match(modelsConfigSource, /savedModelIdsRef\.current = savedModelIds\(normalized\)/);
   assert.match(modelsConfigSource, /savedModelIdsRef\.current = savedModelIds\(draft\)/);
   assert.match(modelsConfigSource, /trackAddedModels\(savedModelIdsRef\.current, providerName, 1\)/);
   assert.match(modelsConfigSource, /savedModelIdsRef\.current\.get\(providerName\)\?\.splice\(index, 1\)/);
-  assert.match(modelsConfigSource, /savedModelIdsRef\.current\.delete\(name\)/);
+  // Plus 1.9.1 (#1342): provider deletion delegates to deleteProviderEntry() in models-config-helpers.ts.
+  assert.match(modelsConfigSource, /deleteProviderEntry\(prev,[\s\S]*?slots: savedModelIdsRef\.current/);
+  assert.match(helpersSource, /slots\.delete\(name\)/);
   assert.match(modelsConfigSource, /slots: savedModelIdsRef\.current,/);
 });
