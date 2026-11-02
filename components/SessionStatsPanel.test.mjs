@@ -54,9 +54,27 @@ test("the exact value is always reachable through formatExactCount", () => {
   assert.equal(formatExactCount(13_242_423), "13,242,423");
   assert.equal(formatExactCount(0), "0");
   assert.equal(formatExactCount(Number.NaN), "—");
-  // The panel prints the grouped number in a title, never only the rounded one.
+  // The panel prints the grouped number in the summary and in a title, never only the rounded one.
   assert.match(panelSource, /const exactCount = \(value: number\) => formatExactCount\(value, locale\)/);
-  assert.match(panelSource, /title=\{exactCount\(tokens\.total\)\}/);
+  assert.match(panelSource, /totalTitle=\{exactCount\(tokens\.total\)\}/);
+});
+
+test("the card is a stack of topic cards, each head first", () => {
+  const tokensAt = panelSource.indexOf('icon="token"');
+  const sessionAt = panelSource.indexOf('icon="session"');
+  assert.ok(tokensAt > 0 && sessionAt > tokensAt, "Token 用量 renders before 会话统计");
+  // Every card is the same shape: icon + title + optional summary, then rows.
+  assert.match(panelSource, /function StatsCard\(\{ icon, title, total, totalTitle, children \}/);
+  assert.match(panelSource, /className="plus-stats-card-head"/);
+  assert.match(panelSource, /className="plus-stats-card-rows"/);
+  assert.match(statsCss, /\.plus-stats-card \{[^}]*border: var\(--hairline, 1px\) solid var\(--border\)/);
+  assert.match(statsCss, /\.plus-stats-card-rows \{[^}]*border-top: var\(--hairline, 1px\) solid var\(--border\)/);
+  // A ledger reads best with full numbers: rows are tabular, right-aligned, never wrapped.
+  assert.match(statsCss, /\.plus-stats-kv-value \{[^}]*font-variant-numeric: tabular-nums/);
+  assert.match(statsCss, /\.plus-stats-kv-value \{[^}]*text-align: right/);
+  assert.match(statsCss, /\.plus-stats-kv-value \{[^}]*white-space: nowrap/);
+  // Tokens are printed in full, with the unit, not compacted.
+  assert.match(panelSource, /const count = \(value: number\) => `\$\{exactCount\(value\)\} tok`/);
 });
 
 test("money never loses the sub-cent distinction", () => {
@@ -116,20 +134,25 @@ test("cost by model is ranked, bar-normalised and folds the free rows away", () 
   assert.match(panelSource, /unattributed \? translate\("session\.unattributedUsage"\)/);
 });
 
-test("the card is headline numbers first, then the five sections", () => {
-  const overviewAt = panelSource.indexOf('className="plus-stats-overview"');
-  const sectionsAt = panelSource.indexOf('<StatsSection title={translate("plus.stats.tokensAndCost")}');
-  assert.ok(overviewAt > 0 && sectionsAt > overviewAt, "overview renders before the sections");
-  for (const key of ["plus.stats.totalTokens", "plus.stats.totalCost", "plus.stats.activeTime", "session.messages"]) {
-    assert.ok(panelSource.indexOf(`translate("${key}")`) < sectionsAt, `${key} belongs to the headline row`);
-  }
-  for (const key of ["plus.stats.tokensAndCost", "session.costByModel", "session.messages", "plus.stats.cache", "plus.stats.sessionAndFiles"]) {
-    assert.match(panelSource, new RegExp(`<StatsSection title=\\{translate\\("${key.replace(/\./g, "\\.")}\\"\\)\\}`));
-  }
-  // White space and hairlines separate sections; never a card inside a card.
-  assert.match(statsCss, /\.plus-stats-section \{[^}]*border-top: var\(--hairline, 1px\) solid var\(--border\)/);
-  assert.doesNotMatch(statsCss, /\.plus-stats-section[^}]*background:/);
-  assert.doesNotMatch(statsCss, /\.plus-stats-section[^}]*border-radius/);
+test("the cards keep the same shape and order", () => {
+  const tokensAt = panelSource.indexOf('icon="token"');
+  const sessionAt = panelSource.indexOf('icon="session"');
+  const costAt = panelSource.indexOf('icon="cost"');
+  const filesAt = panelSource.indexOf('icon="files"');
+  assert.ok(tokensAt > 0 && sessionAt > tokensAt, "Token 用量 renders before 会话统计");
+  assert.ok(costAt > sessionAt && filesAt > costAt, "cost comes before session & files");
+  // Every card is the same shape: icon + title + optional summary, then rows.
+  assert.match(panelSource, /function StatsCard\(\{ icon, title, total, totalTitle, children \}/);
+  assert.match(panelSource, /className="plus-stats-card-head"/);
+  assert.match(panelSource, /className="plus-stats-card-rows"/);
+  assert.match(statsCss, /\.plus-stats-card \{[^}]*border: var\(--hairline, 1px\) solid var\(--border\)/);
+  assert.match(statsCss, /\.plus-stats-card-rows \{[^}]*border-top: var\(--hairline, 1px\) solid var\(--border\)/);
+  // A ledger reads best with full numbers: rows are tabular, right-aligned, never wrapped.
+  assert.match(statsCss, /\.plus-stats-kv-value \{[^}]*font-variant-numeric: tabular-nums/);
+  assert.match(statsCss, /\.plus-stats-kv-value \{[^}]*text-align: right/);
+  assert.match(statsCss, /\.plus-stats-kv-value \{[^}]*white-space: nowrap/);
+  // Tokens are printed in full, with the unit, not compacted.
+  assert.match(panelSource, /const count = \(value: number\) => `\$\{exactCount\(value\)\} tok`/);
 });
 
 test("cache warming reads as a sentence, never as pi's internal state", () => {
@@ -145,7 +168,7 @@ test("cache warming reads as a sentence, never as pi's internal state", () => {
 test("paths and ids stay monospace, ellipsized and copyable", () => {
   assert.match(statsCss, /\.plus-stats-copy-value \{[^}]*font-family:var\(--font-mono\)/);
   assert.match(statsCss, /\.plus-stats-copy-value \{[^}]*text-overflow: ellipsis/);
-  assert.match(statsCss, /\.plus-stats-copy-value\.is-start-ellipsis \{ direction: rtl; text-align: left; \}/);
+  assert.match(statsCss, /\.plus-stats-copy-value\.is-start-ellipsis \{\s*direction: rtl;\s*text-align: left;\s*\}/);
   assert.match(panelSource, /copyRow\(translate\("session\.file"\), sessionStats\.sessionFile, "file", true\)/);
   assert.match(panelSource, /copyRow\(translate\("session\.id"\), sessionStats\.sessionId, "id"\)/);
   // The git branch sits with the project folder, as one line.
@@ -183,23 +206,28 @@ test("styling stays on the design scale and adds no literal colour or :has()", (
   assert.doesNotMatch(statsCss, /:has\(/);
   for (const selector of [
     ".plus-stats",
-    ".plus-stats-overview",
-    ".plus-stats-tile-value",
-    ".plus-stats-section",
-    ".plus-stats-rows",
+    ".plus-stats-card",
+    ".plus-stats-card-head",
+    ".plus-stats-card-icon",
+    ".plus-stats-card-title",
+    ".plus-stats-card-total",
+    ".plus-stats-kv-label",
+    ".plus-stats-kv-value",
+    ".plus-stats-card-note",
     ".plus-stats-model-track",
     ".plus-stats-model-bar",
     ".plus-stats-more-summary",
-    ".plus-stats-note",
     ".plus-stats-copy-row",
     ".plus-stats-branch-chip",
     ".plus-stats-copy",
   ]) {
-    assert.ok(plusCss.includes(`${selector} {`) || plusCss.includes(`${selector},`) || plusCss.includes(`${selector}.`), `${selector} is styled`);
+    assert.ok(
+      plusCss.includes(`${selector} {`) || plusCss.includes(`${selector},`) || plusCss.includes(`${selector}.`) || plusCss.includes(`${selector}\n`),
+      `${selector} is styled`,
+    );
   }
-  // The card's own width drives the layout, so it reads in the floating panel.
-  assert.match(statsCss, /container-type: inline-size/);
-  assert.match(statsCss, /@container \(max-width: 620px\)/);
+  // The shell's narrow width folds the summary under the title.
+  assert.match(statsCss, /\.plus-stats\.is-mobile \.plus-stats-card-head \{ flex-wrap: wrap; \}/);
 });
 
 test("no inline font-size escapes the design scale", () => {

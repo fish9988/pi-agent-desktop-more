@@ -25,8 +25,8 @@ test("the session panel lists cost by model and cache warming, refreshed when it
   // so the wiring is asserted on the component and the shell only has to mount it
   // and read the live cache state when the panel opens.
   assert.match(panel, /const breakdown = \[\.\.\.\(sessionStats\.costBreakdown \?\? \[\]\)\]\.sort\(\(a, b\) => b\.cost - a\.cost\)/);
-  assert.match(panel, /<StatsSection title=\{translate\("session\.costByModel"\)\}>/);
-  assert.match(panel, /<StatsSection title=\{translate\("plus\.stats\.cache"\)\}>/);
+  assert.match(panel, /<StatsCard\s+\n?\s*icon="cost"/);
+  assert.match(panel, /<StatsCard icon="cache" title=\{translate\("plus\.stats\.cache"\)\}>/);
   assert.match(panel, /translate\("session\.cacheWarmingSavings"\)/);
   assert.match(appShell, /<SessionStatsPanel\s+sessionStats=\{sessionStats\}/);
   // Plus: ported pi-web 4eed9e97 — the panel's state read is a status read (#1302).

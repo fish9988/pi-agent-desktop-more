@@ -95,6 +95,23 @@ export function formatActiveDuration(ms: number): string {
   return `${seconds}s`;
 }
 
+/** Locale-aware short duration: `8分2秒` in Chinese, `8m 2s` in English. */
+export function formatDuration(ms: number, locale = "en-US"): string {
+  if (!Number.isFinite(ms) || ms <= 0) return locale.startsWith("zh") ? "0秒" : "0s";
+  const seconds = Math.floor(ms / 1000);
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const zh = locale.startsWith("zh");
+  if (zh) {
+    if (hours > 0) return `${hours}小时${minutes}分`;
+    if (minutes > 0) return `${minutes}分${seconds % 60}秒`;
+    return `${seconds}秒`;
+  }
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
+  return `${seconds}s`;
+}
+
 /** Every unit, for the tooltip behind the active-time tile: `2h 14m 7s`. */
 export function formatExactDuration(ms: number): string {
   if (!Number.isFinite(ms) || ms <= 0) return "0s";

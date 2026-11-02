@@ -11,6 +11,7 @@ import {
   formatExactCount,
   formatExactDuration,
   formatPercent,
+  formatDuration,
   formatUsd,
   formatUsdExact,
   splitModelKey,
@@ -75,33 +76,69 @@ function cacheSentence(info: CacheWarmingInfo | null, t: Translate): string | nu
   return info.mode === "idle" ? t("plus.stats.cacheIdle") : t("plus.stats.cacheRunning");
 }
 
-function StatsTile({ label, value, hint, title }: { label: string; value: string; hint?: string; title?: string }) {
+function StatsCard({ icon, title, total, totalTitle, children }: {
+  icon: CardIcon;
+  title: string;
+  total?: string;
+  totalTitle?: string;
+  children: ReactNode;
+}) {
   return (
-    <div className="plus-stats-tile">
-      <span className="plus-stats-tile-label">{label}</span>
-      <span className="plus-stats-tile-value" title={title ?? value}>{value}</span>
-      {hint ? <span className="plus-stats-tile-hint" title={hint}>{hint}</span> : null}
-    </div>
-  );
-}
-
-function StatsRow({ label, value, title, strong = false }: { label: string; value: string; title?: string; strong?: boolean }) {
-  return (
-    <div className={strong ? "plus-stats-row is-strong" : "plus-stats-row"}>
-      <span className="plus-stats-row-label">{label}</span>
-      <span className="plus-stats-row-value" title={title ?? value}>{value}</span>
-    </div>
-  );
-}
-
-function StatsSection({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="plus-stats-section">
-      <h3 className="plus-stats-section-title">{title}</h3>
-      {children}
+    <section className="plus-stats-card">
+      <div className="plus-stats-card-head">
+        <span className="plus-stats-card-icon" aria-hidden="true">{CARD_ICONS[icon]}</span>
+        <h3 className="plus-stats-card-title">{title}</h3>
+        {total ? <span className="plus-stats-card-total" title={totalTitle ?? total}>{total}</span> : null}
+      </div>
+      <div className="plus-stats-card-rows">{children}</div>
     </section>
   );
 }
+
+function StatsKv({ label, value, title, strong = false }: { label: string; value: string; title?: string; strong?: boolean }) {
+  return (
+    <div className={strong ? "plus-stats-kv is-strong" : "plus-stats-kv"}>
+      <span className="plus-stats-kv-label">{label}</span>
+      <span className="plus-stats-kv-value" title={title ?? value}>{value}</span>
+    </div>
+  );
+}
+
+type CardIcon = "token" | "session" | "cost" | "cache" | "files";
+
+const CARD_ICONS: Record<CardIcon, ReactNode> = {
+  token: (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <ellipse cx="12" cy="5" rx="8" ry="3" />
+      <path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5" />
+      <path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" />
+    </svg>
+  ),
+  session: (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3.5 2" />
+    </svg>
+  ),
+  cost: (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M14.5 9.2a2.6 2.6 0 0 0-2.5-1.4c-1.4 0-2.4.8-2.4 2 0 2.7 5 1.3 5 4 0 1.2-1 2-2.6 2a2.6 2.6 0 0 1-2.5-1.5" />
+      <path d="M12 6.3v1.5M12 15.6v1.6" />
+    </svg>
+  ),
+  cache: (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 12a8 8 0 1 1-2.6-5.9" />
+      <path d="M20 4v4h-4" />
+    </svg>
+  ),
+  files: (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2.5h7.5A2.5 2.5 0 0 1 21 10v7a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17z" />
+    </svg>
+  ),
+};
 
 /**
  * Presentational session-stats panel: four headline numbers, then
@@ -148,6 +185,8 @@ export function SessionStatsPanel({
   }
 
   const exactCount = (value: number) => formatExactCount(value, locale);
+  const count = (value: number) => `${exactCount(value)} tok`;
+  const duration = (ms: number) => formatDuration(ms, locale);
   const tokens = sessionStats.tokens;
   const ctx = contextUsage ?? sessionStats.contextUsage;
   const activeMs = sessionStats.totalActiveMs ?? 0;
@@ -239,65 +278,66 @@ export function SessionStatsPanel({
 
   return (
     <div className={panelClass()}>
-      <div className="plus-stats-overview">
-        <StatsTile
-          label={translate("plus.stats.totalTokens")}
-          value={formatCompactCount(tokens.total)}
-          title={exactCount(tokens.total)}
-          hint={translate("plus.stats.tokensHint", {
-            input: formatCompactCount(tokens.input),
-            output: formatCompactCount(tokens.output),
-          })}
+      <StatsCard
+        icon="token"
+        title={translate("plus.stats.cardTokens")}
+        total={count(tokens.total)}
+        totalTitle={exactCount(tokens.total)}
+      >
+        <StatsKv
+          label={translate("plus.stats.cacheHitRate")}
+          value={hitPercent !== null ? formatPercent(hitPercent, 0) : "—"}
+          title={hitPercent !== null ? translate("plus.stats.cacheHit", { percent: formatPercent(hitPercent) }) : undefined}
         />
-        <StatsTile
-          label={translate("plus.stats.totalCost")}
-          value={formatUsd(sessionStats.cost)}
-          title={formatUsdExact(sessionStats.cost)}
-          hint={billed.length > 1 ? translate("plus.stats.costHint", { count: billed.length }) : undefined}
-        />
-        <StatsTile
+        <StatsKv label={translate("plus.stats.uncachedInput")} value={count(tokens.input)} />
+        <StatsKv label={translate("session.cacheRead")} value={count(tokens.cacheRead)} />
+        {tokens.cacheWrite > 0 ? (
+          <StatsKv label={translate("session.cacheWrite")} value={count(tokens.cacheWrite)} />
+        ) : null}
+        <StatsKv label={translate("session.output")} value={count(tokens.output)} />
+        {ctx?.contextWindow ? (
+          <StatsKv
+            label={translate("session.context")}
+            value={`${formatPercent(ctx.percent, 0)} · ${formatCompactCount(ctx.contextWindow)}`}
+            title={`${formatPercent(ctx.percent)} / ${exactCount(ctx.contextWindow)}`}
+          />
+        ) : null}
+      </StatsCard>
+
+      <StatsCard icon="session" title={translate("plus.stats.cardSession")}>
+        <StatsKv
           label={translate("plus.stats.activeTime")}
-          value={activeMs > 0 ? formatActiveDuration(activeMs) : "—"}
+          value={activeMs > 0 ? duration(activeMs) : "—"}
           title={formatExactDuration(activeMs)}
-          hint={averageReplyMs !== null
-            ? translate("plus.stats.avgPerReply", { duration: formatActiveDuration(averageReplyMs) })
-            : undefined}
         />
-        <StatsTile
+        <StatsKv
+          label={translate("plus.stats.avgPerReplyLabel")}
+          value={averageReplyMs !== null ? duration(averageReplyMs) : "—"}
+          title={translate("plus.stats.avgPerReply", { duration: formatExactDuration(averageReplyMs ?? 0) })}
+        />
+        <StatsKv
           label={translate("session.messages")}
           value={exactCount(sessionStats.totalMessages)}
-          title={exactCount(sessionStats.totalMessages)}
-          hint={translate("plus.stats.messagesHint", {
+          title={translate("plus.stats.messagesHint", {
             user: exactCount(sessionStats.userMessages),
             assistant: exactCount(sessionStats.assistantMessages),
           })}
         />
-      </div>
+        <StatsKv
+          label={translate("session.toolCalls")}
+          value={exactCount(sessionStats.toolCalls)}
+          title={`${translate("session.toolResults")}: ${exactCount(sessionStats.toolResults)}`}
+        />
+      </StatsCard>
 
-      <StatsSection title={translate("plus.stats.tokensAndCost")}>
-        <div className="plus-stats-rows">
-          <StatsRow label={translate("session.input")} value={formatCompactCount(tokens.input)} title={exactCount(tokens.input)} />
-          <StatsRow label={translate("session.output")} value={formatCompactCount(tokens.output)} title={exactCount(tokens.output)} />
-          {tokens.cacheRead > 0 ? (
-            <StatsRow label={translate("session.cacheRead")} value={formatCompactCount(tokens.cacheRead)} title={exactCount(tokens.cacheRead)} />
-          ) : null}
-          {tokens.cacheWrite > 0 ? (
-            <StatsRow label={translate("session.cacheWrite")} value={formatCompactCount(tokens.cacheWrite)} title={exactCount(tokens.cacheWrite)} />
-          ) : null}
-          {ctx?.contextWindow ? (
-            <StatsRow
-              label={translate("session.context")}
-              value={`${formatPercent(ctx.percent)} / ${formatCompactCount(ctx.contextWindow)}`}
-              title={`${formatPercent(ctx.percent)} / ${exactCount(ctx.contextWindow)}`}
-            />
-          ) : null}
-          <StatsRow label={translate("session.total")} value={formatCompactCount(tokens.total)} title={exactCount(tokens.total)} strong />
-        </div>
-      </StatsSection>
-
-      <StatsSection title={translate("session.costByModel")}>
+      <StatsCard
+        icon="cost"
+        title={translate("plus.stats.cardCost")}
+        total={formatUsd(sessionStats.cost)}
+        totalTitle={formatUsdExact(sessionStats.cost)}
+      >
         {breakdown.length === 0 ? (
-          <p className="plus-stats-note is-dim">{translate("plus.stats.noModels")}</p>
+          <p className="plus-stats-card-note">{translate("plus.stats.noModels")}</p>
         ) : (
           <div className="plus-stats-models">
             {billed.map((entry) => modelRow(entry, barWidthPercent(entry.cost, maxCost)))}
@@ -315,35 +355,22 @@ export function SessionStatsPanel({
             ) : null}
           </div>
         )}
-      </StatsSection>
-
-      <StatsSection title={translate("session.messages")}>
-        <div className="plus-stats-rows">
-          <StatsRow label={translate("session.user")} value={exactCount(sessionStats.userMessages)} />
-          <StatsRow label={translate("session.assistant")} value={exactCount(sessionStats.assistantMessages)} />
-          <StatsRow label={translate("session.toolCalls")} value={exactCount(sessionStats.toolCalls)} />
-          <StatsRow label={translate("session.toolResults")} value={exactCount(sessionStats.toolResults)} />
-          <StatsRow label={translate("session.total")} value={exactCount(sessionStats.totalMessages)} strong />
-        </div>
-      </StatsSection>
+      </StatsCard>
 
       {showCacheSection ? (
-        <StatsSection title={translate("plus.stats.cache")}>
-          {cacheLine ? <p className="plus-stats-note">{cacheLine}</p> : null}
-          {hitPercent !== null ? (
-            <p className="plus-stats-note is-dim">
-              {translate("plus.stats.cacheHit", { percent: formatPercent(hitPercent) })}
-            </p>
-          ) : null}
+        <StatsCard icon="cache" title={translate("plus.stats.cache")}>
+          {cacheLine ? <p className="plus-stats-card-note">{cacheLine}</p> : null}
           {expectedSavings !== null ? (
-            <p className="plus-stats-note is-dim" title={formatUsdExact(expectedSavings)}>
-              {translate("session.cacheWarmingSavings")} · {formatUsd(expectedSavings)}
-            </p>
+            <StatsKv
+              label={translate("session.cacheWarmingSavings")}
+              value={formatUsd(expectedSavings)}
+              title={formatUsdExact(expectedSavings)}
+            />
           ) : null}
-        </StatsSection>
+        </StatsCard>
       ) : null}
 
-      <StatsSection title={translate("plus.stats.sessionAndFiles")}>
+      <StatsCard icon="files" title={translate("plus.stats.sessionAndFiles")}>
         <div className="plus-stats-copy-rows">
           {sessionStats.sessionName ? (
             <div className="plus-stats-name-row">
@@ -354,8 +381,9 @@ export function SessionStatsPanel({
           {sessionStats.sessionFile
             ? copyRow(translate("session.file"), sessionStats.sessionFile, "file", true)
             : (
-              <div className="plus-stats-rows">
-                <StatsRow label={translate("session.file")} value={translate("session.inMemory")} />
+              <div className="plus-stats-copy-row">
+                <span className="plus-stats-copy-label">{translate("session.file")}</span>
+                <span className="plus-stats-copy-value">{translate("session.inMemory")}</span>
               </div>
             )}
           {copyRow(translate("session.id"), sessionStats.sessionId, "id")}
@@ -371,7 +399,7 @@ export function SessionStatsPanel({
           ) : null}
           {worktreePath ? copyRow(translate("session.gitWorktree"), worktreePath, "gitWorktree", true) : null}
         </div>
-      </StatsSection>
+      </StatsCard>
     </div>
   );
 }

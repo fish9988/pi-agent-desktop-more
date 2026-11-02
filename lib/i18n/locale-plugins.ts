@@ -4,6 +4,7 @@ import { zhTWLocale } from "./messages/zh-TW.ts";
 import type { Locale, LocalePlugin } from "./types";
 import { patch as branchPatch } from "./patches/branches.ts";
 import { patch as settingsSearchPatch } from "./patches/settings-search.ts";
+import { patch as statsPatch } from "./patches/stats.ts";
 
 /**
  * Fork message patches.
@@ -1858,6 +1859,7 @@ const FORK_MESSAGE_PATCHES: Record<Locale, {
 const FEATURE_PATCHES: ReadonlyArray<Record<Locale, { set: Record<string, string> }>> = [
   branchPatch,
   settingsSearchPatch,
+  statsPatch,
 ];
 
 function applyFeaturePatches(
