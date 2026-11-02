@@ -50,7 +50,8 @@ export function getProjectTrustStatus(cwd: string, agentDir: string): ProjectTru
   if (!requiresTrust) {
     if (!cwd) return { requiresTrust: false, trusted: true, decision: null, inherited: false };
     try {
-      return { requiresTrust: false, trusted: true, ...describeDecision(cwd, trustStore.getEntry(cwd)) };
+      const entry = trustStore.getEntry(cwd);
+      return { requiresTrust: false, trusted: entry?.decision ?? true, ...describeDecision(cwd, entry) };
     } catch (error) {
       return {
         requiresTrust: false,

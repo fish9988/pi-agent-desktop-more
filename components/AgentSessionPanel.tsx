@@ -331,7 +331,7 @@ export function AgentSessionPanel({ rootSession, subagents, selectedSessionId, r
 
   return (
     <div
-      className="agent-session-panel native-popover"
+      className="agent-session-panel app-menu native-popover"
       data-no-drag
       onMouseDown={(e) => e.stopPropagation()}
       role="listbox"

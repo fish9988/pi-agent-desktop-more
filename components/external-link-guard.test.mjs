@@ -57,8 +57,10 @@ class FakeElement {
     this.parent = parent;
   }
   closest(selector) {
-    for (let node = this; node; node = node.parent) {
-      if (selector.split(",").some((part) => selectorMatches(node, part.trim()))) return node;
+    const parts = selector.split(",").map((part) => part.trim());
+    if (parts.some((part) => selectorMatches(this, part))) return this;
+    for (let node = this.parent; node; node = node.parent) {
+      if (parts.some((part) => selectorMatches(node, part))) return node;
     }
     return null;
   }

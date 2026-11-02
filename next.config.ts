@@ -58,6 +58,7 @@ const nextConfig: NextConfig = {
     "@earendil-works/pi-coding-agent",
     "@earendil-works/pi-agent-core",
     "@earendil-works/pi-ai",
+    "@earendil-works/pi-schema",
     "@earendil-works/pi-tui",
   ],
   // Next 16 blocks cross-origin access to dev resources by default. Allow the
