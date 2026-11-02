@@ -206,12 +206,12 @@ export function DirectoryPicker({ onCancel, onSelect, initialPath, busy = false,
       onKeyDown={(event) => {
         if (event.key === "Escape" && !busy && !isImeComposing(event)) onCancel();
       }}
-      style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.35)" }}
+      style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--plus-backdrop, rgba(0,0,0,0.35))" }}
     >
       <div className="directory-picker-panel" style={{ ...panelSurfaceStyle, position: "relative", width: 520, maxWidth: "calc(100vw - 16px)", height: "min(620px, calc(100dvh - 16px))", maxHeight: "calc(100dvh - 16px)", display: "flex", flexDirection: "column" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, padding: "12px 18px", borderBottom: "var(--hairline) solid var(--border)" }}>
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ color: "var(--text)", fontWeight: 700, fontSize: 15 }}>{t("directoryPicker.selectDirectory")}</div>
+            <div style={{ color: "var(--text)", fontWeight: 700, fontSize: 16 }}>{t("directoryPicker.selectDirectory")}</div>
           </div>
           <button
             type="button"
@@ -331,7 +331,7 @@ export function DirectoryPicker({ onCancel, onSelect, initialPath, busy = false,
 
         {createOpen && (
           <div
-            style={{ position: "absolute", inset: 0, zIndex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 12, background: "rgba(0,0,0,0.35)" }}
+            style={{ position: "absolute", inset: 0, zIndex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 12, background: "var(--plus-backdrop, rgba(0,0,0,0.35))" }}
             onClick={(event) => {
               if (event.target === event.currentTarget) closeCreateDialog();
             }}
@@ -350,7 +350,7 @@ export function DirectoryPicker({ onCancel, onSelect, initialPath, busy = false,
               }}
               style={{ ...panelSurfaceStyle, width: 400, maxWidth: "100%" }}
             >
-              <div style={{ padding: "12px 18px", borderBottom: "var(--hairline) solid var(--border)", color: "var(--text)", fontSize: 15, fontWeight: 700 }}>
+              <div style={{ padding: "12px 18px", borderBottom: "var(--hairline) solid var(--border)", color: "var(--text)", fontSize: 16, fontWeight: 700 }}>
                 {t("directoryPicker.createDirectory")}
               </div>
               <div style={{ padding: "12px 18px" }}>

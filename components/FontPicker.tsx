@@ -43,7 +43,7 @@ export function FontPicker({ role, value, onChange, label }: { role: FontRole; v
   const [monoOnly, setMonoOnly] = useState(role === "code");
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const popRef = useRef<HTMLDivElement | null>(null);
-  const [position, setPosition] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null);
+  const [position, setPosition] = useState<{ top?: number; bottom?: number; left: number; width: number; maxHeight: number } | null>(null);
 
   useEffect(() => {
     if (open && fonts === null) void loadSystemFonts().then(setFonts);
@@ -55,9 +55,13 @@ export function FontPicker({ role, value, onChange, label }: { role: FontRole; v
     const width = Math.max(300, rect.width);
     const below = window.innerHeight - rect.bottom - 12;
     const above = rect.top - 12;
-    const maxHeight = Math.min(420, Math.max(below, above));
+    const openUpward = below < 260 && above > below;
+    const availableSpace = openUpward ? above : below;
+    const maxHeight = Math.min(360, Math.max(160, availableSpace - 8));
     setPosition({
-      top: below >= Math.min(320, above) ? rect.bottom + 4 : Math.max(8, rect.top - 4 - maxHeight),
+      ...(openUpward
+        ? { bottom: Math.max(8, window.innerHeight - rect.top + 4) }
+        : { top: rect.bottom + 4 }),
       left: Math.max(8, Math.min(window.innerWidth - width - 8, rect.left)),
       width,
       maxHeight,
@@ -71,7 +75,16 @@ export function FontPicker({ role, value, onChange, label }: { role: FontRole; v
       if (popRef.current?.contains(target) || buttonRef.current?.contains(target)) return;
       setOpen(false);
     };
-    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        if (event.isComposing || event.keyCode === 229) return;
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation?.();
+        setOpen(false);
+        buttonRef.current?.focus();
+      }
+    };
     window.addEventListener("pointerdown", onDown, true);
     window.addEventListener("keydown", onKey, true);
     return () => {
@@ -134,7 +147,17 @@ export function FontPicker({ role, value, onChange, label }: { role: FontRole; v
           data-role={role}
           role="listbox"
           aria-label={label}
-          style={{ position: "fixed", top: position.top, left: position.left, width: position.width, maxHeight: position.maxHeight, zIndex: 2400 }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+              e.preventDefault();
+              e.stopPropagation();
+              e.nativeEvent.stopImmediatePropagation?.();
+              setOpen(false);
+              buttonRef.current?.focus();
+            }
+          }}
+          style={{ position: "fixed", top: position.top, bottom: position.bottom, left: position.left, width: position.width, maxHeight: position.maxHeight, zIndex: 2400 }}
         >
           <div className="plus-font-picker-search">
             <input
@@ -143,6 +166,15 @@ export function FontPicker({ role, value, onChange, label }: { role: FontRole; v
               placeholder={t("plus.fontSearch")}
               onChange={(event) => setQuery(event.target.value)}
               onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  event.nativeEvent.stopImmediatePropagation?.();
+                  setOpen(false);
+                  buttonRef.current?.focus();
+                  return;
+                }
                 if (event.key === "Enter" && typed) {
                   event.preventDefault();
                   const exact = filtered.find((font) => font.name.toLowerCase() === typed.toLowerCase());

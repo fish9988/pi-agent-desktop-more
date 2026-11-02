@@ -322,7 +322,7 @@ function GeneralSettings({
     <div className="settings-general">
       <h2 className="settings-general-title">{t("settings.general")}</h2>
 
-      <div className="settings-general-columns">
+      <div className="settings-general-columns plus-general-bento-grid">
         <div className="settings-general-col">
           <section className="settings-general-section settings-general-intro settings-general-overview">
             <p className="settings-general-tagline">{t("appSettings.tagline", { product: PRODUCT_NAME })}</p>
@@ -451,8 +451,6 @@ function GeneralSettings({
               </div>
             </div>
           </section>
-          <ChatsSettingsSection />
-            <PromptOptimizerSettingsSection />
         </div>
 
         <div className="settings-general-col">
@@ -481,6 +479,8 @@ function GeneralSettings({
             </div>
           </section>
 
+          <ChatsSettingsSection />
+          <PromptOptimizerSettingsSection />
           <DesktopAppSection />
           <TerminalSettingsSection />
 

@@ -1255,6 +1255,45 @@ export function AppShell() {
     });
   }, []);
 
+  const handleFocusSessionSearch = useCallback(() => {
+    if (!sidebarOpen) {
+      setSidebarOpen(true);
+      if (!isMobile) desktopSidebarOpenRef.current = true;
+    }
+    window.requestAnimationFrame(() => {
+      const input = document.querySelector<HTMLInputElement>(".sidebar-search-input");
+      input?.focus();
+      input?.select();
+    });
+  }, [isMobile, sidebarOpen]);
+
+  useEffect(() => {
+    const onOpenChangesPanel = () => {
+      if (isChatWorkspaceActive) return;
+      setRightPanelOpen(true);
+      setFileTreeOpen(true);
+      setFileTreeNarrowOverride(true);
+      setChangesCollapsed(false);
+    };
+    window.addEventListener("pi-plus:open-changes-panel", onOpenChangesPanel);
+    return () => window.removeEventListener("pi-plus:open-changes-panel", onOpenChangesPanel);
+  }, [isChatWorkspaceActive]);
+
+  const sessionBusy = Boolean(selectedSession && runningSessionIds.has(selectedSession.id));
+  const [runningElapsedSec, setRunningElapsedSec] = useState(0);
+  useEffect(() => {
+    if (!sessionBusy) {
+      setRunningElapsedSec(0);
+      return;
+    }
+    const startedAt = Date.now();
+    setRunningElapsedSec(0);
+    const timer = window.setInterval(() => {
+      setRunningElapsedSec(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [sessionBusy, selectedSession?.id]);
+
   // The native macOS menu is the only reliable route when the webview has no
   // focused element. Route its custom items back through the same app state.
   useNativeAppMenu(handleNativeMenuAction);
@@ -1269,8 +1308,11 @@ export function AppShell() {
         isChatWorkspaceActive ? "chat" : "project",
       ),
     activeCwd: isChatWorkspaceActive ? chatWorkspaceCwd : activeCwd,
-    // Only while open: a closed panel must leave \ and focus alone.
     onCloseRightPanel: rightPanelOpen && !shortcutHelpOpen ? handleRightPanelClose : undefined,
+    onToggleRightPanel: !shortcutHelpOpen && !settingsSection && (!isChatWorkspaceActive && (isMobile || !scheduledOpen || rightPanelOpen))
+      ? (rightPanelOpen ? handleRightPanelClose : handleRightPanelToggle)
+      : undefined,
+    onFocusSessionSearch: settingsSection || shortcutHelpOpen ? undefined : handleFocusSessionSearch,
     // Already open: leave it where it is 一 unless it is folded, which is exactly
     // when the shortcut has to bring it back.
     onOpenSettings: settingsSection && !settingsWindowMinimized ? undefined : openSettingsAtLastSection,
@@ -1938,7 +1980,7 @@ export function AppShell() {
           minHeight: mobileBanner ? 32 : undefined,
           height: mobileBanner ? undefined : "100%",
           padding: mobileBanner ? "6px 12px" : "0 12px",
-          background: mobileBanner ? "color-mix(in srgb, #d97706 8%, var(--bg-panel))" : "none",
+          background: mobileBanner ? "color-mix(in srgb, var(--warning) 8%, var(--bg-panel))" : "none",
           border: "none",
           borderRight: mobileBanner ? "none" : "1px solid var(--border)",
           borderBottom: mobileBanner ? "1px solid var(--border)" : "none",
@@ -2214,8 +2256,13 @@ export function AppShell() {
                       </svg>
                     )}
                     <span>
-                      {translate("sidebar.subagentGroup", { count: subCount })}
-                      {runningSubCount > 0 ? ` · ${translate("sidebar.subagentRunningCount", { count: runningSubCount })}` : ""}
+                      {runningSubCount > 0
+                        ? (locale.startsWith("zh")
+                          ? `${runningSubCount}/${subCount} 运行中`
+                          : `${runningSubCount}/${subCount} running`)
+                        : (locale.startsWith("zh")
+                          ? `${subCount} 个子任务 · 已完成`
+                          : `${subCount} sub-agents · done`)}
                     </span>
                     <svg className="app-topbar-subagents-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <polyline points="6 9 12 15 18 9" />
@@ -2233,10 +2280,10 @@ export function AppShell() {
               </small>
             )}
             {/* Plus 1.7: the open session is working (the title bar says so from anywhere). */}
-            {selectedSession && !scheduledOpen && runningSessionIds.has(selectedSession.id) && (
+            {sessionBusy && !scheduledOpen && (
               <small className="app-topbar-chip app-topbar-running">
                 <span className="app-topbar-running-dot" aria-hidden="true" />
-                <span>{translate("plus.runningNow")}</span>
+                <span>{translate("plus.runningNow")} · {runningElapsedSec}s</span>
               </small>
             )}
             {topBarBranch && (
@@ -2752,7 +2799,7 @@ export function AppShell() {
             </div>
           ) : showPlaceholder ? (
             visibleProjectCwd ? (
-              <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", fontSize: 15 }}>
+              <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", fontSize: 16 }}>
                  {translate("workspace.selectSession")}
               </div>
             ) : (
@@ -2761,7 +2808,7 @@ export function AppShell() {
                   <line x1="20" y1="12" x2="4" y2="12" /><polyline points="10 6 4 12 10 18" />
                 </svg>
                 <div>
-                   <div style={{ fontSize: 18, fontWeight: 600, color: "var(--text)", marginBottom: 8 }}>{translate("workspace.getStarted")}</div>
+                   <div style={{ fontSize: 20, fontWeight: 600, color: "var(--text)", marginBottom: 8 }}>{translate("workspace.getStarted")}</div>
                   <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.8 }}>
                     <span style={{ color: "var(--text-dim)", marginRight: 6 }}>1.</span>{translate("workspace.selectProject")}<br />
                     <span style={{ color: "var(--text-dim)", marginRight: 6 }}>2.</span>{translate("workspace.addModels")}
@@ -2851,6 +2898,8 @@ export function AppShell() {
             <dl className="shortcut-help-list">
               <div><dt><kbd>Esc</kbd></dt><dd>{translate("shortcutHelp.stop")}</dd></div>
               <div><dt><kbd>⌘/Ctrl+N</kbd></dt><dd>{translate("shortcutHelp.newSession")}</dd></div>
+              <div><dt><kbd>⌘/Ctrl+K</kbd></dt><dd>{translate("shortcutHelp.searchSessions")}</dd></div>
+              <div><dt><kbd>⌘/Ctrl+F</kbd></dt><dd>{translate("shortcutHelp.findInPage")}</dd></div>
               <div><dt><kbd>⌘/Ctrl+,</kbd></dt><dd>{translate("shortcutHelp.settings")}</dd></div>
               <div><dt><kbd>⌘/Ctrl+/</kbd></dt><dd>{translate("shortcutHelp.help")}</dd></div>
               <div><dt><kbd>⌘/Ctrl+\</kbd></dt><dd>{translate("shortcutHelp.hideWorkspace")}</dd></div>
@@ -2988,14 +3037,33 @@ export function AppShell() {
             aria-controls="file-panel"
             aria-expanded={rightPanelOpen}
             aria-keyshortcuts="Meta+\\ Control+\\"
-          title={translate("workspace.hidePanelHint")}
-          aria-label={translate("workspace.hidePanel")}
+            title={translate("workspace.hidePanelHint")}
+            aria-label={translate("workspace.hidePanel")}
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <line x1="15" y1="3" x2="15" y2="21" />
+              <polyline points="10 9 13 12 10 15" />
             </svg>
           </button>
-          {rightPanelOpen && !isMobile && <WindowControls />}
+          {rightPanelOpen && !isMobile && (
+            <>
+              <span
+                className="right-panel-window-controls-sep"
+                aria-hidden="true"
+                style={{
+                  width: 1,
+                  height: 16,
+                  marginLeft: 6,
+                  marginRight: 8,
+                  background: "var(--separator, var(--border))",
+                  flexShrink: 0,
+                  alignSelf: "center",
+                }}
+              />
+              <WindowControls />
+            </>
+          )}
         </div>
 
         {/* Only the active viewer is mounted. Lightweight per-tab state is restored on activation. */}

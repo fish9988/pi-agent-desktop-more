@@ -47,37 +47,53 @@ export function PlusSettingsWindowBar({ dialogRef, onClose, busy }: Props) {
 
   useEffect(() => {
     const root = document.documentElement;
+    const dialog = dialogRef.current;
+    const surface = dialog?.querySelector<HTMLElement>(".settings-dialog-surface");
     if (isStandalonePopup) {
       root.dataset.plusStandaloneSettings = "1";
       delete root.dataset.plusSettingsDock;
+      dialog?.classList.remove("is-docked");
+      surface?.classList.remove("is-docked");
       return () => {
         delete root.dataset.plusStandaloneSettings;
       };
     }
     if (mode === "dock-right") {
       root.dataset.plusSettingsDock = "right";
+      dialog?.classList.add("is-docked");
+      surface?.classList.add("is-docked");
     } else {
       delete root.dataset.plusSettingsDock;
+      dialog?.classList.remove("is-docked");
+      surface?.classList.remove("is-docked");
     }
     return () => {
       delete root.dataset.plusSettingsDock;
+      dialog?.classList.remove("is-docked");
+      surface?.classList.remove("is-docked");
     };
-  }, [isStandalonePopup, mode]);
+  }, [dialogRef, isStandalonePopup, mode]);
 
   useEffect(() => {
     const root = document.documentElement;
+    const surface = dialogRef.current?.querySelector<HTMLElement>(".settings-dialog-surface");
     if (minimized) {
       root.dataset.plusSettingsMinimized = "1";
+      if (surface) surface.style.transform = "";
       // Everything the focus was in is display:none now; keep the keyboard on the
       // restore control instead of dropping focus to the document body.
       foldButtonRef.current?.focus({ preventScroll: true });
     } else {
       delete root.dataset.plusSettingsMinimized;
+      if (surface && mode !== "dock-right") {
+        const { x, y } = posRef.current;
+        surface.style.transform = x === 0 && y === 0 ? "" : `translate3d(${Math.round(x)}px, ${Math.round(y)}px, 0)`;
+      }
     }
     return () => {
       delete root.dataset.plusSettingsMinimized;
     };
-  }, [minimized]);
+  }, [dialogRef, minimized, mode]);
 
   const applyTransform = useCallback((x: number, y: number) => {
     const surface = dialogRef.current?.querySelector<HTMLElement>(".settings-dialog-surface");

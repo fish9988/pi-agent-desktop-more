@@ -134,7 +134,7 @@ export function UpdateReminder({ onOpenSettings }: { onOpenSettings: () => void 
             background: "transparent",
             color: "var(--text-muted)",
             cursor: "pointer",
-            fontSize: 19,
+            fontSize: 20,
             lineHeight: 1,
           }}
         >
@@ -159,7 +159,7 @@ export function UpdateReminder({ onOpenSettings }: { onOpenSettings: () => void 
           >
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 12, fontWeight: 650 }}>{update.name}</div>
-              <div style={{ marginTop: 3, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 10 }}>
+              <div style={{ marginTop: 3, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 12 }}>
                 {update.currentVersion} → {update.latestVersion}
               </div>
             </div>
@@ -181,7 +181,7 @@ export function UpdateReminder({ onOpenSettings }: { onOpenSettings: () => void 
             </a>
           </div>
         ))}
-        <div className="native-update-reminder-caption" style={{ color: "var(--text-dim)", fontSize: 10, lineHeight: 1.45 }}>
+        <div className="native-update-reminder-caption" style={{ color: "var(--text-dim)", fontSize: 12, lineHeight: 1.45 }}>
           {t("updates.caption", { product: PRODUCT_NAME })}
         </div>
         <button

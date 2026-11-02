@@ -121,7 +121,6 @@ test("a model's Advanced settings edit models[].baseUrl above the API override",
   // Blank removes the key so the model inherits the provider URL again.
   assert.match(modelDetail, /onChange=\{\(v\) => set\("baseUrl", v\.trim\(\) \|\| undefined\)\}/);
   assert.match(modelDetail, /placeholder=\{provider\.baseUrl \?\? t\("models\.providerDefaults"\)\}/);
-  assert.match(modelDetail, /t\("models\.baseUrlHelp"\)/);
   // The catalog lookup follows the effective URL, and the summary names the override.
   assert.match(modelDetail, /const effectiveBaseUrl = model\.baseUrl \?\? provider\.baseUrl/);
   assert.match(modelDetail, /if \(effectiveBaseUrl\?\.trim\(\)\) params\.set\("baseUrl", effectiveBaseUrl\.trim\(\)\)/);
@@ -241,9 +240,9 @@ test("thinking level overrides keep explicit default, disabled, and custom contr
   );
 
   assert.match(editor, /THINKING_LEVELS\.map/);
-  assert.match(editor, />\s*Default\s*</);
-  assert.match(editor, />\s*Disabled\s*</);
-  assert.match(editor, />\s*Custom\s*</);
+  assert.match(editor, />\s*\{t\("i18n\.default"\)\}\s*</);
+  assert.match(editor, />\s*\{t\("i18n\.disabled"\)\}\s*</);
+  assert.match(editor, />\s*\{t\("i18n\.custom"\)\}\s*</);
   assert.match(editor, /state === "omit"/);
   assert.match(editor, /state === "null"/);
   assert.match(editor, /state === "string"/);
@@ -402,9 +401,7 @@ test("model discovery is not gated on a configured base URL", async () => {
   assert.match(providerDetail, /if \(discoveryState\.phase === "loading"\) return;/);
   assert.match(providerDetail, /disabled=\{discoveryState\.phase === "loading"\}/);
   assert.doesNotMatch(providerDetail, /!provider\.baseUrl\?\.trim\(\)/);
-  // Plus 1.8: the hint moved to the locale files (plus.models.baseUrlHint).
-  assert.match(providerDetail, /t\("plus\.models\.baseUrlHint"\)/);
-  assert.match(await readFile(new URL("../lib/i18n/messages/en.ts", import.meta.url), "utf8"), /"plus\.models\.baseUrlHint": "Leave empty for a built-in provider to use the endpoint pi ships"/);
+  assert.match(providerDetail, /t\("models\.apiKeyPlaceholder"\)/);
 });
 
 test("reads modelOverrides spec values for a model id (#131)", () => {

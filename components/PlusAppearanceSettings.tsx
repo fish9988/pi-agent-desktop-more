@@ -761,38 +761,36 @@ export function PlusAppearanceSettings({
       </div>
 
       {/* Card 2: Typography & System Fonts */}
-      {!livePreviewMode && (
-        <div className="plus-studio-card">
-          <div className="plus-appearance-heading">
-            <span>
-              <strong>{t("plus.fonts")}</strong>
-              <span className="plus-studio-subtitle">独立配置界面、对话阅读、标题粗体与代码等宽字体</span>
-            </span>
-            <span className="plus-appearance-heading-actions">
-              <button type="button" className="config-button config-button-small config-button-secondary" onClick={() => void loadSystemFonts(true).then(() => appNotify.success({ message: t("plus.fontsRefreshed") }))}>
-                {t("plus.fontsRefresh")}
-              </button>
-              <button type="button" className="config-button config-button-small config-button-secondary" onClick={() => reset()}>
-                {t("plus.resetAppearance")}
-              </button>
-            </span>
-          </div>
-          {([
-            ["ui", "uiFont", "plus.fontUi", "plus.fontUiHint"],
-            ["chat", "chatFont", "plus.fontChat", "plus.fontChatHint"],
-            ["chatBold", "chatBoldFont", "plus.fontChatBold", "plus.fontChatBoldHint"],
-            ["code", "codeFont", "plus.fontCode", "plus.fontCodeHint"],
-          ] as const).map(([role, key, label, hint]) => (
-            <div key={role} className="plus-appearance-row">
-              <span>
-                <span>{t(label)}</span>
-                <span className="settings-option-hint">{t(hint)}</span>
-              </span>
-              <FontPicker role={role} label={t(label)} value={settings[key]} onChange={(value) => update({ [key]: value })} />
-            </div>
-          ))}
+      <div className="plus-studio-card">
+        <div className="plus-appearance-heading">
+          <span>
+            <strong>{t("plus.fonts")}</strong>
+            <span className="plus-studio-subtitle">独立配置界面、对话阅读、标题粗体与代码等宽字体</span>
+          </span>
+          <span className="plus-appearance-heading-actions">
+            <button type="button" className="config-button config-button-small config-button-secondary" onClick={() => void loadSystemFonts(true).then(() => appNotify.success({ message: t("plus.fontsRefreshed") }))}>
+              {t("plus.fontsRefresh")}
+            </button>
+            <button type="button" className="config-button config-button-small config-button-secondary" onClick={() => reset()}>
+              {t("plus.resetAppearance")}
+            </button>
+          </span>
         </div>
-      )}
+        {([
+          ["ui", "uiFont", "plus.fontUi", "plus.fontUiHint"],
+          ["chat", "chatFont", "plus.fontChat", "plus.fontChatHint"],
+          ["chatBold", "chatBoldFont", "plus.fontChatBold", "plus.fontChatBoldHint"],
+          ["code", "codeFont", "plus.fontCode", "plus.fontCodeHint"],
+        ] as const).map(([role, key, label, hint]) => (
+          <div key={role} className="plus-appearance-row">
+            <span>
+              <span>{t(label)}</span>
+              <span className="settings-option-hint">{t(hint)}</span>
+            </span>
+            <FontPicker role={role} label={t(label)} value={settings[key]} onChange={(value) => update({ [key]: value })} />
+          </div>
+        ))}
+      </div>
 
       {/* Card 3: Custom CSS Studio with Live Global Preview & One-Click Presets */}
       <div className="plus-studio-card plus-css-studio-card">

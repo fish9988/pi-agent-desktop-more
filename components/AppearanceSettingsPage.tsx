@@ -36,7 +36,8 @@ function ResetIcon() {
  * without closing Settings.
  */
 export function AppearanceSettingsPage() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const isZh = locale.startsWith("zh");
   const { preference, setThemePreference } = useTheme();
   const {
     width: chatContentWidth,
@@ -87,8 +88,42 @@ export function AppearanceSettingsPage() {
     }
   };
 
+  const closeSettingsFromPreview = () => {
+    setLivePreviewMode(false);
+    document.querySelector<HTMLButtonElement>(".settings-dialog-close")?.click();
+  };
+
   return (
-    <div className="settings-general plus-appearance-page">
+    <div className={`settings-general plus-appearance-page${livePreviewMode ? " is-floating-preview" : ""}`}>
+      {livePreviewMode && (
+        <div className="plus-live-preview-sticky-bar" role="region" aria-label={isZh ? "全局界面实时预览" : "Global Live Preview"}>
+          <div className="plus-live-preview-sticky-title">
+            <span className="plus-live-preview-dot" aria-hidden="true" />
+            <strong>{isZh ? "全局界面实时预览" : "Global Live Preview"}</strong>
+          </div>
+          <div className="plus-live-preview-sticky-actions">
+            <button
+              type="button"
+              className="config-button config-button-small config-button-primary"
+              onClick={() => setLivePreviewMode(false)}
+            >
+              {isZh ? "退出预览" : "Exit preview"}
+            </button>
+            <button
+              type="button"
+              className="plus-settings-win-btn is-close"
+              onClick={closeSettingsFromPreview}
+              title={isZh ? "关闭设置 (Esc)" : "Close settings (Esc)"}
+              aria-label={isZh ? "关闭设置" : "Close settings"}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
       <h2 className="settings-general-title">{t("settings.appearance")}</h2>
       <div className="plus-appearance-layout">
         <div className="plus-appearance-controls">

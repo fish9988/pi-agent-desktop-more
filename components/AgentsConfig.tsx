@@ -638,7 +638,7 @@ export function AgentsConfig({
                           variant="field"
                           placement="auto"
                         />
-                        {modelsError && <span style={{ color: "var(--danger)", fontSize: 10 }}>{modelsError}</span>}
+                        {modelsError && <span style={{ color: "var(--danger)", fontSize: 12 }}>{modelsError}</span>}
                       </div>
                     </Field>
                     <Field label={t("agents.thinking")}>

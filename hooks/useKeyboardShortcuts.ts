@@ -46,8 +46,12 @@ interface UseGlobalKeyboardShortcutsOptions {
   onNewSession?: (cwd: string) => void;
   /** The currently selected project directory (sidebar cwd). */
   activeCwd?: string | null;
-  /** Called by \\ to close the preview panel and return focus to the composer. */
+  /** Called by ⌘\ / Ctrl+\ to close the preview panel and return focus to the composer. */
   onCloseRightPanel?: () => void;
+  /** Called by ⌘\ / Ctrl+\ to toggle the right workspace panel open or closed. */
+  onToggleRightPanel?: () => void;
+  /** Called by ⌘K / Ctrl+K to focus the sidebar session search box. */
+  onFocusSessionSearch?: () => void;
   /** Called by ⌘, (macOS) / Ctrl+, to open Settings. */
   onOpenSettings?: () => void;
   /** Called by ⌘/ (macOS) / Ctrl+/ to show the shortcut reference. */
@@ -73,7 +77,7 @@ export function handleOpenSettingsShortcut(event: KeyboardEvent, onOpenSettings:
 
 /** Shortcuts that behave like desktop accelerators: primary modifier required. */
 export function handleShortcutActivation(event: KeyboardEvent, key: string): boolean {
-  return event.key === key
+  return event.key.toLowerCase() === key.toLowerCase()
     && (event.metaKey || event.ctrlKey)
     && !event.shiftKey
     && !event.altKey
@@ -105,6 +109,8 @@ export function useGlobalKeyboardShortcuts(
     onNewSession,
     activeCwd,
     onCloseRightPanel,
+    onToggleRightPanel,
+    onFocusSessionSearch,
     onOpenSettings,
     onShortcutHelp,
     onToggleSidebar,
@@ -119,22 +125,28 @@ export function useGlobalKeyboardShortcuts(
         return;
       }
 
-      // ---- Cmd/Ctrl+\: hide the preview and go back to the conversation ----
+      // ---- Cmd/Ctrl+\: toggle or hide the right workspace panel ----
+      const rightPanelAction = onToggleRightPanel ?? onCloseRightPanel;
       if (
         handleShortcutActivation(e, "\\")
-        && onCloseRightPanel
+        && rightPanelAction
       ) {
         const target = e.target as HTMLElement | null;
         const tag = target?.tagName;
-        const composing = target?.isContentEditable;
-        const insideComposer = Boolean(target?.closest?.(".chat-input-shell"));
-        if (!insideComposer && !composing && tag !== "TEXTAREA" && tag !== "INPUT" && tag !== "SELECT") {
+        if (tag !== "SELECT") {
           e.preventDefault();
-          onCloseRightPanel();
+          rightPanelAction();
+          return;
         }
       }
 
       if (handleOpenSettingsShortcut(e, onOpenSettings)) return;
+
+      if (handleShortcutActivation(e, "k") && onFocusSessionSearch) {
+        e.preventDefault();
+        onFocusSessionSearch();
+        return;
+      }
 
       if (handleShortcutActivation(e, "/") && onShortcutHelp) {
         e.preventDefault();
@@ -169,8 +181,10 @@ export function useGlobalKeyboardShortcuts(
   }, [
     activeCwd,
     onFocusComposer,
+    onFocusSessionSearch,
     onNewSession,
     onCloseRightPanel,
+    onToggleRightPanel,
     onOpenSettings,
     onShortcutHelp,
     onToggleSidebar,

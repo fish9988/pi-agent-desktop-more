@@ -43,11 +43,14 @@ import {
 } from "./SettingsUi";
 import { itemsToSwitch, projectTrustReloadKey } from "./settings-ui-helpers";
 import {
+  CURATED_PLUGINS,
   formatCount,
+  PLUGIN_CATALOG_CATEGORIES,
   pluginDisplayName,
   pluginHue,
   pluginInitial,
   pluginSourceKind,
+  type PluginCatalogCategory,
   type PluginCatalogEntry,
 } from "@/lib/plugin-catalog";
 
@@ -199,7 +202,7 @@ function ResourceList({ pkg }: { pkg: PluginPackageInfo }) {
         >
           <div
             style={{
-              fontSize: 10,
+              fontSize: 12,
               fontWeight: 700,
               color: "var(--text-dim)",
               textTransform: "uppercase",
@@ -226,7 +229,7 @@ function ResourceList({ pkg }: { pkg: PluginPackageInfo }) {
                 </div>
                 <div
                   style={{
-                    fontSize: 10,
+                    fontSize: 12,
                     color: "var(--text-dim)",
                     fontFamily: "var(--font-mono)",
                     overflow: "hidden",
@@ -375,7 +378,7 @@ function PackageDetail({
             {pkg.disabled ? (
               <span
                 style={{
-                  fontSize: 10,
+                  fontSize: 12,
                   padding: "1px 5px",
                   borderRadius: 3,
                   background: "color-mix(in srgb, var(--text) 12%, transparent)",
@@ -387,7 +390,7 @@ function PackageDetail({
             ) : pkg.filtered && (
               <span
                 style={{
-                  fontSize: 10,
+                  fontSize: 12,
                   padding: "1px 5px",
                   borderRadius: 3,
                   background: "color-mix(in srgb, var(--warning) 12%, transparent)",
@@ -689,10 +692,12 @@ function DiscoverPanel({
   installingName: string | null;
   onInstall: (name: string) => void;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const isZh = locale.startsWith("zh");
   const [state, setState] = useState<CatalogState>({ phase: "loading" });
   const [confirming, setConfirming] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [categoryFilter, setCategoryFilter] = useState<"all" | PluginCatalogCategory>("all");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -722,12 +727,44 @@ function DiscoverPanel({
       </ConfigEmptyState>
     );
   }
+  const filteredPackages = state.packages.filter((entry) => {
+    if (categoryFilter === "all") return true;
+    const curatedMeta = CURATED_PLUGINS[entry.name];
+    const entryCategory = entry.category ?? curatedMeta?.category;
+    if (categoryFilter === "精选推荐") {
+      return Boolean(entry.curated || curatedMeta?.featured || entryCategory === "精选推荐");
+    }
+    return entryCategory === categoryFilter;
+  });
   return (
     <section className="plus-plugins-group">
+      <div className="plus-plugins-catalog-categories" role="tablist" aria-label={isZh ? "插件分类筛选" : "Plugin categories"}>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={categoryFilter === "all"}
+          className={`plus-plugins-category-pill${categoryFilter === "all" ? " is-active" : ""}`}
+          onClick={() => setCategoryFilter("all")}
+        >
+          {isZh ? "全部" : "All"}
+        </button>
+        {PLUGIN_CATALOG_CATEGORIES.map((category) => (
+          <button
+            key={category}
+            type="button"
+            role="tab"
+            aria-selected={categoryFilter === category}
+            className={`plus-plugins-category-pill${categoryFilter === category ? " is-active" : ""}`}
+            onClick={() => setCategoryFilter(category)}
+          >
+            {category}
+          </button>
+        ))}
+      </div>
       <div className="plus-plugins-catalog-head">
         <span>{query.trim()
-          ? t("plus.plugins.catalogSearchSummary", { total: state.total.toLocaleString(), shown: state.packages.length })
-          : t("plus.plugins.catalogSummary", { total: state.total.toLocaleString(), shown: state.packages.length })}</span>
+          ? t("plus.plugins.catalogSearchSummary", { total: state.total.toLocaleString(), shown: filteredPackages.length })
+          : t("plus.plugins.catalogSummary", { total: state.total.toLocaleString(), shown: filteredPackages.length })}</span>
         <a
           href="https://pi.dev/packages"
           target="_blank"
@@ -737,18 +774,23 @@ function DiscoverPanel({
           pi.dev/packages ↗
         </a>
       </div>
-      {state.packages.length === 0 ? (
+      {filteredPackages.length === 0 ? (
         <ConfigEmptyState>{t("plus.plugins.catalogEmpty")}</ConfigEmptyState>
       ) : (
         <div className="plus-plugins-grid">
-          {state.packages.map((entry) => {
+          {filteredPackages.map((entry) => {
             const installed = installedNames.has(entry.name);
             const installing = installingName === entry.name;
+            const curatedMeta = CURATED_PLUGINS[entry.name];
+            const zhDesc = entry.zhDescription ?? curatedMeta?.zhDescription;
+            const category = entry.category ?? curatedMeta?.category;
+            const isCurated = Boolean(entry.curated || curatedMeta);
             const meta = [
               entry.publisher,
               entry.version ? `v${entry.version}` : null,
               t("plus.plugins.weeklyDownloads", { count: formatCount(entry.weeklyDownloads) }),
             ].filter(Boolean).join(" · ");
+            const displayDesc = (isZh && zhDesc) ? zhDesc : (entry.description || t("plus.plugins.noDescription"));
             return (
               <article key={entry.name} className="plus-plugin-card">
                 <div className="plus-plugin-card-main">
@@ -759,7 +801,13 @@ function DiscoverPanel({
                       <span>{meta}</span>
                     </span>
                   </span>
-                  <span className="plus-plugin-card-desc">{entry.description || t("plus.plugins.noDescription")}</span>
+                  <span className="plus-plugin-card-desc">{displayDesc}</span>
+                  {(isCurated || category) && (
+                    <span className="plus-plugin-tags">
+                      {isCurated && <span className="plus-plugin-tag is-curated">{isZh ? "精选" : "Featured"}</span>}
+                      {category && <span className="plus-plugin-tag">{category}</span>}
+                    </span>
+                  )}
                 </div>
                 <div className="plus-plugin-card-foot">
                   {confirming === entry.name && !installed ? (
@@ -1349,6 +1397,7 @@ export function PluginsConfig({
             )}
           </div>
         </div>
+        {view !== "discover" && (
         <ConfigFooter status={
             availableUpdateCount > 0 ? (
               <span style={{ fontSize: 12, color: "var(--accent)" }}>
@@ -1388,6 +1437,7 @@ export function PluginsConfig({
              {t("i18n.refresh")}
           </ConfigButton>
         </ConfigFooter>
+        )}
     </ConfigPanelShell>
   );
 }
