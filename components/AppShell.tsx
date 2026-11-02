@@ -27,7 +27,7 @@ import { openFileTab, saveFileViewerState } from "./file-tab-state";
 import { SettingsPanel } from "./SettingsPanel";
 import { keepDocumentTitle } from "@/lib/document-title";
 import { ProjectTrustDialog, type ProjectTrustFailure } from "./ProjectTrustDialog";
-import { BranchNavigator, hasSessionBranches } from "./BranchNavigator";
+import { BranchNavigator, hasNavigableBranches } from "./BranchNavigator";
 import { UpdateReminder } from "./UpdateReminder";
 import { useTheme } from "@/hooks/useTheme";
 import { useI18n } from "@/hooks/useI18n";
@@ -43,7 +43,7 @@ import {
 import { useViewportHeight } from "@/hooks/useViewportHeight";
 import { useResizablePanel } from "@/hooks/useResizablePanel";
 import { useDesktopConnection } from "@/lib/desktop-connection";
-import { isTauriDesktop, setCloseQuitsNative } from "@/lib/desktop-native";
+import { isTauriDesktop, installExternalLinkGuard, setCloseQuitsNative } from "@/lib/desktop-native";
 import { canUseNativeMenu, menuPointBelow, showNativeMenu } from "@/lib/desktop-menu";
 import { useNativeContextMenu } from "@/hooks/useNativeContextMenu";
 import { DomContextMenuHost } from "./DomContextMenuHost";
@@ -67,7 +67,6 @@ import { artifactPanelTab, artifactTabId, artifactTabsForSession, upsertArtifact
 import { ArtifactPanel } from "./ArtifactPanel";
 import { setArtifactOpener, useArtifactTitles } from "@/lib/artifact-store";
 import { useAudio } from "@/hooks/useAudio";
-import { copyText } from "@/lib/clipboard";
 import { agentStatusUrl, sendAgentCommand } from "@/lib/agent-client";
 import {
   claimExtensionAttentionNotification,
@@ -99,8 +98,7 @@ import {
   SIDEBAR_MIN_WIDTH,
 } from "@/lib/panel-layout";
 import type { BlockingExtensionUiRequest, CacheWarmingInfo, LeafChangeOptions, SessionInfo, SessionTreeNode, SessionWorkspaceKind } from "@/lib/types";
-import { shouldShowUsageBreakdown, UNATTRIBUTED_USAGE_KEY } from "@/lib/usage-breakdown";
-import { cacheWarmingRows } from "@/lib/cache-warming-display";
+import { SessionStatsPanel } from "./SessionStatsPanel";
 import type { McpErrorResponse, ProjectTrustStatus } from "@/lib/api-types";
 import type { ChatInputHandle } from "./ChatInput";
 import type { SessionStatsInfo } from "@/lib/pi-types";
@@ -110,7 +108,6 @@ import { getSessionFamily } from "@/lib/session-family";
 import { appNotify } from "@/lib/notification-store";
 import { getLastSettingsSection, type SettingsSection } from "@/lib/settings-navigation";
 
-type SessionCopyField = "file" | "id" | "projectDir" | "gitBranch" | "gitWorktree";
 type AutoNameStatus =
   | { kind: "idle" }
   | { kind: "naming" }
@@ -456,7 +453,7 @@ export function AppShell() {
   const [branchActiveLeafId, setBranchActiveLeafId] = useState<string | null>(null);
   const [branchSwitchLocked, setBranchSwitchLocked] = useState(false);
   const branchLeafChangeFnRef = useRef<((leafId: string | null, options?: LeafChangeOptions) => void) | null>(null);
-  const sessionHasBranches = hasSessionBranches(branchTree);
+  const sessionHasBranches = hasNavigableBranches(branchTree);
 
   const handleBranchDataChange = useCallback((tree: SessionTreeNode[], activeLeafId: string | null, onLeafChange: (leafId: string | null, options?: LeafChangeOptions) => void, locked: boolean) => {
     setBranchTree(tree);
@@ -507,6 +504,12 @@ export function AppShell() {
       void setCloseQuitsNative(getPrefBool(APP_PREF_KEYS.closeQuits, false));
     }
   }, [desktopMode]);
+
+  // Backstop for external links: any `<a href="https…">` that no component
+  // intercepted would otherwise navigate the WebView and replace the whole app
+  // UI with that page. Installed once, capture phase, no rendering; in-app
+  // routes, fragments and relative paths are left to the app.
+  useEffect(() => installExternalLinkGuard(), []);
 
   // Context usage — populated by ChatWindow, used by the stats panel and ring
   const [contextUsage, setContextUsage] = useState<{ percent: number | null; contextWindow: number; tokens: number | null } | null>(null);
@@ -1598,15 +1601,6 @@ export function AppShell() {
     if (isMobile) setSidebarOpen(false);
   }, [isChatWorkspaceActive, isMobile]);
 
-  const [copiedSessionField, setCopiedSessionField] = useState<SessionCopyField | null>(null);
-  const sessionCopyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const handleCopySessionField = useCallback((field: SessionCopyField, value: string) => {
-    void copyText(value).then(() => {
-      if (sessionCopyTimerRef.current) clearTimeout(sessionCopyTimerRef.current);
-      setCopiedSessionField(field);
-      sessionCopyTimerRef.current = setTimeout(() => setCopiedSessionField(null), 1400);
-    });
-  }, []);
 
   const handleOpenLinkedFile = useCallback((filePath: string, page?: number) => {
     if (isChatWorkspaceActive) return;
@@ -2330,7 +2324,7 @@ export function AppShell() {
                 </svg>
                  {!isMobile && <span>{translate("history.label")}</span>}
               </button>
-              {!isChatWorkspaceActive && (
+              {!isChatWorkspaceActive && sessionHasBranches && (
                 <BranchNavigator
                   tree={branchTree}
                   activeLeafId={branchActiveLeafId}
@@ -2666,202 +2660,13 @@ export function AppShell() {
                   boxShadow: "0 10px 28px rgba(0,0,0,0.10)",
                   padding: "12px 16px",
                 }}>
-                  {sessionStats ? (() => {
-                    const formatDuration = (ms: number) => {
-                      if (ms <= 0) return "0s";
-                      const totalSec = Math.floor(ms / 1000);
-                      const h = Math.floor(totalSec / 3600);
-                      const m = Math.floor((totalSec % 3600) / 60);
-                      const s = totalSec % 60;
-                      if (h > 0) return `${h}h ${m}m`;
-                      if (m > 0) return `${m}m ${s}s`;
-                      return `${s}s`;
-                    };
-                    const totalActiveMs = sessionStats.totalActiveMs ?? 0;
-                    const ws = isChatWorkspaceActive ? null : selectedSession;
-                    const sessionRows = [
-                       ...(sessionStats.sessionName ? [{ label: translate("session.name"), value: sessionStats.sessionName, copyField: null }] : []),
-                       { label: translate("session.file"), value: sessionStats.sessionFile ?? translate("session.inMemory"), copyField: "file" as const },
-                       { label: translate("session.id"), value: sessionStats.sessionId, copyField: "id" as const },
-                       ...(totalActiveMs > 0 ? [{ label: translate("session.totalActive"), value: formatDuration(totalActiveMs), copyField: null }] : []),
-                    ];
-                    const projectRows = [
-                      ...(ws ? [{ label: translate("session.projectDir"), value: ws.projectRoot ?? ws.cwd, copyField: "projectDir" as const }] : []),
-                      ...(ws?.branch ? [{ label: translate("session.gitBranch"), value: ws.branch, copyField: "gitBranch" as const }] : []),
-                      ...(ws?.isWorktree ? [{ label: translate("session.gitWorktree"), value: ws.cwd, copyField: "gitWorktree" as const }] : []),
-                    ];
-                    const messageRows = [
-                       [translate("session.user"), sessionStats.userMessages.toLocaleString(locale)],
-                       [translate("session.assistant"), sessionStats.assistantMessages.toLocaleString(locale)],
-                       [translate("session.toolCalls"), sessionStats.toolCalls.toLocaleString(locale)],
-                       [translate("session.toolResults"), sessionStats.toolResults.toLocaleString(locale)],
-                       [translate("session.total"), sessionStats.totalMessages.toLocaleString(locale)],
-                    ];
-                    const tokenRows = [
-                       [translate("session.input"), sessionStats.tokens.input.toLocaleString(locale)],
-                       [translate("session.output"), sessionStats.tokens.output.toLocaleString(locale)],
-                       ...(sessionStats.tokens.cacheRead > 0 ? [[translate("session.cacheRead"), sessionStats.tokens.cacheRead.toLocaleString(locale)]] : []),
-                       ...(sessionStats.tokens.cacheWrite > 0 ? [[translate("session.cacheWrite"), sessionStats.tokens.cacheWrite.toLocaleString(locale)]] : []),
-                       [translate("session.total"), sessionStats.tokens.total.toLocaleString(locale)],
-                    ];
-                    const ctx = contextUsage ?? sessionStats.contextUsage;
-                    const formatCompact = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(0)}k` : String(n);
-                    const extraTokenRows = [
-                       ...(sessionStats.cost > 0 ? [[translate("session.cost"), `$${sessionStats.cost.toFixed(4)}`]] : []),
-                       ...(ctx?.contextWindow ? [[translate("session.context"), `${ctx.percent !== null ? `${ctx.percent.toFixed(1)}%` : "?"} / ${formatCompact(ctx.contextWindow)}`]] : []),
-                       // Cache hit rate = cache reads / (input + cache writes + cache reads) — the denominator covers all input-class tokens.
-                       ...(sessionStats.tokens.cacheRead + sessionStats.tokens.cacheWrite > 0 && sessionStats.tokens.cacheRead + sessionStats.tokens.cacheWrite + sessionStats.tokens.input > 0
-                         ? [[translate("session.cacheHitRate"), `${(sessionStats.tokens.cacheRead / (sessionStats.tokens.cacheRead + sessionStats.tokens.cacheWrite + sessionStats.tokens.input) * 100).toFixed(1)}%`]]
-                         : []),
-                    ];
-                    const section = (
-                      title: string,
-                      sectionRows: string[][],
-                      valueAlign: "left" | "right" = "left",
-                      compact = false,
-                    ) => (
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>{title}</div>
-                          <div style={{
-                            display: "grid",
-                            gridTemplateColumns: compact ? "max-content max-content" : "auto minmax(0, 1fr)",
-                            columnGap: compact ? 14 : 12,
-                            rowGap: 4,
-                            justifyContent: compact ? "start" : undefined,
-                          }}>
-                            {sectionRows.map(([label, value]) => (
-                              <div key={`${title}:${label}`} style={{ display: "contents" }}>
-                                <div style={{ color: "var(--text-dim)", whiteSpace: "nowrap" }}>{label}</div>
-                                <div style={{
-                                  color: "var(--text-muted)",
-                                  minWidth: 0,
-                                  overflowWrap: compact ? "normal" : "anywhere",
-                                  textAlign: valueAlign,
-                                  whiteSpace: valueAlign === "right" ? "nowrap" : "normal",
-                                }}>{value}</div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    const copyTitleKey: Record<SessionCopyField, string> = {
-                      file: "session.copyFile",
-                      id: "session.copyId",
-                      projectDir: "session.copyProjectDir",
-                      gitBranch: "session.copyGitBranch",
-                      gitWorktree: "session.copyGitWorktree",
-                    };
-                    const copyButton = (field: SessionCopyField, value: string) => {
-                      const copied = copiedSessionField === field;
-                      return (
-                        <button
-                          type="button"
-                          title={copied ? translate("session.copied") : translate(copyTitleKey[field])}
-                          onClick={() => handleCopySessionField(field, value)}
-                          style={{
-                            alignSelf: "start",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            width: 22,
-                            height: 22,
-                            marginTop: -2,
-                            color: copied ? "var(--accent)" : "var(--text-dim)",
-                            flex: "0 0 auto",
-                          }}
-                          className="session-field-copy"
-                        >
-                          {copied ? (
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                              <polyline points="20 6 9 17 4 12" />
-                            </svg>
-                          ) : (
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                            </svg>
-                          )}
-                        </button>
-                      );
-                    };
-                    const costBreakdownRows = shouldShowUsageBreakdown(sessionStats.costBreakdown, sessionStats.selectedModelKey)
-                      ? (sessionStats.costBreakdown ?? []).map((entry) => [
-                          entry.key === UNATTRIBUTED_USAGE_KEY ? translate("session.unattributedUsage") : entry.key,
-                          `$${entry.cost.toFixed(4)} · ${formatCompact(entry.tokens)}`,
-                        ])
-                      : [];
-                    const cacheWarmingInfo = panelCacheWarming ?? sessionStats.cacheWarming;
-                    const cacheWarmingSectionRows = cacheWarmingInfo ? cacheWarmingRows(cacheWarmingInfo, translate) : [];
-                    const sessionInfoSection = (
-                      <div style={{ minWidth: 0 }}>
-                         <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>{translate("session.infoSection")}</div>
-                        <div style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto", columnGap: 12, rowGap: 8, alignItems: "start" }}>
-                          {sessionRows.map((row) => (
-                            <div key={`session-info:${row.label}`} style={{ display: "contents" }}>
-                              <div style={{ color: "var(--text-dim)", whiteSpace: "nowrap" }}>{row.label}</div>
-                              <div style={{
-                                color: "var(--text-muted)",
-                                minWidth: 0,
-                                overflowWrap: "anywhere",
-                                wordBreak: "break-word",
-                                whiteSpace: "normal",
-                              }}>{row.value}</div>
-                              <div>{row.copyField ? copyButton(row.copyField, row.value) : null}</div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                    const projectInfoSection = projectRows.length > 0 ? (
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>{translate("session.projectSection")}</div>
-                        <div style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto", columnGap: 12, rowGap: 8, alignItems: "start" }}>
-                          {projectRows.map((row) => (
-                            <div key={`project-info:${row.label}`} style={{ display: "contents" }}>
-                              <div style={{ color: "var(--text-dim)", whiteSpace: "nowrap" }}>{row.label}</div>
-                              <div style={{
-                                color: "var(--text-muted)",
-                                minWidth: 0,
-                                overflowWrap: "anywhere",
-                                wordBreak: "break-word",
-                                whiteSpace: "normal",
-                              }}>{row.value}</div>
-                              <div>{row.copyField ? copyButton(row.copyField, row.value) : null}</div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null;
-
-                    return (
-                      <div style={{
-                        display: "grid",
-                        // Adapt cleanly to narrow center columns when the right sidebar is open.
-                        gridTemplateColumns: isMobile || topPanelPos.width < 640
-                          ? "1fr"
-                          : topPanelPos.width < 920
-                            ? "minmax(0, 1.35fr) minmax(0, 1fr)"
-                            : "minmax(260px, 1.5fr) minmax(120px, 0.5fr) minmax(170px, 0.7fr)",
-                        gap: isMobile ? 16 : 20,
-                        fontSize: 12,
-                        lineHeight: 1.5,
-                        fontFamily: "var(--font-mono)",
-                      }}>
-                        <div style={{ display: "flex", flexDirection: "column", gap: isMobile ? 16 : 20 }}>
-                          {sessionInfoSection}
-                          {projectInfoSection}
-                          {costBreakdownRows.length > 0 && section(translate("session.costByModel"), costBreakdownRows)}
-                          {cacheWarmingSectionRows.length > 0 && section(translate("session.cacheWarming"), cacheWarmingSectionRows)}
-                        </div>
-                         {section(translate("session.messages"), messageRows)}
-                         {section(translate("session.tokens"), [...tokenRows, ...extraTokenRows], "right", true)}
-                      </div>
-                    );
-                  })() : (
-                    <div style={{ fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" }}>
-                       {translate("session.load")}
-                    </div>
-                  )}
+                  <SessionStatsPanel
+                    sessionStats={sessionStats}
+                    contextUsage={contextUsage}
+                    cacheWarming={panelCacheWarming}
+                    session={isChatWorkspaceActive ? null : selectedSession}
+                    isMobile={isMobile}
+                  />
                 </div>
               )}
             </div>

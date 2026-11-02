@@ -20,6 +20,7 @@ import {
 import { encodeFilePathForApi, getFileDirectory, getFileName, getRelativeFilePath } from "@/lib/file-paths";
 import { parsePdfPageFragment, resolveLocalFileHref, shouldOpenLocalFileInApp } from "@/lib/file-links";
 import { parseFrontmatter } from "@/lib/frontmatter";
+import { handleExternalLinkClick } from "@/lib/desktop-native";
 import { jumpToMarkdownFragment, markdownPreviewRehypePlugins, markdownPreviewRemarkPlugins, markdownUrlTransform, normalizeDisplayMath } from "@/lib/markdown";
 import { CodeBlock, MermaidBlock } from "./MermaidBlock";
 import { FrontmatterCard } from "./FrontmatterCard";
@@ -2097,7 +2098,14 @@ function TextFileViewer({
                     ? resolveLocalFileHref(href, markdownDirectory, cwd ?? markdownDirectory)
                     : null;
                   if (!linkedFile || !onOpenFile) {
-                    return <a href={href} {...props}>{children}</a>;
+                    // Plus: an http/mailto link in the preview opens in the system
+                    // browser; a bare anchor would navigate the desktop WebView
+                    // and replace the app UI with that page.
+                    return (
+                      <a href={href} {...props} onClick={(event) => handleExternalLinkClick(event, href)}>
+                        {children}
+                      </a>
+                    );
                   }
 
                   const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {

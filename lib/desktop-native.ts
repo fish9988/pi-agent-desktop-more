@@ -350,6 +350,56 @@ export async function importLocalFiles(options: {
   return { status: response.status, data };
 }
 
+/** Schemes the shell hands to the system browser (`open_external_url` allows these). */
+const EXTERNAL_LINK_SCHEMES = /^(?:https?:\/\/|mailto:)/i;
+
+/**
+ * The URL a click should open outside the app, or null when it stays inside it.
+ * An in-app route (`?session=…`), a fragment (`#…`) or a relative path never
+ * matches; `data-allow-navigation` opts a single anchor out.
+ */
+export function externalLinkHref(
+  href: string | null | undefined,
+  allowNavigation = false,
+): string | null {
+  if (allowNavigation) return null;
+  const trimmed = (href ?? "").trim();
+  return EXTERNAL_LINK_SCHEMES.test(trimmed) ? trimmed : null;
+}
+
+/**
+ * Document-level backstop, installed once by `AppShell`: an external anchor no
+ * component intercepted still opens in the system browser instead of letting
+ * the WebView navigate — which replaces the whole app UI with that page and
+ * leaves no way back (the window has no address bar or back button).
+ *
+ * Capture phase, so a handler that stops propagation cannot leak the click. It
+ * cancels the navigation synchronously, then opens the link in one microtask:
+ * React's `onClick` handlers run *after* a document capture listener, and by
+ * then they see `defaultPrevented` (see `handleExternalLinkClick`) and stay
+ * out of the way, so the link opens exactly once. Passive: it only reads the
+ * DOM and never renders.
+ */
+export function installExternalLinkGuard(doc: Document = document): () => void {
+  const handleClick = (event: MouseEvent) => {
+    if (!isTauriDesktop()) return;
+    if (event.button !== 0 || event.defaultPrevented) return;
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    const target = event.target;
+    const anchor = target instanceof Element ? target.closest("a[href]") : null;
+    if (!anchor) return;
+    const href = externalLinkHref(
+      anchor.getAttribute("href"),
+      anchor.hasAttribute("data-allow-navigation"),
+    );
+    if (!href) return;
+    event.preventDefault();
+    queueMicrotask(() => void openExternal(href));
+  };
+  doc.addEventListener("click", handleClick, true);
+  return () => doc.removeEventListener("click", handleClick, true);
+}
+
 /** Intercept primary clicks on external anchors so desktop uses the system browser. */
 export function handleExternalLinkClick(
   event: {

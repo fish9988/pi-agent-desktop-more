@@ -1435,6 +1435,8 @@ export const zhCNLocale: LocalePlugin = {
     "i18n.customEndpoint": "自定义端点格式",
     "i18n.noChanges": "没有更改",
     "i18n.branches": "分支",
+  "i18n.branchesHint": "同一段对话的不同版本（重新回答、编辑后重发、分叉）。点一行即可切到那个版本。",
+  "i18n.branchCurrent": "当前",
     "i18n.noActiveSession": "没有活动会话",
     "i18n.noBranches": "此会话没有分支",
     "i18n.branchesLockedWhileRunning": "会话运行中，暂时无法切换分支",

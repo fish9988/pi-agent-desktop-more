@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { McpServerInfo, McpSignInFlowInfo } from "@/lib/api-types";
 import { useI18n } from "@/hooks/useI18n";
 import { revealHiddenCharacters } from "@/lib/mcp-server-display";
+import { handleExternalLinkClick } from "@/lib/desktop-native";
 import { focusIfLost } from "@/lib/stacked-dialog";
 import { OAuthPastePanel } from "./OAuthPastePanel";
 import { ConfigButton, ConfigDetailGridRow } from "./SettingsUi";
@@ -247,7 +248,14 @@ function McpSignInAuthorize({
         hint={link ? (
           <>
             {t("mcp.signIn.authorize.link")}{" "}
-            <a href={link} target="_blank" rel="noopener noreferrer">{revealHiddenCharacters(link)}</a>
+            <a
+              href={link}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(event) => handleExternalLinkClick(event, link)}
+            >
+              {revealHiddenCharacters(link)}
+            </a>
           </>
         ) : (
           <>

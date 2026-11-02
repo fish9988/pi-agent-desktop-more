@@ -1435,6 +1435,8 @@ export const enLocale: LocalePlugin = {
     "i18n.customEndpoint": "Custom endpoint format",
     "i18n.noChanges": "No changes",
     "i18n.branches": "Branches",
+  "i18n.branchesHint": "Different versions of the same conversation (answered again, edited and resent, or forked). Click a row to switch to that version.",
+  "i18n.branchCurrent": "Current",
     "i18n.noActiveSession": "No active session",
     "i18n.noBranches": "This session has no branches",
     "i18n.branchesLockedWhileRunning": "Branches can't be switched while the session is running",

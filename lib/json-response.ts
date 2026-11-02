@@ -29,12 +29,11 @@ function appendVary(headers: Headers, value: string): void {
   }
 }
 
-export function jsonResponse(
+export function jsonResponseFromBody(
   request: Request,
-  data: unknown,
+  body: string,
   init: ResponseInit = {},
 ): Response {
-  const body = JSON.stringify(data);
   const isLargeEnough = Buffer.byteLength(body) >= MIN_GZIP_BYTES;
   const headers = new Headers(init.headers);
   headers.set("Content-Type", "application/json; charset=utf-8");
@@ -53,4 +52,12 @@ export function jsonResponse(
   }
 
   return new Response(body, { ...init, headers });
+}
+
+export function jsonResponse(
+  request: Request,
+  data: unknown,
+  init: ResponseInit = {},
+): Response {
+  return jsonResponseFromBody(request, JSON.stringify(data), init);
 }

@@ -3,8 +3,9 @@
 > 每次工作结束（或上下文快满、要换会话时）更新本文件。长期知识写在 [plus.md](plus.md)。
 > 新会话接手的顺序：`AGENTS.md` 开头的 Plus 部分 → `plus.md` → 本文件 → `git log --oneline -10` → `CHANGELOG-PLUS.md` 的最新条目。
 
-_最后更新：2026-10-27_
+_最后更新：2026-11-02_
 
+- **最新发布：v1.19.0**（2026-11-02）：① 会话读取不再阻塞事件循环：`lib/session-slim-load.ts` 分块 + 可让出的读取、`lib/session-reader.ts` 的 `openSessionManagerAsync`（同文件并发合并、失败回退同步）、`lib/session-context-cache.ts` 按文件指纹 + 窗口选项 LRU 缓存已序列化 body（24 条 / 16 MB），69.5 MiB / 4786 条会话实测事件循环最长阻塞 296–403 ms → 9–10 ms、首次打开 305–410 ms → 199–229 ms、重复 context 1–2 ms；② 切会话不再假空白：去掉恢复滚动位置时的 `visibility: hidden`（那条 locate 会翻页，白屏就是这么来的），空窗口/`hasMore` 不一致由 hook 的不变量与 `loadContext` 的守卫拦住，另有「自动重试一次 + 重新加载会话 + 状态诊断行」兜底；③ 外链不再顶掉应用：`lib/desktop-native.ts` 新增 `installExternalLinkGuard`（document capture + 微任务里才 `openExternal`，与 React 已处理的点击不重复打开），7 个组件里的裸 `target="_blank"` 收敛到 `handleExternalLinkClick`；④ 分支控件只在真的有「对话分叉」时出现（`hasNavigableBranches`：工具调用扇出和 custom 记录不算），面板锚到按钮本身、宽度上限 420px、加了说明文案和「当前」标签；⑤ 会话统计面板重做：`components/SessionStatsPanel.tsx` 从死代码变成真正渲染（AppShell 里 209 行内联 JSX 换成组件），`lib/metrics-format.ts` 统一 1.23M / <$0.01 / 34%，四头条数字 + 五段分区 + 按模型花费排序条形。上一版 v1.18.2（2026-11-02）：切换会话空白（快路径保留被清空的窗口并写进缓存）与「有加载提示但滚不动」。
 ## 当前状态
 
 - 上一版 v1.6.1：修复文件树下载按钮无反应、「在资源管理器中显示」打开错目录（正斜杠路径 + Rust 引号问题，改用 `raw_arg`）。v1.6.0 是上游周报 #1 的移植。

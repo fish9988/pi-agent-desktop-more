@@ -519,6 +519,16 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const setToolPresetState = opts.setToolPreset ?? setToolPreset;
   const existingSessionId = session?.id;
 
+  // An empty transcript can never offer to load older history: paging prepends,
+  // so the offer would stay dead forever. Keeping the two in sync here covers
+  // every writer (switch reset, load, page, error) instead of one call site.
+  useEffect(() => {
+    if (messages.length === 0 && hasEarlierMessages) {
+      setHasEarlierMessages(false);
+      setHistoryCursor(null);
+    }
+  }, [hasEarlierMessages, messages.length]);
+
   useLayoutEffect(() => {
     if (chatWorkspace) {
       setToolPresetState("none");
@@ -954,8 +964,15 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       // Keep the message-length layout effect from pulling the reader back to
       // the bottom before the browser delivers its pending scroll event.
       if (before) isNearBottomRef.current = false;
+      // A page can report "more history" and still hand back nothing the chat can
+      // render (a stale cursor, a window that is all metadata). Claiming more then
+      // leaves a transcript that is empty *and* offers to load earlier messages —
+      // a dead end, because paging prepends to the same empty list.
+      const nextMessageCount = before
+        ? messagesRef.current.length + d.context.messages.length
+        : d.context.messages.length;
       setHistoryCursor(d.context.oldestEntryId);
-      setHasEarlierMessages(d.context.hasMore);
+      setHasEarlierMessages(nextMessageCount > 0 ? d.context.hasMore : false);
       setData((prev) => {
         if (!prev || prev.sessionId !== sid) return prev;
         const context = before ? {

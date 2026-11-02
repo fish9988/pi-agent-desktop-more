@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { formatFrontmatterValue, getFrontmatterTitle } from "@/lib/frontmatter";
+import { handleExternalLinkClick } from "@/lib/desktop-native";
 
 interface FrontmatterCardProps {
   data: Record<string, unknown> | null;
@@ -20,7 +21,12 @@ function renderValue(value: unknown): ReactNode {
     // Only safe schemes — values come from the user's own file but stay escaped
     // by React regardless; this just prevents javascript: hrefs.
     return (
-      <a href={value} target="_blank" rel="noopener noreferrer">
+      <a
+        href={value}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(event) => handleExternalLinkClick(event, value)}
+      >
         {text}
       </a>
     );

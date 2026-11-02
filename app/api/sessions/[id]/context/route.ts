@@ -1,6 +1,17 @@
 import { NextResponse } from "next/server";
-import { resolveSessionPath, openSessionManager, buildSessionContext } from "@/lib/session-reader";
+import {
+  resolveSessionPath,
+  openSessionManagerAsync,
+  buildSessionContext,
+  getSessionFileFingerprint,
+} from "@/lib/session-reader";
 import { getRpcSession } from "@/lib/rpc-manager";
+import { jsonResponseFromBody } from "@/lib/json-response";
+import {
+  cacheSessionContextBody,
+  getCachedSessionContextBody,
+  sessionContextCacheKey,
+} from "@/lib/session-context-cache";
 
 export async function GET(
   req: Request,
@@ -24,12 +35,34 @@ export async function GET(
   try {
     const rpc = getRpcSession(id);
     const liveRpc = rpc?.isAlive() ? rpc : undefined;
+    // Only disk reads use the payload cache: a live runtime can append between
+    // two requests without the on-disk fingerprint changing yet.
     const filePath = liveRpc ? null : await resolveSessionPath(id);
     if (!liveRpc && !filePath) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
 
-    const sm = liveRpc?.inner.sessionManager ?? openSessionManager(filePath!);
+    const fileFingerprint = filePath ? getSessionFileFingerprint(filePath)?.fingerprint : null;
+    const cacheKey = filePath
+      ? sessionContextCacheKey({
+          filePath,
+          fingerprint: fileFingerprint,
+          sessionId: id,
+          leafId,
+          before,
+          tail,
+          deferThinking,
+          deferToolResultImages,
+          excludeLeaf: Boolean(before),
+          wholeTurns,
+        })
+      : null;
+    const cachedBody = getCachedSessionContextBody(cacheKey);
+    if (cachedBody !== null) {
+      return jsonResponseFromBody(req, cachedBody);
+    }
+
+    const sm = liveRpc?.inner.sessionManager ?? await openSessionManagerAsync(filePath!);
     // `before` is the oldest entry already on the client; fetch its ancestors
     // only (excludeLeaf) so prepending the page does not duplicate `before`.
     const context = buildSessionContext(sm.getEntries() as never, before ?? leafId, {
@@ -41,7 +74,11 @@ export async function GET(
       sessionId: id,
     });
 
-    return NextResponse.json({ context, tail, before: before ?? null });
+    // Cache the exact serialized response so repeat loads skip both the window
+    // rebuild and JSON.stringify, not just the JSONL parse.
+    const body = JSON.stringify({ context, tail, before: before ?? null });
+    cacheSessionContextBody(cacheKey, body);
+    return jsonResponseFromBody(req, body);
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }

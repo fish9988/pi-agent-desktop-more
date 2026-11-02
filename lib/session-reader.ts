@@ -3,7 +3,7 @@ import {
   getAgentDir,
 } from "@earendil-works/pi-coding-agent";
 import { closeSync, type Dirent, fstatSync, openSync, readSync, statSync } from "fs";
-import { readdir } from "fs/promises";
+import { readdir, stat as statAsync } from "fs/promises";
 import { isAbsolute, join, normalize as normalizePath, relative, resolve as resolvePath, sep } from "path";
 import type { AgentMessage, ImageContent, SessionEntry, SessionHeader, SessionInfo, SessionContext } from "./types";
 import { normalizeToolCalls } from "./normalize";
@@ -12,7 +12,7 @@ import { projectIdentityKey } from "./project-identity";
 import { sessionPathKey } from "./session-path";
 import { MAX_TOOL_RESULT_IMAGE_BYTES, TOOL_RESULT_IMAGE_MIMES } from "./tool-result-images";
 import { projectToolResultDetails, slimToolResultMessage } from "./tool-result-details";
-import { openSlimSessionManager } from "./session-slim-load";
+import { openSlimSessionManager, openSlimSessionManagerAsync } from "./session-slim-load";
 import { resolveProject, type ProjectInfo } from "./worktree";
 import { readSubagentRun, SUBAGENT_META_TYPE } from "./subagents";
 import { listSessionsIncremental, type ScannedSessionInfo } from "./session-list-scanner";
@@ -511,6 +511,7 @@ interface SmCacheEntry {
 
 declare global {
   var __piSmCache: Map<string, SmCacheEntry> | undefined;
+  var __piSmPendingOpens: Map<string, Promise<SessionManager>> | undefined;
 }
 
 /**
@@ -529,6 +530,16 @@ export const SM_CACHE_LIMITS = {
 function getSmCache(): Map<string, SmCacheEntry> {
   if (!globalThis.__piSmCache) globalThis.__piSmCache = new Map();
   return globalThis.__piSmCache;
+}
+
+function getSmPendingOpens(): Map<string, Promise<SessionManager>> {
+  if (!globalThis.__piSmPendingOpens) globalThis.__piSmPendingOpens = new Map();
+  return globalThis.__piSmPendingOpens;
+}
+
+/** Disk fingerprint used by both the manager cache and the context payload cache. */
+export function getSessionFileFingerprint(filePath: string): { fingerprint: string; bytes: number } | null {
+  return sessionFileStats(filePath);
 }
 
 function sessionFileStats(filePath: string): { fingerprint: string; bytes: number } | null {
@@ -583,10 +594,57 @@ function estimateRetainedBytes(sm: SessionManager, fileBytes: number): number {
   }
 }
 
+function yieldToEventLoop(): Promise<void> {
+  return new Promise<void>((resolveImmediate) => setImmediate(resolveImmediate));
+}
+
+/** Cooperative versions used by the async read path: same result, yielded often. */
+async function slimCachedEntriesAsync(sm: SessionManager): Promise<boolean> {
+  let slimmed = false;
+  let lastYield = Date.now();
+  for (const entry of sm.getEntries()) {
+    if (entry.type === "message") {
+      const message = entry.message as unknown as { role?: unknown; details?: unknown };
+      if (message.role === "toolResult" && message.details !== undefined) {
+        const projected = projectToolResultDetails(message.details);
+        if (projected !== message.details) {
+          if (projected === undefined) delete message.details;
+          else message.details = projected;
+          slimmed = true;
+        }
+      }
+    }
+    if (Date.now() - lastYield >= 1) {
+      await yieldToEventLoop();
+      lastYield = Date.now();
+    }
+  }
+  return slimmed;
+}
+
+async function estimateRetainedBytesAsync(sm: SessionManager, fileBytes: number): Promise<number> {
+  try {
+    let bytes = 0;
+    let lastYield = Date.now();
+    for (const entry of sm.getEntries()) {
+      bytes += JSON.stringify(entry).length;
+      if (bytes >= fileBytes) return fileBytes;
+      if (Date.now() - lastYield >= 1) {
+        await yieldToEventLoop();
+        lastYield = Date.now();
+      }
+    }
+    return Math.min(bytes, fileBytes);
+  } catch {
+    return fileBytes;
+  }
+}
+
 export function invalidateSessionManagerCache(filePath?: string): void {
   const cache = getSmCache();
   if (filePath === undefined) {
     cache.clear();
+    getSmPendingOpens().clear();
     return;
   }
   cache.delete(sessionPathKey(filePath));
@@ -634,6 +692,89 @@ export function openSessionManager(
   cache.set(pathKey, { sm, fingerprint: stats.fingerprint, bytes });
   evictSmCache(cache);
   return sm;
+}
+
+/**
+ * Cooperative version of openSessionManager for read-only API routes. It
+ * shares __piSmCache (and its byte budget) with the synchronous opener, so a
+ * detail load, a paginated context load and a later tool-result image read all
+ * reuse one parsed entry set instead of re-reading the JSONL.
+ *
+ * Concurrent first opens of the same file+fingerprint share one parse. On any
+ * failure it falls back to the synchronous path, so a reader bug degrades to
+ * the previous latency instead of a 500.
+ */
+export async function openSessionManagerAsync(
+  filePath: string,
+  options: { mutable?: boolean } = {},
+): Promise<SessionManager> {
+  if (options.mutable) return SessionManager.open(filePath, undefined);
+
+  const cache = getSmCache();
+  const pathKey = sessionPathKey(filePath);
+  let stats: { fingerprint: string; bytes: number } | null = null;
+  try {
+    const fileStats = await statAsync(filePath);
+    stats = { fingerprint: `${fileStats.size}:${fileStats.mtimeMs}`, bytes: fileStats.size };
+  } catch {
+    stats = null;
+  }
+  if (stats === null) {
+    cache.delete(pathKey);
+    return SessionManager.open(filePath, undefined);
+  }
+
+  const cached = cache.get(pathKey);
+  if (cached && cached.fingerprint === stats.fingerprint) {
+    // LRU touch.
+    cache.delete(pathKey);
+    cache.set(pathKey, cached);
+    return cached.sm as SessionManager;
+  }
+
+  const pendingKey = `${pathKey}|${stats.fingerprint}`;
+  const pendingOpens = getSmPendingOpens();
+  const pending = pendingOpens.get(pendingKey);
+  if (pending) return pending;
+
+  const openPromise = (async () => {
+    try {
+      const sm = await openSlimSessionManagerAsync(filePath, { minFileBytes: 0 })
+        ?? SessionManager.open(filePath, undefined);
+      const slimmed = await slimCachedEntriesAsync(sm);
+      // Below the per-file cap the on-disk size is already a conservative proxy:
+      // skip a second full serialization pass (measured ~125 ms on a 69 MiB
+      // session with many large but kept tool-result details). Only a slimmed
+      // oversize file needs the exact retained-size estimate to become cacheable.
+      const bytes = slimmed && stats.bytes > SM_CACHE_LIMITS.maxFileBytes
+        ? await estimateRetainedBytesAsync(sm, stats.bytes)
+        : stats.bytes;
+      const current = cache.get(pathKey);
+      if (bytes > SM_CACHE_LIMITS.maxFileBytes) {
+        // Too large to hold: only drop an entry for this same fingerprint; a newer
+        // generation (another append) must not be evicted by this older read.
+        if (current?.fingerprint === stats.fingerprint) cache.delete(pathKey);
+        return sm;
+      }
+      // Do not let a slower older read overwrite a newer fingerprint's entries.
+      if (!current || current.fingerprint === stats.fingerprint) {
+        cache.set(pathKey, { sm, fingerprint: stats.fingerprint, bytes });
+        evictSmCache(cache);
+      }
+      return sm;
+    } catch {
+      // A cooperative-reader or cache failure must not turn a session read into
+      // a 500: fall back to the original synchronous open path for this request.
+      return openSlimSessionManager(filePath) ?? SessionManager.open(filePath, undefined);
+    }
+  })();
+
+  pendingOpens.set(pendingKey, openPromise);
+  try {
+    return await openPromise;
+  } finally {
+    if (pendingOpens.get(pendingKey) === openPromise) pendingOpens.delete(pendingKey);
+  }
 }
 
 export async function resolveSessionPath(sessionId: string): Promise<string | null> {
@@ -712,6 +853,12 @@ export function readSessionHeader(filePath: string): SessionHeader | null {
 
 export function getSessionEntries(filePath: string): SessionEntry[] {
   const entries = openSessionManager(filePath).getEntries();
+  return entries as unknown as SessionEntry[];
+}
+
+/** Cooperative entry read for request paths that may be the first disk access. */
+export async function getSessionEntriesAsync(filePath: string): Promise<SessionEntry[]> {
+  const entries = (await openSessionManagerAsync(filePath)).getEntries();
   return entries as unknown as SessionEntry[];
 }
 

@@ -6,7 +6,7 @@ import {
   listAllSessions,
   listSessionSummaries,
   mergeSessionLists,
-  openSessionManager,
+  openSessionManagerAsync,
 } from "@/lib/session-reader";
 import {
   getCompletionNotificationSuppressedRpcSessionIds,
@@ -49,7 +49,8 @@ export async function GET(req: Request) {
         .slice(0, 2);
       setTimeout(() => {
         for (const s of topWarmTargets) {
-          try { openSessionManager(s.path); } catch { /* ignore */ }
+          // Cooperative: warming two large sessions must not block the event loop.
+          void openSessionManagerAsync(s.path).catch(() => undefined);
         }
       }, 120).unref?.();
     }

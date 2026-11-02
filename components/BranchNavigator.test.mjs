@@ -6,7 +6,7 @@ const jiti = createJiti(import.meta.url, {
   jsx: { runtime: "automatic" },
   tsconfigPaths: true,
 });
-const { BranchNavigator, buildActivePath, compressChain, hasSessionBranches, selectTopLevelBranches } = await jiti.import("./BranchNavigator.tsx");
+const { BranchNavigator, buildActivePath, compressChain, hasSessionBranches, hasNavigableBranches, selectTopLevelBranches } = await jiti.import("./BranchNavigator.tsx");
 const React = await jiti.import("react");
 const { renderToStaticMarkup } = await jiti.import("react-dom/server");
 const { I18nProvider } = await jiti.import("@/hooks/useI18n");
@@ -208,4 +208,32 @@ test("a locked navigator keeps the tree readable but offers no branch to switch 
   // Only the panel header stays clickable; branch rows are not.
   assert.equal((locked.match(/cursor:pointer/g) ?? []).length, 1);
   assert.equal((locked.match(/cursor:default/g) ?? []).length, 2);
+});
+
+// A branch control the reader cannot use is noise in the top bar: it used to be
+// shown for every desktop session, and opening it could produce an empty panel.
+test("only a conversation split counts as a branch", () => {
+  const toolCall = (id) => ({ type: "message", id, parentId: null, timestamp: "t", message: { role: "toolResult", content: "x" } });
+  const split = [node(msg("u1", "user", "问题"), [node(msg("a1", "assistant", "回答一")), node(msg("a2", "assistant", "回答二"))])];
+  assert.equal(hasSessionBranches(split), true);
+  assert.equal(hasNavigableBranches(split), true);
+  assert.equal(selectTopLevelBranches(split).length, 2);
+});
+
+test("tool-call fan-out and internal records are not branches", () => {
+  const toolCall = (id) => ({ type: "message", id, parentId: null, timestamp: "t", message: { role: "toolResult", content: "x" } });
+  const fanOut = [node(msg("u1", "user", "问题"), [node(msg("a1", "assistant", "回答"), [node(toolCall("t1")), node(toolCall("t2"))])])];
+  assert.equal(hasSessionBranches(fanOut), false, "one answer with two tool calls is not a branch");
+  assert.equal(hasNavigableBranches(fanOut), false);
+  const records = [node(info("s1"), [node(model("m1")), node(model("m2"))])];
+  assert.equal(hasSessionBranches(records), false, "internal records are not branches");
+  assert.equal(hasNavigableBranches(records), false);
+});
+
+test("a deep split still counts, but only when the panel can list it", () => {
+  const deep = [node(msg("u1", "user", "q"), [node(msg("a1", "assistant", "a"), [node(msg("u2", "user", "q2"), [node(msg("a2", "assistant", "b1")), node(msg("a3", "assistant", "b2"))])])])];
+  assert.equal(hasSessionBranches(deep), true);
+  // selectTopLevelBranches walks the compressed chain to the first real split.
+  assert.equal(selectTopLevelBranches(deep).length, 2);
+  assert.equal(hasNavigableBranches(deep), true);
 });

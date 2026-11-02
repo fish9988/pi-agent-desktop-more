@@ -6,6 +6,7 @@ import {
   listAllSessions,
   mergeSessionLists,
   openSessionManager,
+  openSessionManagerAsync,
   resolveSessionPath,
   resolveSessionIdByPath,
   invalidateSessionPathCache,
@@ -55,7 +56,7 @@ export async function GET(
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
 
-    const sm = liveRpc?.inner.sessionManager ?? openSessionManager(resolvedPath!);
+    const sm = liveRpc?.inner.sessionManager ?? await openSessionManagerAsync(resolvedPath!);
     perf?.span("open");
     const filePath = liveRpc?.sessionFile || sm.getSessionFile() || resolvedPath || "";
     const entries = sm.getEntries();

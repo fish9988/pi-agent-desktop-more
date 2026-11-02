@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback, useId, useRef } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import type { ModelCatalogPreset, ModelCatalogRecommendation } from "@/lib/model-catalog";
 import type { DiscoveredModel } from "@/lib/model-discovery";
+import { handleExternalLinkClick, openExternal } from "@/lib/desktop-native";
 import {
   getLastSettingsSelection,
   setLastSettingsSelection,
@@ -1193,6 +1194,7 @@ function ModelDetail({
             href="https://github.com/anomalyco/models.dev"
             target="_blank"
             rel="noreferrer"
+            onClick={(event) => handleExternalLinkClick(event, "https://github.com/anomalyco/models.dev")}
             style={{ marginLeft: "auto", color: "var(--text-dim)", fontSize: 10, textDecoration: "none" }}
           >
             {t("models.catalogSource")}
@@ -1457,7 +1459,8 @@ function OAuthDetail({ provider, onRefresh, enabledModels }: {
       };
       if (data.type === "auth") {
         setLoginState({ phase: "auth", url: data.url!, instructions: data.instructions ?? null, token: data.token! });
-        window.open(data.url!, "_blank", "noopener,noreferrer");
+        // External link: the system browser, never the app's own WebView.
+        void openExternal(data.url!);
       } else if (data.type === "device_code") {
         setLoginState({
           phase: "device_code",
@@ -1466,7 +1469,7 @@ function OAuthDetail({ provider, onRefresh, enabledModels }: {
           intervalSeconds: data.intervalSeconds ?? null,
           expiresInSeconds: data.expiresInSeconds ?? null,
         });
-        window.open(data.verificationUri!, "_blank", "noopener,noreferrer");
+        void openExternal(data.verificationUri!);
       } else if (data.type === "prompt_request") {
         setLoginState({ phase: "prompt", message: data.message!, placeholder: data.placeholder ?? null, token: data.token! });
       } else if (data.type === "select_request") {
@@ -1620,7 +1623,12 @@ function OAuthDetail({ provider, onRefresh, enabledModels }: {
             hint={loginState.phase === "auth" ? (
               <>
                 If the browser window did not open,{" "}
-                <a href={loginState.url} target="_blank" rel="noopener noreferrer">
+                <a
+                  href={loginState.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(event) => handleExternalLinkClick(event, loginState.url)}
+                >
                   click here to open the login page
                 </a>
                 .
@@ -1643,7 +1651,13 @@ function OAuthDetail({ provider, onRefresh, enabledModels }: {
               {loginState.userCode}
             </div>
             <p style={{ margin: 0, fontSize: 12, color: "var(--text-dim)", lineHeight: 1.5 }}>
-              <a href={loginState.verificationUri} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", wordBreak: "break-all" }}>
+              <a
+                href={loginState.verificationUri}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(event) => handleExternalLinkClick(event, loginState.verificationUri)}
+                style={{ color: "var(--accent)", wordBreak: "break-all" }}
+              >
                 {loginState.verificationUri}
               </a>
               {loginState.expiresInSeconds ? ` Expires in ${Math.ceil(loginState.expiresInSeconds / 60)} minutes.` : ""}

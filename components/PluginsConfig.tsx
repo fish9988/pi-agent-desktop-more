@@ -11,6 +11,7 @@ import type {
   ProjectTrustStatus,
 } from "@/lib/api-types";
 import { useI18n } from "@/hooks/useI18n";
+import { handleExternalLinkClick } from "@/lib/desktop-native";
 import { shortenPath } from "@/lib/display-path";
 import {
   getLastSettingsSelection,
@@ -727,7 +728,14 @@ function DiscoverPanel({
         <span>{query.trim()
           ? t("plus.plugins.catalogSearchSummary", { total: state.total.toLocaleString(), shown: state.packages.length })
           : t("plus.plugins.catalogSummary", { total: state.total.toLocaleString(), shown: state.packages.length })}</span>
-        <a href="https://pi.dev/packages" target="_blank" rel="noreferrer">pi.dev/packages ↗</a>
+        <a
+          href="https://pi.dev/packages"
+          target="_blank"
+          rel="noreferrer"
+          onClick={(event) => handleExternalLinkClick(event, "https://pi.dev/packages")}
+        >
+          pi.dev/packages ↗
+        </a>
       </div>
       {state.packages.length === 0 ? (
         <ConfigEmptyState>{t("plus.plugins.catalogEmpty")}</ConfigEmptyState>
@@ -757,7 +765,13 @@ function DiscoverPanel({
                   {confirming === entry.name && !installed ? (
                     <span className="plus-plugin-card-confirm">{t("plus.plugins.installConfirm")}</span>
                   ) : (
-                    <a className="plus-plugin-card-link" href={entry.repoUrl || entry.npmUrl} target="_blank" rel="noreferrer">
+                    <a
+                      className="plus-plugin-card-link"
+                      href={entry.repoUrl || entry.npmUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(event) => handleExternalLinkClick(event, entry.repoUrl || entry.npmUrl)}
+                    >
                       {entry.repoUrl ? t("plus.plugins.repo") : "npm"} ↗
                     </a>
                   )}

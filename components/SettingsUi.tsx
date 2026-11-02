@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useId, useRef } from "react";
 import type { ButtonHTMLAttributes, ClipboardEvent, CSSProperties, HTMLAttributes, ReactNode, Ref } from "react";
+import { handleExternalLinkClick } from "@/lib/desktop-native";
 
 type ConfigButtonVariant = "primary" | "secondary" | "danger" | "ghost";
 type ConfigButtonSize = "small" | "default";
@@ -445,7 +446,14 @@ export function ConfigAddSourceHeading({
         <ConfigDetailTitle>{title}</ConfigDetailTitle>
         <span className="config-add-source-catalogs">
           {catalogs.map((catalog) => (
-            <a key={catalog.href} href={catalog.href} target="_blank" rel="noopener noreferrer" className="config-add-source-catalog">
+            <a
+              key={catalog.href}
+              href={catalog.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="config-add-source-catalog"
+              onClick={(event) => handleExternalLinkClick(event, catalog.href)}
+            >
               {catalog.icon}
               {catalog.label}
             </a>

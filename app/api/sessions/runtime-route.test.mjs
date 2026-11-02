@@ -166,9 +166,9 @@ test("session reads use the live SessionManager before requiring a JSONL path", 
     const pathLookup = source.indexOf("resolveSessionPath(id)");
     assert.ok(liveLookup >= 0);
     assert.ok(pathLookup > liveLookup);
-    // openSessionManager is the cached read-only opener; the live wrapper's
-    // manager must still win over any disk read, cached or not.
-    assert.match(source, /liveRpc\?\.inner\.sessionManager \?\? openSessionManager\(/);
+    // openSessionManagerAsync is the cached, cooperative read-only opener; the
+    // live wrapper's manager must still win over any disk read, cached or not.
+    assert.match(source, /liveRpc\?\.inner\.sessionManager \?\? (?:await )?openSessionManager(?:Async)?\(/);
   }
 });
 

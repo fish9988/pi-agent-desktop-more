@@ -57,6 +57,27 @@ function isMessageEntry(entry: SessionEntry): boolean {
   return entry.type === "message" && "message" in entry && entry.message.role !== "system";
 }
 
+// Only a user/assistant exchange is something a reader can tell apart. Tool
+// results fan out too (one assistant message, several tool calls), and treating
+// that as "branches" is what made the control show up in almost every session
+// with rows like `custom`.
+function isConversationEntry(entry: SessionEntry): boolean {
+  if (entry.type !== "message" || !("message" in entry)) return false;
+  const role = (entry.message as { role?: string }).role;
+  return role === "user" || role === "assistant";
+}
+
+/** Does this branch (down its single-child chain) hold a real message? */
+export function chainHasConversation(node: SessionTreeNode): boolean {
+  const stack: SessionTreeNode[] = [node];
+  while (stack.length > 0) {
+    const current = stack.pop()!;
+    if (isConversationEntry(current.entry)) return true;
+    if (current.children.length === 1) stack.push(current.children[0]);
+  }
+  return false;
+}
+
 // Compress a visible linear chain into the first branching/leaf node.
 // Server-side compressed IDs also count as skipped nodes.
 // branchPreview is the bounded preview of the first message on the source
@@ -110,15 +131,26 @@ function getLabel(entry: SessionEntry): string {
   return entry.type;
 }
 
-// Does the tree have any branching at all? Iterative: a linear chain has no
-// branching but recursing over it would overflow the stack, so walk with a stack.
+// Is there a branch the reader can actually switch to? `hasSessionBranches`
+// answers "does the tree split"; this also requires the panel to have rows to
+// show (a split the viewer cannot pick from is a dead control).
+export function hasNavigableBranches(tree: SessionTreeNode[]): boolean {
+  return hasSessionBranches(tree) && selectTopLevelBranches(tree).length > 0;
+}
+
+// Does the tree hold two branches a reader could tell apart? A split that only
+// separates tool calls or internal records is not a branch the reader asked for.
 export function hasSessionBranches(nodes: SessionTreeNode[]): boolean {
   // Sessions branched from the very first message have multiple root nodes.
-  if (nodes.length > 1) return true;
+  if (nodes.length > 1) return nodes.filter(chainHasConversation).length > 1;
   const stack: SessionTreeNode[] = [...nodes];
   while (stack.length > 0) {
     const node = stack.pop()!;
-    if (node.children.length > 1) return true;
+    if (node.children.length > 1) {
+      let conversations = 0;
+      for (const child of node.children) if (chainHasConversation(child)) conversations += 1;
+      if (conversations > 1) return true;
+    }
     for (const child of node.children) stack.push(child);
   }
   return false;
@@ -279,6 +311,11 @@ function TreeNodeView({ node, activePathIds, depth, isLast, parentLines, onSelec
           </span>
         )}
 
+        {/* Current-branch badge */}
+        {isActive && (
+          <span className="branch-current-badge">{t("i18n.branchCurrent")}</span>
+        )}
+
         {/* Label */}
         <span style={{
           fontSize: 12,
@@ -342,12 +379,14 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
     const anchor = containerRef?.current ?? btnRef.current;
     if (!anchor) return;
     const update = () => {
-      const rect = anchor.getBoundingClientRect();
+      const rect = (hideInlineButton ? anchor : btnRef.current)?.getBoundingClientRect() ?? anchor.getBoundingClientRect();
+      // Anchored to the control itself: anchoring to the top bar made the panel
+      // as wide as the window, which read as a full-page overlay.
+      const width = Math.min(420, Math.max(280, window.innerWidth - reserveRight - 24));
       setDropdownPos({
         top: rect.bottom,
-        // The anchor rect already starts at the sidebar's right edge.
-        left: rect.left,
-        width: Math.max(0, rect.width - reserveRight),
+        left: Math.max(12, Math.min(rect.left, window.innerWidth - width - 12)),
+        width,
       });
     };
     update();
@@ -390,6 +429,9 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
 
   const topLevel = selectTopLevelBranches(tree);
   const hasContent = !noBranchReason && topLevel.length > 0;
+  // A split the panel cannot list still has to say something: otherwise opening
+  // the control showed an empty box.
+  const emptyReason = noBranchReason ?? t("i18n.noBranches");
 
   const branchIcon = (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: hasContent ? "var(--accent)" : "var(--text-dim)", flexShrink: 0 }}>
@@ -465,7 +507,7 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
               </div>
             ) : (
               <div style={{ padding: "10px 16px", fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" }}>
-                {noBranchReason}
+                {emptyReason}
               </div>
             )}
           </div>
@@ -511,7 +553,8 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
           zIndex: 100,
         }}>
           {hasContent ? (
-            <div style={{ padding: "4px 12px 8px 12px", maxHeight: 260, overflowY: "auto" }}>
+            <div className="branch-menu-body">
+              <div className="branch-menu-hint">{t("i18n.branchesHint")}</div>
               {lockedNotice}
               {topLevel.map((child, idx) => (
                 <TreeNodeView

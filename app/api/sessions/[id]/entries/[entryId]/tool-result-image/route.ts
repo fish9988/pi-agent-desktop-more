@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSessionEntries, resolveSessionPath } from "@/lib/session-reader";
+import { getSessionEntriesAsync, resolveSessionPath } from "@/lib/session-reader";
 import { MAX_TOOL_RESULT_IMAGE_BYTES, TOOL_RESULT_IMAGE_MIMES } from "@/lib/tool-result-images";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -56,7 +56,7 @@ export async function GET(
     const filePath = await resolveSessionPath(id);
     if (!filePath) return NextResponse.json({ error: "Session not found" }, { status: 404 });
 
-    const entry = getSessionEntries(filePath).find((candidate) => candidate.id === entryId);
+    const entry = (await getSessionEntriesAsync(filePath)).find((candidate) => candidate.id === entryId);
     if (!entry || entry.type !== "message" || entry.message.role !== "toolResult") {
       return NextResponse.json({ error: "Tool result not found" }, { status: 404 });
     }

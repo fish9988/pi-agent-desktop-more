@@ -3,6 +3,71 @@
 Pi Agent Plus 是 [abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop) 的个人二次开发版（仅 Windows），
 与官方版可同时安装、互不覆盖。版本规则见 [VERSIONING-PLUS.md](./VERSIONING-PLUS.md)。
 
+## [1.19.0] - 2026-11-02
+
+一个大版本：**会话读取不再阻塞事件循环**、**切会话不再白屏**、**外链不再顶掉应用**，以及三处界面改造（分支控件、会话统计、会话恢复）。
+
+### 1. 数据通路：读取会话不再卡住整个服务
+
+之前打开一个 69 MB / 4786 条的会话，服务端会同步读文件 + 逐行 `JSON.parse`，300–400 ms 内事件循环完全阻塞——SSE、状态查询、其他会话的请求全部排队，这就是“UI 偶发卡死”。
+
+- `lib/session-slim-load.ts`：1 MB 分块读、按 Buffer 拼行，约每 1 ms `setImmediate` 让出一次；新增 `openSlimSessionManagerAsync()`。
+- `lib/session-reader.ts`：新增 `openSessionManagerAsync()`，与同步版共用同一份 `__piSmCache`；同一文件并发的首次打开会合并成一次解析；任何异常回退同步路径。
+- `app/api/sessions/**`（详情 / 分页 / 参考 / 图片 / thinking）与列表预热全部改用异步打开。
+- `lib/session-context-cache.ts`（新）：按 `文件路径 + size:mtime + leafId + before + tail/…` 缓存**已序列化好的** context 响应体（LRU 24 条 / 16 MB，单条 4 MB 封顶），`lib/json-response.ts` 命中时直接复用 body，不再重复 `JSON.stringify`。
+
+实测（69.5 MiB / 4786 条）：
+
+| 指标 | 之前 | 之后 |
+| --- | --- | --- |
+| 事件循环最长连续阻塞 | 296–403 ms | **9–10 ms** |
+| 首次打开（解析） | 305–410 ms | 199–229 ms |
+| 已缓存 manager 打开 | — | 0.3–0.5 ms |
+| 同一窗口重复 `/context` | 每次重新序列化 | **1–2 ms**（命中） |
+| 上一页 | 重新解析 | 6 ms |
+
+### 2. 切换会话后的空白
+
+上一版修的是“被污染的视图快照”，这次找到另一个真正让人看到白屏的机制：
+
+**恢复滚动位置时，整个消息区被设成 `visibility: hidden`**，等“定位到上次看到的那条消息”完成才显示；而定位本身会向服务端翻页（最多 2 页）。所以每次切到一个有滚动记录的会话，就可能先白 1–3 秒。现在不再隐藏，直接用（一次滚动跳动比白屏代价小），定位过程保留 2.5 秒上限。
+
+配套的不变量：
+
+- `loadContext` 不再允许出现“消息为空但声称还有更早历史”（那会把提示行变成死路）；
+- hook 里加了一条不变量：`messages` 为空时强制 `hasEarlierMessages = false`、游标清空；
+- 真会话读不到任何消息时，**自动重试一次**并显示「没有读取到会话内容 / 重新加载会话」，下面一行是当时的内部状态（session / entries / hasMore / cursor / loading），以后再出问题可以直接看出是哪一种。
+
+### 3. 点一下变成一整页网页
+
+在 Tauri/WebView2 里，没被拦截的 `<a target="_blank">` 会让内嵌 webview 直接导航，把整个应用顶掉。
+
+- `lib/desktop-native.ts` 新增 `installExternalLinkGuard()`：document capture 阶段拦住 `http(s)`/`mailto:`，**同步** `preventDefault()`（导航一定被取消），真正打开放到微任务里（此时 React 的 `onClick` 已跑完，已处理的链接不会再打开一次）。`AppShell` 只装一次。
+- 7 处裸链收敛到 `handleExternalLinkClick`：Plugins / Skills / Models（OAuth 链接与 `window.open`）/ SettingsUi 的来源目录 / MCP 登录页 / frontmatter 链接 / **FileViewer 里 markdown 预览的外部链接**（之前也会顶掉 UI）。
+
+### 4. 分支控件：只在真的有分支时出现，且看得懂
+
+原来的问题：桌面端顶栏**无条件**渲染分支控件，点开是一个和窗口一样宽的面板，里面列的是树节点的原始 entry，标签是 `+423 继续`、`custom` 这种——工具调用的扇出（一次回答派多个工具）也被当成“分支”。
+
+- `hasNavigableBranches()`：只有“同一个位置下有两个以上**对话消息**分支”才算分支，工具调用扇出、custom 记录不算；面板列不出东西时控件直接不显示；
+- 面板锚到按钮本身（不再跟顶栏一样宽），宽度上限 420px；
+- 顶部加一行说明：同一段对话的不同版本（重新回答 / 编辑后重发 / 分叉），点一行切换；
+- 当前分支加「当前」标签；空状态一定有文字（之前会出现一个空白面板）。
+
+### 5. 会话统计面板重做
+
+`components/SessionStatsPanel.tsx` 之前是**死代码**——真正渲染的是 `AppShell.tsx` 里 209 行内联 JSX。现在：
+
+- 内联 JSX 换成 `<SessionStatsPanel />`，死代码里的重复实现删掉；
+- 新 `lib/metrics-format.ts`：`1,234,567 → 1.23M`、`0.0099 → <$0.01`、`34.25%`、`2h 14m`，**精确值全部保留在 `title`**；
+- 层级：四个头条数字（总 token / 总费用 / 活跃时长 / 消息）→ `Token 与费用` → `按模型的花费`（按费用降序 + 归一化细条 + 零费用折叠）→ `消息` → `缓存` → `会话与文件`；
+- 路径前面省略（保留文件名）、ID 尾部省略、复制按钮保留；
+- `waiting for first request` 这类内部字符串不再出现，换成人话（未启用 / 正在预热 / 运行期间已预热）。
+
+### 验证
+
+368 项相关测试通过；生产构建后在真实数据上扫描 18 个会话切换（0 空白）+ 向上滚动翻页（75 → 144 条）+ 统计面板 1440/900 宽均无横向溢出。新增测试：`lib/session-context-cache.test.mjs`、`app/api/sessions/context-route-cache.test.mjs`、`components/SessionStatsPanel.test.mjs`、`components/external-link-guard.test.mjs`、`hooks/useAgentSession.blank-view.test.mjs`，以及 `BranchNavigator.test.mjs` 里三条分支判定用例。
+
 ## [1.18.2] - 2026-11-02
 
 修两个问题：**切换会话后偶发空白**（只剩一行「向上滚动以加载更早的消息」），以及**有那一行时滚不动**。

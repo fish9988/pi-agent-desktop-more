@@ -1454,7 +1454,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
           className="chat-scroll-container scrollbar-subtle min-w-0 flex-1 overflow-x-hidden overflow-y-scroll pt-4"
           style={{
             paddingLeft: scrollbarGutter > 0 ? scrollbarGutter : undefined,
-            visibility: pendingScrollRestore && !loading ? "hidden" : undefined,
+            visibility: pendingScrollRestore && !loading ? "hidden" : undefined, // TEMP A/B
           }}
         >
           <div style={{ minWidth: 0, padding: `0 ${CHAT_COLUMN_PADDING}px` }}>

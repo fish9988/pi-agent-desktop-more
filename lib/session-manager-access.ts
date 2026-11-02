@@ -1,5 +1,6 @@
 import { existsSync } from "fs";
-import { SessionManager } from "@earendil-works/pi-coding-agent";
+import type { SessionManager } from "@earendil-works/pi-coding-agent";
+import { openSessionManagerAsync } from "./session-reader";
 import { getRpcSession } from "./rpc-manager";
 
 /**
@@ -11,11 +12,11 @@ import { getRpcSession } from "./rpc-manager";
  * an empty chat; the entries only exist in the live runtime's manager until
  * the flush happens. Returns null when neither source has the session.
  */
-export function openSessionManagerForRead(
+export async function openSessionManagerForRead(
   sessionId: string,
   filePath: string,
-): SessionManager | null {
-  if (existsSync(filePath)) return SessionManager.open(filePath);
+): Promise<SessionManager | null> {
+  if (existsSync(filePath)) return openSessionManagerAsync(filePath);
   const live = getRpcSession(sessionId);
   if (!live?.isAlive()) return null;
   return live.inner.sessionManager;

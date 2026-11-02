@@ -12,6 +12,7 @@ import type {
   ProjectTrustStatus,
 } from "@/lib/api-types";
 import { displayPathWithin, shortenPath } from "@/lib/display-path";
+import { handleExternalLinkClick } from "@/lib/desktop-native";
 import {
   getLastSettingsSelection,
   setLastSettingsSelection,
@@ -173,6 +174,7 @@ function SkillDetail({
             rel="noreferrer"
             title={skill.install.skillsShUrl}
             className="skill-source-link"
+            onClick={(event) => handleExternalLinkClick(event, skill.install?.skillsShUrl)}
           >
             <span className="skill-source-link-text">
               {skill.install.skillsShUrl.replace(/^https?:\/\//, "")} ↗
@@ -481,6 +483,7 @@ function AddSkillPanel({
                         href={r.url}
                         target="_blank"
                         rel="noreferrer"
+                        onClick={(event) => handleExternalLinkClick(event, r.url)}
                         style={{
                           fontSize: 12,
                           color: "var(--accent)",
