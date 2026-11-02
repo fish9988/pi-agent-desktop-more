@@ -18,6 +18,9 @@ const FORK_MESSAGE_PATCHES: Record<Locale, {
     "set": {
       "plus.compaction.expand": "Expand this summary",
       "plus.compaction.collapse": "Collapse this summary",
+      "chat.emptyTranscript": "This session came back empty",
+      "chat.emptyTranscriptHint": "The session file is still there — this read returned an empty window. Reload, or click the session in the sidebar again.",
+      "chat.reloadTranscript": "Reload session",
       "settings.completionSound": "Play a sound when a reply finishes",
       "settings.sectionPicker": "Settings section",
       "agentSwitcher.none": "No sub-agents in this session",
@@ -605,6 +608,9 @@ const FORK_MESSAGE_PATCHES: Record<Locale, {
     "set": {
       "plus.compaction.expand": "展开摘要",
       "plus.compaction.collapse": "收起摘要",
+      "chat.emptyTranscript": "没有读取到会话内容",
+      "chat.emptyTranscriptHint": "会话文件还在，只是这次读取返回了空窗口。点下面重新加载，或直接在侧栏再点一次这个会话。",
+      "chat.reloadTranscript": "重新加载会话",
       "settings.completionSound": "回复完成时播放提示音",
       "settings.sectionPicker": "设置分区",
       "agentSwitcher.none": "此会话没有子 Agent",
@@ -1195,6 +1201,9 @@ const FORK_MESSAGE_PATCHES: Record<Locale, {
     "set": {
       "plus.compaction.expand": "展開摘要",
       "plus.compaction.collapse": "收合摘要",
+      "chat.emptyTranscript": "沒有讀取到工作階段內容",
+      "chat.emptyTranscriptHint": "工作階段檔案還在，只是這次讀取回傳了空視窗。請重新載入，或在側邊欄再點一次這個工作階段。",
+      "chat.reloadTranscript": "重新載入工作階段",
       "settings.completionSound": "回覆完成時播放提示音",
       "settings.sectionPicker": "设定区块",
       "agentSwitcher.none": "此會話沒有子 Agent",

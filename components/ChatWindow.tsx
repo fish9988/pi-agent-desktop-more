@@ -596,6 +596,16 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
     if (searchTarget) setPendingScrollRestore(null);
   }, [searchTarget]);
 
+  // The transcript is visibility:hidden while a restored position is being
+  // located, and locating can page the server. A slow or hung page must not
+  // leave the reader with an empty (but scrollable) pane: reveal it anyway after
+  // a moment and let the restore finish in the background if it still can.
+  useEffect(() => {
+    if (!pendingScrollRestore) return;
+    const timer = setTimeout(() => setPendingScrollRestore(null), 2500);
+    return () => clearTimeout(timer);
+  }, [pendingScrollRestore]);
+
   useEffect(() => {
     const position = pendingScrollRestore;
     const sessionId = session?.id;
@@ -730,7 +740,13 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
     if (loadingOlderRef.current) return;
     if (!hasEarlierMessages) return;
     const oldestId = historyCursor;
-    if (!oldestId) return;
+    if (!oldestId) {
+      // "More history" with no cursor to continue from means the view is holding
+      // a window it cannot page: a stale cache once wrote an empty one. Re-read
+      // the session instead of leaving the row dead.
+      retryLoad();
+      return;
+    }
     const sid = session?.id ?? sessionIdRef.current;
     if (!sid) return;
     // A page that does not make the transcript taller would be requested again
@@ -746,7 +762,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
         ? 0
         : stalledOlderLoadsRef.current + 1;
     });
-  }, [activeLeafId, hasEarlierMessages, historyCursor, loadContext, scrollContainerRef, session?.id]);
+  }, [activeLeafId, hasEarlierMessages, historyCursor, loadContext, retryLoad, scrollContainerRef, session?.id]);
 
   // The sentinel row also carries the "load earlier" button, so scrolling is
   // not the only way in. It still pages when it comes into view — but only after
@@ -810,6 +826,18 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
       if (frame !== null) cancelAnimationFrame(frame);
     };
   }, [requestOlderPage, scrollContainerRef]);
+
+  // A transcript shorter than the viewport cannot be scrolled, so the "load
+  // earlier" path (which waits for a scroll to the top) can never fire — the row
+  // sat there and nothing happened. Once the reader has shown intent, keep filling
+  // the viewport one page at a time; the stall guard above stops a loop.
+  useEffect(() => {
+    if (!userScrollIntentRef.current) return;
+    const container = scrollContainerRef.current;
+    if (!container || !hasEarlierMessages) return;
+    if (container.scrollHeight > container.clientHeight + 8) return;
+    requestOlderPage();
+  }, [hasEarlierMessages, messages.length, requestOlderPage, scrollContainerRef]);
 
   // Keep the rendered window at least as large as what's loaded, so prepended
   // (older) pages stay visible instead of being sliced off the top.
@@ -981,6 +1009,18 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
   }, [messages]);
 
   const isEmptyNew = isNew && !loading && !error && messages.length === 0 && !isStreaming && !sessionBusy;
+
+  // Last line of defence against a blank transcript: a real session that renders
+  // nothing is retried once on its own, so a stale read cannot leave the reader
+  // staring at an empty pane (the recovery state below also offers a button).
+  const emptyRetrySessionRef = useRef<string | null>(null);
+  useEffect(() => {
+    const sid = session?.id;
+    if (!sid || isNew || loading || error || sessionBusy || messages.length > 0) return;
+    if (emptyRetrySessionRef.current === sid) return;
+    emptyRetrySessionRef.current = sid;
+    retryLoad();
+  }, [error, isNew, loading, messages.length, retryLoad, session?.id, sessionBusy]);
   useScrollbarVisibility(scrollContainerRef, Boolean(session?.id) || !isEmptyNew);
 
   // The message scrollport always shows its (usually invisible) scrollbar track,
@@ -1422,6 +1462,17 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
             {!loading && <ChatColumnResizeHandles columnRef={messageContentRef} />}
             {loading ? (
               <div className="chat-loading-hint">{t("chat.loadingSession")}</div>
+            ) : messages.length === 0 && session && !error && !isEmptyNew ? (
+              // A session with history must never render as nothing. This is the
+              // recovery state for any read that landed empty (a stale view cache
+              // did exactly that); it also retries once by itself.
+              <div className="chat-empty-recovery" role="status">
+                <div className="chat-empty-recovery-title">{t("chat.emptyTranscript")}</div>
+                <div className="chat-empty-recovery-hint">{t("chat.emptyTranscriptHint")}</div>
+                <button type="button" className="chat-load-earlier" onClick={() => retryLoad()}>
+                  {t("chat.reloadTranscript")}
+                </button>
+              </div>
             ) : (() => {
               let lastUserIdx = -1;
               for (let i = messages.length - 1; i >= 0; i--) {

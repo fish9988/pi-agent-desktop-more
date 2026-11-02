@@ -3,6 +3,27 @@
 Pi Agent Plus 是 [abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop) 的个人二次开发版（仅 Windows），
 与官方版可同时安装、互不覆盖。版本规则见 [VERSIONING-PLUS.md](./VERSIONING-PLUS.md)。
 
+## [1.18.2] - 2026-11-02
+
+修两个问题：**切换会话后偶发空白**（只剩一行「向上滚动以加载更早的消息」），以及**有那一行时滚不动**。
+
+### 空白的原因
+`useAgentSession` 里有个“秒开”优化：读到会话时，如果磁盘未变（`snapshotRevision` 相同）就保留“你已经翻出来的窗口”，不重置历史。问题在于**切换会话会先把视图清空**（`setMessages([])`），于是重读回填时“保留已有窗口”保到了一片空白——而 `setMessages` 在 `revisionUnchanged` 分支里根本不会被调用。更糟的是它随后把这片空窗口写进了 `session-view-cache`，还带着 `hasMore: true`——之后每次打开这个会话都会直接回放这个“空但还有历史”的快照。
+
+修法：
+- “保留已有窗口”加前置条件：`messagesRef.current.length > 0` **且**当前 `data` 确实属于这个会话；空窗口时走正常回填；
+- 空窗口一律不写缓存（`persistedMessages.length > 0`）；
+- 读到空快照视为没有快照并删掉它（自动清掉已被污染的缓存）；
+- 再加两道兜底：真会话渲染不出任何消息时，自动重试一次并显示「重新加载会话」；恢复滚动位置如果卡在分页请求上，2.5 秒后强制显示（之前那个状态下消息区是 `visibility: hidden`，直接白屏）。
+
+### “有标志但滚不动”的原因
+- 窗口比视口矮时**根本没有可滚动区域**，而“滚到顶”是唯一的触发条件——所以永远触发不了，只能点那行字（现在它本来就是按钮）。修法：读者有过手势后，如果内容不够高就自动再拉一页，直到填满视口（有“拉一页没变高就停”的保护）；
+- 另一种死局是“还有历史但游标为空”（就是上面那个被污染的快照）：现在点那行会直接重读会话，而不是默默 return。
+
+### 其他
+- 修了 `components/ChatWindow.render-cache.test.mjs` 一个早就失效的断言（它按上游的 `const rendered: ReactNode[]` 找代码，而 fork 的类型是 `Array<ReactNode | (() => ReactNode)>`），现在按形状匹配；
+- 新增 `hooks/useAgentSession.blank-view.test.mjs`（6 项）把上面每一条钉住。
+
 ## [1.18.1] - 2026-11-02
 
 修 1.18.0 的回归：**向上滚动加载更早消息失效**（滚到顶后卡片显示「向上滚动以加载更早的消息」，但怎么滚都没反应）。

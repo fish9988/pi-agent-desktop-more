@@ -797,9 +797,19 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       // revision), keep any history the user already paged in instead of
       // collapsing back to the fresh 50-entry window. The state hooks then
       // only need the server's tree/leaf/stats — never a history reset.
+      //
+      // Only when the transcript on screen really is this session's. A switch
+      // empties the view before this read lands, and keeping "the messages we
+      // already have" then kept an empty window: the chat rendered nothing but
+      // its "load earlier" row, and the empty window was written back to the
+      // view cache as a valid snapshot.
       const cached = getSessionViewSnapshot(sid);
+      const viewHoldsThisSession = sessionIdRef.current === sid
+        && dataRef.current?.sessionId === sid
+        && messagesRef.current.length > 0;
       const revisionUnchanged = Boolean(
-        d.snapshotRevision
+        viewHoldsThisSession
+        && d.snapshotRevision
         && cached?.revision === d.snapshotRevision
         && cached.entryIds.length >= (d.context.entryIds ?? []).length,
       );
@@ -852,7 +862,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       setCurrentModelOverride((current) => modelSwitchPendingRef.current ? current : null);
       setCurrentThinkingOverride(null);
       setError(null);
-      if (d.treeFormat === "summary" && d.snapshotRevision) {
+      if (d.treeFormat === "summary" && d.snapshotRevision && persistedMessages.length > 0) {
         setSessionViewSnapshot({
           sessionId: sid,
           revision: d.snapshotRevision,
@@ -2800,7 +2810,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       const promoted = promotedLoadRef.current;
       promotedLoadRef.current = false;
       promotedIdentityRef.current = null;
-      const cached = promoted ? null : getSessionViewSnapshot(session.id);
+      const cachedSnapshot = promoted ? null : getSessionViewSnapshot(session.id);
+      // A snapshot with no messages is a broken cache entry, never a real view:
+      // treat it as absent so the session loads instead of rendering blank.
+      const cached = cachedSnapshot && cachedSnapshot.messages.length > 0 ? cachedSnapshot : null;
+      if (cachedSnapshot && !cached) deleteSessionViewSnapshot(session.id);
       if (cached) {
         setData({
           sessionId: session.id,

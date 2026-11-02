@@ -1499,3 +1499,25 @@ html[data-plus-live-preview="1"] .settings-dialog-backdrop.is-plus-page .setting
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
+/* -- Plus: empty-transcript recovery state --------------------------------- */
+/* A session with history must never render as a blank pane; this is what the
+   reader sees if a read ever lands empty, with the reload button inside it. */
+.chat-empty-recovery {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 40px 16px;
+  color: var(--text-muted);
+  text-align: center;
+}
+.chat-empty-recovery-title {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
+.chat-empty-recovery-hint {
+  max-width: 420px;
+  font-size: 12px;
+  line-height: 1.6;
+}

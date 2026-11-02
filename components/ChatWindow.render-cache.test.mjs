@@ -46,7 +46,11 @@ test("a turn's written-files list keeps its identity until its inputs change", (
 });
 
 test("the transcript loop reads the caches instead of re-deriving per render", () => {
-  const loop = source.slice(source.indexOf("const rendered: ReactNode[] = [];"));
+  // Plus holds render items as nodes or lazy thunks, so the declaration carries a
+  // union type; match it by shape rather than by the upstream exact string.
+  const declaration = /const rendered[^\n]*= \[\];/.exec(source);
+  assert.ok(declaration, "the transcript render loop is still here");
+  const loop = source.slice(declaration.index);
   assert.match(loop, /getFinalSplit\(finalAssistant\)/);
   assert.match(loop, /getTurnWrittenFiles\(finalAssistant,/);
   assert.doesNotMatch(loop, /splitFinalAssistantBlocks\(|withAssistantBlocks\(|extractTurnWrittenFiles\(/);
