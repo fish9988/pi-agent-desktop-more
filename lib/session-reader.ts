@@ -922,6 +922,35 @@ export interface BuildSessionContextOptions {
   sessionId?: string;
 }
 
+/**
+ * True when something above `first` still renders as conversation.
+ *
+ * A window whose only remaining ancestors are bookkeeping (the tool-selection
+ * custom entry, model changes, session info) is already the top of the branch —
+ * even though those entries have parents of their own. Reporting "more history"
+ * there handed the reader a "scroll up to load earlier messages" row that paged
+ * in nothing, on a session that had nothing left to page: the row looked alive
+ * and completely ignored every scroll.
+ */
+function restsOnMoreHistory(first: SessionEntry | undefined, entries: SessionEntry[]): boolean {
+  if (!first?.parentId) return false;
+  const byId = new Map<string, SessionEntry>();
+  for (const entry of entries) byId.set(entry.id, entry);
+  let cursor = byId.get(first.parentId);
+  let guard = 0;
+  while (cursor && guard < 1_000_000) {
+    if (cursor.type === "message") {
+      const role = (cursor as { message?: { role?: string } }).message?.role;
+      if (role !== "system") return true;
+    } else if (cursor.type === "compaction" || cursor.type === "custom_message") {
+      return true;
+    }
+    cursor = cursor.parentId ? byId.get(cursor.parentId) : undefined;
+    guard += 1;
+  }
+  return false;
+}
+
 export function buildSessionContext(
   entries: SessionEntry[],
   leafId?: string | null,
@@ -933,7 +962,7 @@ export function buildSessionContext(
   const sliced = leafId === null ? [] : sliceActiveBranch(
     entries, leafId ?? null, tail && tail > 0 ? tail : entries.length, excludeLeaf, wholeTurns,
   );
-  const hasMore = Boolean(tail && tail > 0 && sliced[0]?.parentId);
+  const hasMore = Boolean(tail && tail > 0 && restsOnMoreHistory(sliced[0], entries));
 
   // Convert messages and their IDs together to keep fork/navigation targets aligned.
   const messages: AgentMessage[] = [];

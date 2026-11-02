@@ -749,18 +749,21 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
     }
     const sid = session?.id ?? sessionIdRef.current;
     if (!sid) return;
-    // A page that does not make the transcript taller would be requested again
-    // the moment it lands. One retry only.
+    // A page that comes back empty is the only real stall; anything else is the
+    // reader asking for history that exists.
     if (stalledOlderLoadsRef.current >= 2) return;
-    const heightBefore = container.scrollHeight;
     loadingOlderRef.current = true;
     lastOlderLoadAtRef.current = Date.now();
     prevScrollDistanceRef.current = captureScrollDistance(container.scrollHeight, container.scrollTop);
-    void loadContext(sid, activeLeafId, oldestId).finally(() => {
+    void loadContext(sid, activeLeafId, oldestId).then((page) => {
+      // Whether a page arrived is the signal, not how many pixels the list grew:
+      // the old check read scrollHeight in the load's own microtask, before React
+      // had committed the prepend, so two perfectly good pages counted as stalls
+      // and latched older history off for the rest of the session.
+      const added = page ? page.messages?.length ?? 0 : 0;
+      stalledOlderLoadsRef.current = added > 0 ? 0 : stalledOlderLoadsRef.current + 1;
+    }).finally(() => {
       loadingOlderRef.current = false;
-      stalledOlderLoadsRef.current = container.scrollHeight > heightBefore + 24
-        ? 0
-        : stalledOlderLoadsRef.current + 1;
     });
   }, [activeLeafId, hasEarlierMessages, historyCursor, loadContext, retryLoad, scrollContainerRef, session?.id]);
 
@@ -802,6 +805,13 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
     const markIntent = (event: Event) => {
       if (inside(event)) userScrollIntentRef.current = true;
     };
+    const requestNextFrame = () => {
+      if (frame !== null) return;
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        requestOlderPage();
+      });
+    };
     const onScroll = (event: Event) => {
       const container = scrollContainerRef.current;
       if (!container || event.target !== container) return;
@@ -811,17 +821,27 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
       if (container.scrollTop > 24) return;
       // The prepend's own anchor restore is not the reader asking for more.
       if (Date.now() - lastOlderLoadAtRef.current < 600) return;
-      if (frame !== null) return;
-      frame = requestAnimationFrame(() => {
-        frame = null;
-        requestOlderPage();
-      });
+      requestNextFrame();
     };
-    const gestureEvents = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
+    // Already at the top, a wheel produces no scroll event at all (there is no
+    // range left to scroll), so the transcript sat there with its "load earlier"
+    // row and ignored every further swipe. The wheel itself is the trigger then.
+    const onWheel = (event: WheelEvent) => {
+      const container = inside(event);
+      if (!container) return;
+      userScrollIntentRef.current = true;
+      if (event.deltaY >= 0) return;
+      if (container.scrollTop > 24) return;
+      if (Date.now() - lastOlderLoadAtRef.current < 400) return;
+      requestNextFrame();
+    };
+    const gestureEvents = ["touchstart", "pointerdown", "keydown"] as const;
     for (const event of gestureEvents) document.addEventListener(event, markIntent, { capture: true, passive: true });
+    document.addEventListener("wheel", onWheel, { capture: true, passive: true });
     document.addEventListener("scroll", onScroll, { capture: true, passive: true });
     return () => {
       for (const event of gestureEvents) document.removeEventListener(event, markIntent, { capture: true });
+      document.removeEventListener("wheel", onWheel, { capture: true });
       document.removeEventListener("scroll", onScroll, { capture: true });
       if (frame !== null) cancelAnimationFrame(frame);
     };

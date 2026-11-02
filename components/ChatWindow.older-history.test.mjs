@@ -40,13 +40,29 @@ test("the load-earlier row is a button, and both paths share one request", () =>
   assert.match(source, /userScrollIntentRef\.current = true;\n\s*requestOlderPage\(\);/);
 });
 
-test("a page that does not make the transcript taller stops trying", () => {
+test("a page that comes back empty stops trying, a page with content never does", () => {
+  // The old guard counted pixel growth, read in the load's own microtask before
+  // React committed the prepend: two good pages counted as stalls and latched
+  // older history off for the rest of the session.
   assert.match(source, /if \(stalledOlderLoadsRef\.current >= 2\) return;/);
-  assert.match(source, /stalledOlderLoadsRef\.current = container\.scrollHeight > heightBefore \+ 24/);
+  assert.match(source, /const added = page \? page\.messages\?\.length \?\? 0 : 0;/);
+  assert.match(source, /stalledOlderLoadsRef\.current = added > 0 \? 0 : stalledOlderLoadsRef\.current \+ 1;/);
+  assert.doesNotMatch(source, /container\.scrollHeight > heightBefore \+ 24/);
   // The prepend's anchor restore fires a scroll event of its own; without this
   // window the load chained off itself while the reader sat at the top.
   assert.match(source, /lastOlderLoadAtRef\.current = Date\.now\(\);/);
   assert.match(source, /if \(Date\.now\(\) - lastOlderLoadAtRef\.current < 600\) return;/);
+});
+
+test("wheeling up while already at the top still loads", () => {
+  // At scrollTop 0 there is no range left, so no scroll event fires and the
+  // transcript ignored every further swipe.
+  const wheel = source.slice(source.indexOf("// Already at the top, a wheel produces no scroll event"), source.indexOf("const gestureEvents ="));
+  assert.match(wheel, /userScrollIntentRef\.current = true;/);
+  assert.match(wheel, /if \(event\.deltaY >= 0\) return;/);
+  assert.match(wheel, /if \(container\.scrollTop > 24\) return;/);
+  assert.match(wheel, /requestNextFrame\(\);/);
+  assert.match(source, /document\.addEventListener\("wheel", onWheel, \{ capture: true, passive: true \}\)/);
 });
 
 test("restoring a saved position pages back a bounded number of times", () => {
