@@ -860,20 +860,26 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
   }, [hasEarlierMessages, messages.length, requestOlderPage, scrollContainerRef]);
 
   // Keep the rendered window at least as large as what's loaded, so prepended
-  // (older) pages stay visible instead of being sliced off the top.
-  useEffect(() => {
-    setVisibleCount((current) => Math.max(current, messages.length));
-  }, [messages.length]);
+  // (older) pages stay visible instead of being sliced off the top. This has to
+  // happen during render: growing it in a passive effect meant the prepended
+  // page was committed already-sliced-away, and the scroll restore below then
+  // measured a list that had not grown.
+  if (messages.length > visibleCount) setVisibleCount(messages.length);
 
-  // After visibleCount increases (more messages prepended), restore the
-  // scroll position so the viewport doesn't jump.
-  useEffect(() => {
+  // Restore the reading position right after a prepend, before paint: the
+  // distance from the viewport top to the end of the content is unchanged by
+  // inserting history above, so keeping it leaves the same message on screen.
+  // Keyed on messages.length, not visibleCount: growing visibleCount can be a
+  // no-op (it was already large), and the restore then never ran — the view
+  // stayed at the top of the freshly inserted page, which read as "scrolling up
+  // does nothing" even though a page had loaded.
+  useLayoutEffect(() => {
     if (prevScrollDistanceRef.current == null) return;
     const container = scrollContainerRef.current;
     if (!container) return;
     container.scrollTop = restoreScrollTop(container.scrollHeight, prevScrollDistanceRef.current);
     prevScrollDistanceRef.current = null;
-  }, [visibleCount, scrollContainerRef]);
+  }, [messages.length, scrollContainerRef]);
   // Push session stats up to AppShell for the stats panel and ring hover summary.
   // Compare scalar fields to avoid loops from new object identity each render.
   const statsKey = sessionStats
