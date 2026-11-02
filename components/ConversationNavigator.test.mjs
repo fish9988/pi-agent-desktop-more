@@ -34,7 +34,10 @@ test("navigator behaviour is unchanged: rail, drag, list, preview, keyboard", ()
   assert.match(source, /if \(draggingRef\.current && index !== activeIndex\)/);
   assert.match(source, /role="slider"/);
   assert.match(source, /event\.key !== "ArrowUp" && event\.key !== "ArrowDown"/);
+  assert.match(source, /if \(Date\.now\(\) - hoverOpenedAtRef\.current < 400\) return;/);
   assert.match(source, /setListOpen\(\(open\) => !open\)/);
   assert.match(source, /conversation-navigator-preview/);
-  assert.match(source, /if \(turns\.length < 2\) return null;/);
+  // Plus: when hasMore is true, keep the navigator visible so earlier history can be loaded.
+  assert.match(source, /if \(!hasMore && turns\.length < 2\) return null;/);
+  assert.match(source, /conversation-navigator-load-more/);
 });

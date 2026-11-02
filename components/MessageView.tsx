@@ -365,7 +365,12 @@ export const MessageView = memo(function MessageView({ message, isStreaming, too
     && prev.onCompact === next.onCompact
     && prev.isCompacting === next.isCompacting
     && prev.compactError === next.compactError
-    && prev.compactStep === next.compactStep;
+    && prev.compactStep === next.compactStep
+    && prev.editDisabled === next.editDisabled
+    && prev.branchPager === next.branchPager
+    && prev.branchSwitchLocked === next.branchSwitchLocked
+    && prev.onBranchSwitch === next.onBranchSwitch
+    && findBranchDecision(prev.branchDecisions, prev.entryId) === findBranchDecision(next.branchDecisions, next.entryId);
 });
 
 function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, onEditContent, editDisabled, onCancelEdit, isEditing }: {
@@ -413,6 +418,17 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
   const commandArgs = commandText && commandSeparator !== -1
     ? commandText.slice(commandSeparator + 1)
     : "";
+  const trimmedBody = bodyText.trim();
+  const isSlashCommandLine = !commandText
+    && attachedFiles.length === 0
+    && /^\/[a-zA-Z][\w.:-]*(?:\s+[^\r\n]+)?$/.test(trimmedBody);
+  const slashSeparator = isSlashCommandLine ? trimmedBody.search(/\s/) : -1;
+  const slashCommandName = isSlashCommandLine
+    ? (slashSeparator === -1 ? trimmedBody : trimmedBody.slice(0, slashSeparator))
+    : "";
+  const slashCommandArgs = isSlashCommandLine && slashSeparator !== -1
+    ? trimmedBody.slice(slashSeparator + 1)
+    : "";
 
   const time = formatTime(message.timestamp);
   const canFork = !!entryId && !!onFork;
@@ -429,7 +445,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
             <img
               src={src}
               alt=""
-              style={{ maxWidth: 240, maxHeight: 240, borderRadius: 6, objectFit: "contain", display: "block", border: "var(--hairline) solid rgba(59,130,246,0.15)" }}
+              style={{ maxWidth: 240, maxHeight: 240, borderRadius: 6, objectFit: "contain", display: "block", border: "var(--hairline) solid var(--plus-stroke, var(--border))" }}
             />
           </ImagePreview>
         );
@@ -457,12 +473,13 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
     >
       <div style={{ display: "flex", alignItems: "flex-end", gap: 6, maxWidth: "min(78%, 660px)" }}>
         <div
-          className={`message-user-bubble${isEditing ? " is-editing" : ""}`}
+          className={`message-user-bubble${isEditing ? " is-editing" : ""}${commandText || isSlashCommandLine ? " is-slash-command" : ""}`}
           style={{
             flex: 1,
             minWidth: 0,
             maxHeight: USER_BUBBLE_MAX_HEIGHT,
             overflowY: "auto",
+            ...(isSlashCommandLine && imageBlocks.length === 0 ? { padding: "4px 10px" } : {}),
           }}
         >
           {commandText ? (
@@ -524,6 +541,39 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
                 <MarkdownBody className="markdown-user-message" keepLineBreaks cwd={cwd} onOpenFile={onOpenFile}>{content}</MarkdownBody>
               )}
             </div>
+          ) : isSlashCommandLine ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
+              {imageBlocksNode}
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+                <span
+                  className="message-slash-command-name"
+                  style={{
+                    color: "var(--accent)",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "calc(13px + var(--chat-font-size-offset, 0px))",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {slashCommandName}
+                </span>
+                {slashCommandArgs && (
+                  <span
+                    className="message-slash-command-args"
+                    style={{
+                      color: "var(--text)",
+                      fontSize: "calc(13px + var(--chat-font-size-offset, 0px))",
+                      lineHeight: 1.5,
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-word",
+                      minWidth: 0,
+                      flex: 1,
+                    }}
+                  >
+                    {slashCommandArgs}
+                  </span>
+                )}
+              </div>
+            </div>
           ) : (
             <>
               {imageBlocksNode}
@@ -550,7 +600,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
           gap: 6, marginTop: 3,
         }}>
           <div className="message-copy-actions" style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            {Boolean(bodyText) && !commandText && (
+            {Boolean(bodyText) && !commandText && !isSlashCommandLine && (
               <button
                 type="button"
                 onClick={() => setRawView((v) => !v)}

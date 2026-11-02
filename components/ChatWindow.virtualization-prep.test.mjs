@@ -140,3 +140,29 @@ test("the anchoring work does not take over the paging triggers", () => {
   assert.match(source, /if \(container\.scrollTop > 24\) return;/);
   assert.match(source, /const MAX_RESTORE_PAGES = 2;/);
 });
+
+test("user scroll gestures immediately cancel pinPrependAnchor and in-flight height changes update prependAnchorRef", () => {
+  const gestureBlock = slice("const markIntent = (event: Event) =>", "}, [requestOlderPage, scrollContainerRef]);");
+  assert.match(gestureBlock, /stopPrependPin\(\);/);
+  assert.match(gestureBlock, /"touchmove"/);
+  const observerBlock = slice("const observer = new ResizeObserver(() => {", "rowObserverRef.current = observer;");
+  assert.match(observerBlock, /if \(loadingOlderRef\.current && prependAnchorRef\.current\) \{/);
+});
+
+test("branch pager reads tree and activeLeafId directly from useAgentSession without a forwardBranchData state loop", () => {
+  assert.doesNotMatch(source, /forwardBranchData|setBranchView/);
+  assert.match(source, /getBranchDecisions\(data\.tree, activeLeafId\)/);
+  assert.match(source, /event\.target\.closest\("\.message-branch-pager"\)/);
+});
+
+test("long transcripts recycle off-screen rows and sync entry geometry with lib/message-index", () => {
+  assert.match(source, /setIndexedEntries\(container, entryIds, turnMap\)/);
+  assert.match(source, /recordRowHeight\(scrollContainerRef\.current, row\.dataset\.entryId, row\.offsetHeight/);
+  assert.match(source, /data-virtual-spacer="top"/);
+  assert.match(source, /data-virtual-spacer="bottom"/);
+});
+
+test("copying a selection with KaTeX formulas writes TeX source to the clipboard", () => {
+  assert.match(source, /texClipboardPayload\(selection\)/);
+  assert.match(source, /document\.addEventListener\("copy", onCopy\)/);
+});

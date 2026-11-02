@@ -1,7 +1,9 @@
 "use client";
 
-import { createContext, memo, useContext, useEffect, useMemo, useRef, useState, type ComponentProps, type MouseEvent } from "react";
+import { createContext, memo, useContext, useEffect, useMemo, useRef, useState, type ComponentProps, type MouseEvent, type ReactNode } from "react";
 import ReactMarkdown, { type Components, type ExtraProps } from "react-markdown";
+import { useI18n } from "@/hooks/useI18n";
+import { copyText } from "@/lib/clipboard";
 import { useFileContextMenu } from "@/hooks/useFileContextMenu";
 import { inlineCodeFilePath } from "@/lib/file-context-menu";
 import { parsePdfPageFragment, resolveLocalFileHref, shouldOpenLocalFileInApp } from "@/lib/file-links";
@@ -11,6 +13,7 @@ import { jumpToMarkdownFragment, markdownRehypePlugins, markdownRemarkPlugins, m
 import { splitMarkdownBlocks } from "@/lib/markdown-blocks";
 import { ImagePreview } from "./ImagePreview";
 import { MermaidBlock, CodeBlock } from "./MermaidBlock";
+import { SvgBlock } from "./SvgBlock";
 import { HtmlPreviewBlock } from "./HtmlPreviewBlock";
 import { htmlPreviewKind } from "@/lib/html-preview";
 import { ArtifactCard } from "./ArtifactCard";
@@ -64,6 +67,50 @@ function MarkdownImage({
     <ImagePreview src={imageSrc} alt={alt ?? ""} className="markdown-image">
       {image}
     </ImagePreview>
+  );
+}
+
+/**
+ * A display formula with a Copy button for its LaTeX, as code fences have
+ * (#1380). The button sits outside KaTeX's scroller, so it stays put while a
+ * wide formula scrolls.
+ */
+function MathDisplay({ source, children }: { source: string; children: ReactNode }) {
+  const { t } = useI18n();
+  const [copied, setCopied] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const copy = () => {
+    copyText(source).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+  return (
+    <div
+      className="markdown-math-display"
+      style={{ position: "relative" }}
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => setHovered(false)}
+    >
+      {children}
+      <button
+        type="button"
+        onClick={copy}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        className="markdown-code-action markdown-math-copy"
+        style={{
+          position: "absolute",
+          top: 2,
+          right: 0,
+          opacity: hovered || focused || copied ? 1 : 0,
+          transition: "opacity 0.12s ease",
+        }}
+      >
+        {copied ? t("i18n.copied") : t("i18n.copy")}
+      </button>
+    </div>
   );
 }
 
@@ -151,6 +198,9 @@ function buildComponents(
             />
           );
         }
+        if (lang === "svg") {
+          return <SvgBlock code={raw.replace(/\n$/, "")} isStreaming={isStreaming} />;
+        }
         const previewKind = htmlPreviewKind(lang, raw);
         if (previewKind) {
           return (
@@ -221,6 +271,11 @@ function buildComponents(
     },
     img(props) {
       return <MarkdownImage cwd={cwd} {...props} />;
+    },
+    div({ node, children, ...props }) {
+      const source = node?.properties?.dataMathSource;
+      if (typeof source === "string") return <MathDisplay source={source}>{children}</MathDisplay>;
+      return <div {...props}>{children}</div>;
     },
     table({ children }) {
       return (

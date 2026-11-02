@@ -14,27 +14,34 @@ interface Props {
   turns: ConversationTurnLocation[];
   scrollContainerRef: RefObject<HTMLDivElement | null>;
   onSelect: (index: number) => void;
+  hasMore?: boolean;
+  onLoadMore?: () => void;
 }
 
 function nearestTurnIndex(event: ReactPointerEvent<HTMLDivElement>, count: number): number {
+  if (count <= 1) return 0;
   const rect = event.currentTarget.getBoundingClientRect();
   const ratio = Math.max(0, Math.min(1, (event.clientY - rect.top) / Math.max(rect.height, 1)));
   return Math.min(count - 1, Math.round(ratio * (count - 1)));
 }
 
-export function ConversationNavigator({ turns, scrollContainerRef, onSelect }: Props) {
-  const { t } = useI18n();
+export function ConversationNavigator({ turns, scrollContainerRef, onSelect, hasMore = false, onLoadMore }: Props) {
+  const { locale, t } = useI18n();
   const [activeIndex, setActiveIndex] = useState(0);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [isHovering, setIsHovering] = useState(false);
   // Plus: list of every question, opened from the button above the rail.
   const [listOpen, setListOpen] = useState(false);
   const listTimerRef = useRef<number | null>(null);
+  const hoverOpenedAtRef = useRef(0);
   const listRef = useRef<HTMLDivElement | null>(null);
   const openList = useCallback(() => {
     if (listTimerRef.current !== null) window.clearTimeout(listTimerRef.current);
     listTimerRef.current = null;
-    setListOpen(true);
+    setListOpen((open) => {
+      if (!open) hoverOpenedAtRef.current = Date.now();
+      return true;
+    });
   }, []);
   const closeListSoon = useCallback(() => {
     if (listTimerRef.current !== null) window.clearTimeout(listTimerRef.current);
@@ -106,13 +113,13 @@ export function ConversationNavigator({ turns, scrollContainerRef, onSelect }: P
   }, [listOpen]);
 
   const preview = previewIndex == null ? null : turns[previewIndex];
-  const navigatorHeight = turns.length * 2 + (turns.length - 1) * 8;
+  const navigatorHeight = Math.max(10, turns.length * 2 + Math.max(0, turns.length - 1) * 8);
   const tickPositions = useMemo(() => turns.map((turn, index) => ({
     ...turn,
     top: 1 + index * 10,
   })), [turns]);
 
-  if (turns.length < 2) return null;
+  if (!hasMore && turns.length < 2) return null;
 
   return (
     <div
@@ -132,7 +139,10 @@ export function ConversationNavigator({ turns, scrollContainerRef, onSelect }: P
         aria-expanded={listOpen}
         onPointerEnter={openList}
         onPointerLeave={closeListSoon}
-        onClick={() => setListOpen((open) => !open)}
+        onClick={() => {
+          if (Date.now() - hoverOpenedAtRef.current < 400) return;
+          setListOpen((open) => !open);
+        }}
       >
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><circle cx="3.5" cy="6" r="1" /><circle cx="3.5" cy="12" r="1" /><circle cx="3.5" cy="18" r="1" /></svg>
       </button>
@@ -145,6 +155,22 @@ export function ConversationNavigator({ turns, scrollContainerRef, onSelect }: P
           onPointerEnter={openList}
           onPointerLeave={closeListSoon}
         >
+          {hasMore && onLoadMore && (
+            <button
+              type="button"
+              role="menuitem"
+              className="conversation-navigator-list-item conversation-navigator-load-more"
+              title={t("chat.loadEarlier")}
+              onClick={() => {
+                onLoadMore();
+              }}
+            >
+              <span className="conversation-navigator-list-number" aria-hidden="true">↑</span>
+              <span className="conversation-navigator-list-text">
+                {locale.startsWith("zh") ? "↑ 加载更早历史消息" : "↑ Load earlier messages"}
+              </span>
+            </button>
+          )}
           {turns.map((turn, index) => (
             <button
               key={turn.index}

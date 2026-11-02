@@ -10,7 +10,7 @@ const jiti = createJiti(import.meta.url, {
   tsconfigPaths: true,
 });
 const { MarkdownBody } = await jiti.import("./MarkdownBody.tsx");
-const { normalizeDisplayMath, markdownPreviewRemarkPlugins, markdownPreviewRehypePlugins } = await jiti.import("../lib/markdown.ts");
+const { normalizeDisplayMath, markdownPreviewRemarkPlugins, markdownPreviewRehypePlugins, markdownRemarkPlugins, markdownRehypePlugins } = await jiti.import("../lib/markdown.ts");
 const { I18nProvider } = await jiti.import("@/hooks/useI18n");
 
 function renderMarkdown(markdown, props = {}) {
@@ -433,4 +433,29 @@ test("keeps a block that opens a raw-text tag as it renders without line breaks"
   assert.match(renderMarkdown("normal <kbd>Ctrl</kbd>\nline two", { keepLineBreaks: true }), /<\/kbd><br\/>line two/);
   const list = renderMarkdown("- item <textarea>\n  more\n- two\n  lines", { keepLineBreaks: true });
   assert.match(list, /<li>two<br\/>lines<\/li>/);
+});
+
+test("display math gets a Copy button for its LaTeX source; inline math does not", () => {
+  const copyButtons = (html) => (html.match(/markdown-math-copy/g) ?? []).length;
+  const markdown = "$$\n\\frac{a}{b} < c\n$$\n\n```math\na^2\n```\n\nInline $x$ and $$y$$ stay plain.";
+  for (const props of [{}, { isStreaming: true }]) {
+    const html = renderMarkdown(markdown, props);
+    assert.equal(copyButtons(html), 2);
+    assert.equal((html.match(/class="katex-display"/g) ?? []).length, 2);
+    assert.doesNotMatch(html, /data-math-source/);
+  }
+  const sources = [];
+  renderToStaticMarkup(React.createElement(ReactMarkdown, {
+    remarkPlugins: markdownRemarkPlugins,
+    rehypePlugins: markdownRehypePlugins,
+    components: {
+      div({ node, children }) {
+        sources.push(node.properties.dataMathSource);
+        return React.createElement("div", null, children);
+      },
+    },
+  }, markdown));
+  assert.deepEqual(sources, ["\\frac{a}{b} < c", "a^2"]);
+  assert.equal(copyButtons(renderMarkdown("$$\n\\frac{a", { isStreaming: true })), 1);
+  assert.equal(copyButtons(renderMarkdown('<div data-math-source="x">hi</div>')), 0);
 });

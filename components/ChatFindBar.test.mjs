@@ -47,4 +47,6 @@ test("find bar behaviour is unchanged: highlights, count, keys, debounce", () =>
   // streaming repaint is debounced instead of running per mutation
   assert.match(source, /window\.setTimeout\(paint, 250\)/);
   assert.match(source, /observer\.observe\(container, \{ childList: true, subtree: true, characterData: true \}\)/);
+  // Plus: when earlier history has not been loaded yet, offer a load-earlier action in the bar.
+  assert.match(source, /chat-find-load-more/);
 });

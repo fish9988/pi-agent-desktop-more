@@ -31,9 +31,18 @@ function renderMessage(message, props = {}) {
 }
 
 test("updates a reused message when its written files change", () => {
-  const props = { message: { role: "assistant", content: [] } };
+  const props = { message: { role: "assistant", content: [] }, entryId: "a1" };
   assert.equal(MessageView.compare(props, props), true);
   assert.equal(MessageView.compare(props, { ...props, writtenFiles: [{ path: "/tmp/result.txt" }] }), false);
+  const decisionA = { parentEntryId: "u1", activeIndex: 0, total: 2, options: [], anchorEntryId: "a1" };
+  const decisionB = { parentEntryId: "u1", activeIndex: 1, total: 2, options: [], anchorEntryId: "a1" };
+  assert.equal(
+    MessageView.compare(
+      { ...props, branchDecisions: [decisionA] },
+      { ...props, branchDecisions: [decisionB] },
+    ),
+    false,
+  );
 });
 
 test("matches response model aliases and otherwise includes the provider", () => {
@@ -439,6 +448,26 @@ test("renders user-message images as buttons that open a larger preview", () => 
 
   assert.match(html, /<button[^>]+aria-label="Preview image"[^>]*>/);
   assert.match(html, /<img[^>]+src="data:image\/png;base64,YWJj"/);
+  assert.match(html, /var\(--plus-stroke, var\(--border\)\)/);
+  assert.doesNotMatch(html, /rgba\(59,130,246,0\.15\)/);
+});
+
+test("renders single-line slash commands compactly without the raw toggle button", () => {
+  const slashHtml = renderMessage({
+    role: "user",
+    content: "/compact keep recent errors",
+  });
+  assert.match(slashHtml, /is-slash-command/);
+  assert.match(slashHtml, /class="message-slash-command-name"[^>]*>\/compact<\/span>/);
+  assert.match(slashHtml, /class="message-slash-command-args"[^>]*>keep recent errors<\/span>/);
+  assert.doesNotMatch(slashHtml, /Show raw text|查看原始文本/);
+
+  const plainHtml = renderMessage({
+    role: "user",
+    content: "ordinary user message",
+  });
+  assert.doesNotMatch(plainHtml, /is-slash-command/);
+  assert.match(plainHtml, /Show raw text/);
 });
 
 test("marks apply_patch returned failures as errors even when isError is unset", () => {

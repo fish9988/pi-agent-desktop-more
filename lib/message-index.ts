@@ -102,6 +102,69 @@ let revisionCounter = 0;
 
 const watchers = new WeakMap<HTMLElement, Watcher>();
 const detached = new WeakMap<HTMLElement, MessageIndex>();
+const rowCache = new WeakMap<HTMLElement, Map<string, { height: number; turn: number | null }>>();
+const configuredEntries = new WeakMap<HTMLElement, {
+  entryIds: readonly string[];
+  turnByEntryId?: ReadonlyMap<string, number>;
+}>();
+
+const DETACHED_ROW_ELEMENT = Object.freeze({
+  isConnected: false,
+  dataset: Object.freeze({}),
+}) as unknown as HTMLElement;
+
+function getContainerRowCache(container: HTMLElement): Map<string, { height: number; turn: number | null }> {
+  let cache = rowCache.get(container);
+  if (!cache) {
+    cache = new Map();
+    rowCache.set(container, cache);
+  }
+  return cache;
+}
+
+/** Record or update a row's measured height in the container's geometry cache. */
+export function recordRowHeight(
+  container: HTMLElement | null,
+  entryId: string | null | undefined,
+  height: number,
+  turn?: number | null,
+): void {
+  if (!container || !entryId || !Number.isFinite(height) || height <= 0) return;
+  const cache = getContainerRowCache(container);
+  const previous = cache.get(entryId);
+  cache.set(entryId, {
+    height,
+    turn: turn !== undefined ? turn : (previous?.turn ?? null),
+  });
+}
+
+/** Read a row's cached height if it was previously mounted in `container`. */
+export function getCachedRowHeight(
+  container: HTMLElement | null,
+  entryId: string | null | undefined,
+): number | undefined {
+  if (!container || !entryId) return undefined;
+  return rowCache.get(container)?.get(entryId)?.height;
+}
+
+/**
+ * Configure the full ordered `entryIds` list (and optional `entryId -> turn` map)
+ * for a virtualized container so `buildIndex(container)` can interpolate geometry
+ * for unmounted rows. Passing an empty list clears the configuration.
+ */
+export function setIndexedEntries(
+  container: HTMLElement | null,
+  entryIds: readonly string[] | null | undefined,
+  turnByEntryId?: ReadonlyMap<string, number>,
+): void {
+  if (!container) return;
+  if (!entryIds || entryIds.length === 0) {
+    configuredEntries.delete(container);
+  } else {
+    configuredEntries.set(container, { entryIds, turnByEntryId });
+  }
+  invalidateIndex(container);
+}
 
 function now(): number {
   return Date.now();
@@ -184,7 +247,11 @@ function measureOffsets(container: HTMLElement, elements: readonly HTMLElement[]
 }
 
 /** Rebuild the index for a container. Call this on message/mount/resize changes. */
-export function buildIndex(container: HTMLElement | null): MessageIndex {
+export function buildIndex(
+  container: HTMLElement | null,
+  entryIds?: readonly string[],
+  turnByEntryId?: ReadonlyMap<string, number>,
+): MessageIndex {
   if (!container) return emptyIndex(null);
   const nodes = container.querySelectorAll<HTMLElement>("[data-entry-id]");
   const rows: { entryId: string; element: HTMLElement; turn: number | null }[] = [];
@@ -201,7 +268,7 @@ export function buildIndex(container: HTMLElement | null): MessageIndex {
   }
 
   const offsets = measureOffsets(container, rows.map((row) => row.element));
-  const entries: MessageIndexEntry[] = rows.map((row) => ({
+  const mountedEntries: MessageIndexEntry[] = rows.map((row) => ({
     entryId: row.entryId,
     element: row.element,
     offsetTop: offsets.get(row.element) ?? 0,
@@ -209,11 +276,105 @@ export function buildIndex(container: HTMLElement | null): MessageIndex {
     turn: row.turn,
   }));
 
+  const cache = getContainerRowCache(container);
+  let mountedTotalHeight = 0;
+  for (const entry of mountedEntries) {
+    mountedTotalHeight += entry.height;
+    if (entry.height > 0 || !cache.has(entry.entryId)) {
+      cache.set(entry.entryId, { height: entry.height, turn: entry.turn });
+    } else if (entry.turn !== null) {
+      const prev = cache.get(entry.entryId)!;
+      cache.set(entry.entryId, { height: prev.height, turn: entry.turn });
+    }
+  }
+
+  const configured = configuredEntries.get(container);
+  const fullEntryIds = entryIds ?? configured?.entryIds;
+  const fullTurns = turnByEntryId ?? configured?.turnByEntryId;
+
+  let averageHeight = mountedEntries.length > 0 ? mountedTotalHeight / mountedEntries.length : 0;
+  if (averageHeight <= 0 && cache.size > 0) {
+    let cachedSum = 0;
+    let cachedCount = 0;
+    for (const item of cache.values()) {
+      if (item.height > 0) {
+        cachedSum += item.height;
+        cachedCount += 1;
+      }
+    }
+    if (cachedCount > 0) averageHeight = cachedSum / cachedCount;
+  }
+
+  let entries: MessageIndexEntry[];
+  if (!fullEntryIds || fullEntryIds.length === 0) {
+    entries = mountedEntries;
+  } else {
+    const mountedById = new Map<string, MessageIndexEntry>();
+    for (const entry of mountedEntries) mountedById.set(entry.entryId, entry);
+    const orderedIds: string[] = [];
+    const seenIds = new Set<string>();
+    for (const id of fullEntryIds) {
+      if (!id || seenIds.has(id)) continue;
+      seenIds.add(id);
+      orderedIds.push(id);
+    }
+    for (const entry of mountedEntries) {
+      if (!seenIds.has(entry.entryId)) {
+        seenIds.add(entry.entryId);
+        orderedIds.push(entry.entryId);
+      }
+    }
+    const fallbackHeight = averageHeight > 0 ? averageHeight : 120;
+    entries = orderedIds.map((entryId) => {
+      const mounted = mountedById.get(entryId);
+      if (mounted) {
+        const turn = mounted.turn ?? fullTurns?.get(entryId) ?? null;
+        return turn === mounted.turn ? mounted : { ...mounted, turn };
+      }
+      const cached = cache.get(entryId);
+      const height = cached && cached.height > 0 ? cached.height : fallbackHeight;
+      const turn = fullTurns?.get(entryId) ?? cached?.turn ?? null;
+      return {
+        entryId,
+        element: DETACHED_ROW_ELEMENT,
+        offsetTop: 0,
+        height,
+        turn,
+      };
+    });
+
+    // Interpolate offsetTop for unmounted entries around mounted anchors.
+    const firstMountedIdx = entries.findIndex((entry) => isLiveEntry(entry));
+    if (firstMountedIdx === -1) {
+      let cursor = 0;
+      for (const entry of entries) {
+        entry.offsetTop = cursor;
+        cursor += entry.height;
+      }
+    } else {
+      let backCursor = entries[firstMountedIdx].offsetTop;
+      for (let i = firstMountedIdx - 1; i >= 0; i -= 1) {
+        backCursor = Math.max(0, backCursor - entries[i].height);
+        entries[i].offsetTop = backCursor;
+      }
+      let forwardCursor = entries[firstMountedIdx].offsetTop + entries[firstMountedIdx].height;
+      for (let i = firstMountedIdx + 1; i < entries.length; i += 1) {
+        const entry = entries[i];
+        if (isLiveEntry(entry)) {
+          forwardCursor = entry.offsetTop + entry.height;
+        } else {
+          entry.offsetTop = forwardCursor;
+          forwardCursor += entry.height;
+        }
+      }
+    }
+  }
+
   const index = emptyIndex(container);
   index.entries = entries;
   let totalHeight = 0;
   entries.forEach((entry, position) => {
-    index.elementByIndex.set(position, entry.element);
+    if (isLiveEntry(entry)) index.elementByIndex.set(position, entry.element);
     index.indexByEntryId.set(entry.entryId, position);
     if (entry.turn !== null) index.indexByTurn.set(entry.turn, position);
     totalHeight += entry.height;
@@ -222,7 +383,7 @@ export function buildIndex(container: HTMLElement | null): MessageIndex {
     .filter((entry) => entry.turn !== null)
     .map((entry) => ({ turn: entry.turn as number, position: index.indexByEntryId.get(entry.entryId) ?? 0, offsetTop: entry.offsetTop }))
     .sort((a, b) => a.offsetTop - b.offsetTop);
-  index.averageHeight = entries.length > 0 ? totalHeight / entries.length : 0;
+  index.averageHeight = averageHeight > 0 ? averageHeight : (entries.length > 0 ? totalHeight / entries.length : 0);
   index.contentHeight = container.scrollHeight;
   index.builtAt = now();
   if (!watchers.has(container)) detached.set(container, index);
@@ -303,14 +464,14 @@ export function viewportEntry(container: HTMLElement | null, position: number): 
   const index = messageIndex(container);
   const entry = entryAt(index, position);
   const mounted = Boolean(entry && isLiveEntry(entry));
-  const geometry = mounted && entry
+  const geometry = entry
     ? { offsetTop: entry.offsetTop, height: entry.height }
     : estimateGeometry(index, position);
   const top = geometry.offsetTop - container.scrollTop;
   const bottom = top + geometry.height;
   return {
     position,
-    entryId: mounted && entry ? entry.entryId : null,
+    entryId: entry ? entry.entryId : null,
     mounted,
     estimated: !mounted,
     offsetTop: geometry.offsetTop,
@@ -369,10 +530,17 @@ export function scrollToEntry(
 ): boolean {
   if (!container || !entryId) return false;
   const element = elementForEntry(container, entryId);
-  if (!element) return false;
   const index = messageIndex(container);
   const position = indexOfEntry(index, entryId);
   const entry = position === undefined ? null : entryAt(index, position);
+  if (!element) {
+    if (!entry) return false;
+    container.scrollTo({
+      top: Math.max(0, entry.offsetTop - (options.offset ?? DEFAULT_SCROLL_OFFSET)),
+      behavior: options.behavior ?? "smooth",
+    });
+    return true;
+  }
   const useCache = Boolean(entry && entry.element === element && isLiveEntry(entry)) && !indexIsStale(container);
   const offsetTop = useCache && entry
     ? entry.offsetTop

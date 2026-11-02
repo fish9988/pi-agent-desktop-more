@@ -705,6 +705,37 @@ function markdownHeadingAnchors() {
   };
 }
 
+/**
+ * Display math (`$$…$$`, a ```math fence: `<pre><code class="language-math">`)
+ * goes into a `<div data-math-source>` holding its LaTeX, which MarkdownBody
+ * gives a Copy button (#1380). KaTeX then renders the formula inside the div;
+ * its glyphs are no source to copy. Runs after sanitizing, so the attribute is
+ * never one a user's own HTML could carry (the schema drops `data-*`), and
+ * inline math (no `<pre>`) stays as it is.
+ */
+function rehypeDisplayMathSource() {
+  return (tree: HastRoot): void => {
+    const visit = (parent: HastRoot | HastElement): void => {
+      parent.children = parent.children.map((child) => {
+        if (child.type !== "element") return child;
+        const code = child.tagName === "pre" && child.children.length === 1 ? child.children[0] : null;
+        const classes = code?.type === "element" && code.tagName === "code" ? code.properties.className : null;
+        if (Array.isArray(classes) && classes.includes("language-math")) {
+          return {
+            type: "element",
+            tagName: "div",
+            properties: { className: ["markdown-math-display"], dataMathSource: hastText(child).replace(/\n$/, "") },
+            children: [child],
+          };
+        }
+        visit(child);
+        return child;
+      });
+    };
+    visit(tree);
+  };
+}
+
 // Chat and file previews read the same rule: heading anchors first (so
 // `[go](#heading-two)` names a slug), then sanitizing, then the matching prefix
 // on both sides of every fragment pair. KaTeX runs last, after the anchors read
@@ -714,6 +745,7 @@ export const markdownRehypePlugins: ReactMarkdownOptions["rehypePlugins"] = [
   markdownHeadingAnchors,
   [rehypeSanitize, markdownSanitizeSchema],
   rehypeMatchClobberedIds,
+  rehypeDisplayMathSource,
   [rehypeKatex, { throwOnError: false, strict: false }],
 ];
 

@@ -20,6 +20,8 @@ interface UseChatFindOptions {
   entryIds: readonly string[];
   toolResults: ReadonlyMap<string, ToolResultMessage>;
   scrollContainerRef: RefObject<HTMLDivElement | null>;
+  hasMore?: boolean;
+  onLoadMore?: () => void;
 }
 
 type HighlightRegistry = { set(name: string, value: unknown): void; delete(name: string): void };
@@ -62,7 +64,7 @@ function clearHighlights(): void {
  * rows, opened groups, streamed text); the index is rebuilt once when the bar
  * opens.
  */
-export function useChatFind({ messages, entryIds, toolResults, scrollContainerRef }: UseChatFindOptions) {
+export function useChatFind({ messages, entryIds, toolResults, scrollContainerRef, hasMore = false, onLoadMore }: UseChatFindOptions) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [index, setIndex] = useState(0);
@@ -187,13 +189,13 @@ export function useChatFind({ messages, entryIds, toolResults, scrollContainerRe
     clearHighlights();
   }, []);
 
-  return { open, setOpen, close, query, setQuery, total, index: total === 0 ? 0 : Math.min(index, total - 1), current, next, prev, revealEntryId };
+  return { open, setOpen, close, query, setQuery, total, index: total === 0 ? 0 : Math.min(index, total - 1), current, next, prev, revealEntryId, hasMore, onLoadMore };
 }
 
 export type ChatFindState = ReturnType<typeof useChatFind>;
 
 export function ChatFindBar({ find }: { find: ChatFindState }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const inputRef = useRef<HTMLInputElement | null>(null);
   if (!find.open) return null;
   const hasQuery = find.query.trim().length > 0;
@@ -224,6 +226,18 @@ export function ChatFindBar({ find }: { find: ChatFindState }) {
       <span className="chat-find-count" aria-live="polite">
         {hasQuery ? (find.total > 0 ? `${find.index + 1}/${find.total}` : t("find.noResults")) : ""}
       </span>
+      {find.hasMore && find.onLoadMore && (
+        <button
+          type="button"
+          className="chat-find-load-more"
+          onClick={find.onLoadMore}
+          title={t("chat.loadEarlier")}
+          aria-label={t("chat.loadEarlier")}
+          style={{ width: "auto", padding: "0 6px", fontSize: 12, whiteSpace: "nowrap" }}
+        >
+          {locale.startsWith("zh") ? "加载更早历史" : "Load earlier"}
+        </button>
+      )}
       <button type="button" onClick={find.prev} disabled={find.total === 0} title={t("find.prev")} aria-label={t("find.prev")}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="18 15 12 9 6 15" /></svg>
       </button>

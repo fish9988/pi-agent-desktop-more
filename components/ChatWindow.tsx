@@ -10,6 +10,8 @@ import { asBracketedPaste, toTerminalKeyData } from "@/lib/terminal-input";
 import { countToolCallBlocks, getAssistantErrorMessage, getDisplayableAssistantBlocks, hasAssistantAnswer, isAssistantTruncated, isMessageGroupAnchor, splitFinalAssistantBlocks } from "@/lib/message-display";
 import { extractTurnWrittenFiles, type WrittenFile } from "@/lib/turn-written-files";
 import { buildQuotedSelection } from "@/lib/quoted-selection";
+import { texClipboardPayload } from "@/lib/selection-tex";
+import { recordRowHeight, setIndexedEntries } from "@/lib/message-index";
 import { MessageView } from "./MessageView";
 import { useReportDesktopReady } from "./desktop";
 import { MarkdownBody } from "./MarkdownBody";
@@ -108,6 +110,8 @@ interface Props {
 // the overlay keeps the name with zero width so the toast column spans full width.
 const CHAT_MINIMAP_WIDTH = 0;
 const CHAT_COLUMN_PADDING = 16;
+const VIRTUAL_RENDER_LIMIT = 60;
+const VIRTUAL_DEFAULT_ITEM_HEIGHT = 120;
 
 // --- Transcript anchoring (the ground work for list virtualization) ---------
 // Two things move the reading position that the browser cannot fix for us:
@@ -396,41 +400,8 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
   });
   const [restoreAnchorReady, setRestoreAnchorReady] = useState(false);
 
-  // Per-answer branch pager (< 2/3 >): the session hook reports the tree, the
-  // active leaf and the switch callback once per change; keep them here so a
-  // message footer can page without routing through the top-bar panel.
-  const [branchView, setBranchView] = useState<{
-    tree: SessionTreeNode[];
-    leafId: string | null;
-    onLeafChange: (leafId: string | null, options?: LeafChangeOptions) => void;
-    locked: boolean;
-  } | null>(null);
-  const forwardBranchData = useCallback((
-    tree: SessionTreeNode[],
-    leafId: string | null,
-    onLeafChange: (leafId: string | null, options?: LeafChangeOptions) => void,
-    locked: boolean,
-  ) => {
-    setBranchView((current) => (
-      current
-        && current.tree === tree
-        && current.leafId === leafId
-        && current.locked === locked
-        && current.onLeafChange === onLeafChange
-        ? current
-        : { tree, leafId, onLeafChange, locked }
-    ));
-    onBranchDataChange?.(tree, leafId, onLeafChange, locked);
-  }, [onBranchDataChange]);
-  const branchDecisions = useMemo(
-    () => (branchView ? getBranchDecisions(branchView.tree, branchView.leafId) : []),
-    [branchView],
-  );
-  const handleBranchPagerSwitch = useCallback((tipId: string) => {
-    branchView?.onLeafChange(tipId);
-  }, [branchView]);
   const {
-    loading, error, messages, activeToolResults, entryIds, historyCursor, hasEarlierMessages, streamingStore,
+    data, loading, error, messages, activeToolResults, entryIds, historyCursor, hasEarlierMessages, streamingStore,
     agentRunning, bashRunning, pendingBash, modelNames, modelList, modelError, modelScopeWarnings, modelThinkingLevels, modelThinkingLevelMaps, toolPreset, thinkingLevel,
     retryInfo, contextUsage, forkingEntryId, summarizationRetry, automation, handleSetAutomation,
     isCompacting, compactError, compactNotice, compactResult, displayModel: displayModelValue, modelSwitching, sessionStats,
@@ -448,7 +419,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
     sessionIdRef, scrollContainerRef,
     lastUserMsgRef, promptAnchorActive,
     branchSummaryPending, handleAbortBranchSummary, routedModel,
-    handleSend, handleAbort, handleAbortRetry, handleFork, handleEditContent, cancelEdit, handleModelChange, handleModelReselect,
+    handleSend, handleAbort, handleAbortRetry, handleFork, handleLeafChange, handleEditContent, cancelEdit, handleModelChange, handleModelReselect,
     handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior, handleAbortCompaction, handleQueuedMessageAction,
     retryLoad,
     dismissModelScopeWarnings,
@@ -459,11 +430,25 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
   } = useAgentSession({
     session, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd: wrappedOnAgentEnd, onAttentionNeeded, onSessionCreated, onSessionForked,
     chatWorkspace: chatOnly,
-    modelsRefreshKey, chatInputRef, onBranchDataChange: forwardBranchData, onSystemPromptChange, onSystemToolsChange, onSystemInfoLoaderChange, onSessionStatsPanelOpen,
+    modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemToolsChange, onSystemInfoLoaderChange, onSessionStatsPanelOpen,
     onOpenSettings,
     deferInitialScroll: Boolean(pendingScrollRestore),
     onScrollPositionChange,
   });
+  const branchSwitchLocked = agentRunning || bashRunning || isCompacting || branchSummaryPending;
+  const branchDecisions = useMemo(
+    () => (data?.tree ? getBranchDecisions(data.tree, activeLeafId) : []),
+    [data?.tree, activeLeafId],
+  );
+  const handleLeafChangeRef = useRef(handleLeafChange);
+  handleLeafChangeRef.current = handleLeafChange;
+  const handleBranchPagerSwitch = useCallback((tipId: string) => {
+    userScrollIntentRef.current = false;
+    prependAnchorRef.current = null;
+    prevScrollDistanceRef.current = null;
+    stopPrependPin();
+    void handleLeafChangeRef.current(tipId);
+  }, []);
   const sessionBusy = agentRunning || bashRunning;
   // Plus: work details level (compact/standard/detailed/verbose).
   const { policy: workPolicy, collapseTiming: workCollapseTiming } = useWorkDetails();
@@ -536,12 +521,8 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
 
   useEffect(() => {
     if (!quoteInputOpen || !quotedSelection) return;
-    quoteChatInputRef.current?.insertIfEmpty(buildQuotedSelection(
-      quotedSelection.text,
-      t("chat.quoteIntro"),
-      t("chat.quoteQuestion"),
-    ));
-  }, [quoteInputOpen, quotedSelection, t]);
+    quoteChatInputRef.current?.insertIfEmpty(buildQuotedSelection(quotedSelection.text));
+  }, [quoteInputOpen, quotedSelection]);
 
   useLayoutEffect(() => {
     const popover = quotePopoverRef.current;
@@ -589,18 +570,14 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
 
   const askSelectionHere = useCallback(() => {
     if (!quotedSelection) return;
-    chatInputRef?.current?.insertText(buildQuotedSelection(
-      quotedSelection.text,
-      t("chat.quoteIntro"),
-      t("chat.quoteQuestion"),
-    ));
+    chatInputRef?.current?.insertText(buildQuotedSelection(quotedSelection.text));
     // No `removeAllRanges()` here (pi-web bc762a3e, #1319): inserting focuses
     // the composer, and that focus already collapses the page's selection.
     // Calling it afterwards also clears the composer's own selection and drops
     // its caret to offset 0, so the quote would be typed in front of instead
     // of after.
     closeQuotedSelection();
-  }, [chatInputRef, quotedSelection, closeQuotedSelection, t]);
+  }, [chatInputRef, quotedSelection, closeQuotedSelection]);
 
   const askSelectionInNewChat = useCallback(async (prompt: string) => {
     const sourceSessionId = sessionIdRef.current ?? session?.id;
@@ -662,6 +639,25 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
     playDoneSoundRef.current();
   }, [completionNotificationsEnabled, extensionDialog]);
 
+  // When copying a selection inside the transcript that contains rendered KaTeX
+  // formulas, replace the duplicate MathML + glyph text with the original
+  // $...$ / $$...$$ TeX source from <annotation encoding="application/x-tex">.
+  useEffect(() => {
+    const onCopy = (event: ClipboardEvent) => {
+      const container = scrollContainerRef.current;
+      const selection = window.getSelection();
+      if (!container || !selection || selection.rangeCount === 0 || selection.isCollapsed) return;
+      const range = selection.getRangeAt(0);
+      if (!container.contains(range.commonAncestorContainer)) return;
+      const payload = texClipboardPayload(selection);
+      if (!payload || !event.clipboardData) return;
+      event.clipboardData.setData("text/plain", payload);
+      event.preventDefault();
+    };
+    document.addEventListener("copy", onCopy);
+    return () => document.removeEventListener("copy", onCopy);
+  }, [scrollContainerRef]);
+
   // Register the abort handler for the global Esc shortcut
   useEffect(() => {
     registerAbortHandler(sessionBusy ? handleAbort : null);
@@ -702,6 +698,8 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
   const pendingScrollRestoreRef = useRef(pendingScrollRestore);
   pendingScrollRestoreRef.current = pendingScrollRestore;
   const [pendingSearchScroll, setPendingSearchScroll] = useState<Props["searchTarget"]>(null);
+  const [virtualAnchorIndex, setVirtualAnchorIndex] = useState<number | null>(null);
+  const totalRenderedCountRef = useRef(0);
 
   // ChatWindow intentionally stays mounted across session switches. Reset all
   // per-viewport state during render so the next commit cannot paint the old
@@ -722,6 +720,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
     loadingOlderRef.current = false;
     prevScrollDistanceRef.current = null;
     setPendingSearchScroll(null);
+    setVirtualAnchorIndex(null);
     userScrollIntentRef.current = false;
     stalledOlderLoadsRef.current = 0;
     foldAnchorRef.current = null;
@@ -993,7 +992,16 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
       return target === container || container.contains(target) ? container : null;
     };
     const markIntent = (event: Event) => {
+      if (event.target instanceof Element && event.target.closest(".message-branch-pager")) return;
       if (inside(event)) userScrollIntentRef.current = true;
+      if (!inside(event)) return;
+      if (event.type === "pointerdown" || event.type === "touchstart" || event.type === "touchmove") {
+        stopPrependPin();
+      } else if (event.type === "keydown" && event instanceof KeyboardEvent) {
+        if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "].includes(event.key)) {
+          stopPrependPin();
+        }
+      }
     };
     const requestNextFrame = () => {
       if (frame !== null) return;
@@ -1005,6 +1013,11 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
     const onScroll = (event: Event) => {
       const container = scrollContainerRef.current;
       if (!container || event.target !== container) return;
+      if (loadingOlderRef.current && prependAnchorRef.current && pinFrameRef.current === null) {
+        const currentFold = captureFoldAnchor(container, foldRowsRef.current);
+        const updated = capturePrependAnchor(container, currentFold);
+        if (updated) prependAnchorRef.current = updated;
+      }
       if (!userScrollIntentRef.current) return;
       // Only at the very top of the loaded window; one frame of slack for
       // trackpad overscroll and fractional pixel positions.
@@ -1020,12 +1033,13 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
       const container = inside(event);
       if (!container) return;
       userScrollIntentRef.current = true;
+      stopPrependPin();
       if (event.deltaY >= 0) return;
       if (container.scrollTop > 24) return;
       if (Date.now() - lastOlderLoadAtRef.current < 400) return;
       requestNextFrame();
     };
-    const gestureEvents = ["touchstart", "pointerdown", "keydown"] as const;
+    const gestureEvents = ["touchstart", "touchmove", "pointerdown", "keydown"] as const;
     for (const event of gestureEvents) document.addEventListener(event, markIntent, { capture: true, passive: true });
     document.addEventListener("wheel", onWheel, { capture: true, passive: true });
     document.addEventListener("scroll", onScroll, { capture: true, passive: true });
@@ -1119,6 +1133,12 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
       observer.observe(row);
       observedRowsRef.current.add(row);
     }
+    for (const row of rows) {
+      if (row.offsetHeight <= 0) continue;
+      const rawTurn = row.dataset.conversationTurn;
+      const turn = rawTurn === undefined || rawTurn === "" ? null : Number(rawTurn);
+      recordRowHeight(scrollContainerRef.current, row.dataset.entryId, row.offsetHeight, turn !== null && Number.isFinite(turn) ? turn : null);
+    }
     // The list box itself: a folded work group sits in a wrapper that carries
     // no entry id, and its `contain-intrinsic-size` estimate resolving changes
     // the height of everything below it without resizing a row wrapper.
@@ -1202,6 +1222,10 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
       );
       if (delta !== 0) container.scrollTop += delta;
       foldAnchorRef.current = captureFoldAnchor(container, foldRowsRef.current);
+      if (loadingOlderRef.current && prependAnchorRef.current) {
+        const updated = capturePrependAnchor(container, foldAnchorRef.current);
+        if (updated) prependAnchorRef.current = updated;
+      }
     });
     rowObserverRef.current = observer;
     syncRowObservations();
@@ -1216,8 +1240,21 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
   // New pages add rows; a session switch replaces them all. Only the difference
   // is touched, so rows that are already being watched keep their baseline.
   useLayoutEffect(() => {
+    const container = scrollContainerRef.current;
+    if (container) {
+      const turnMap = new Map<string, number>();
+      let turnCounter = 0;
+      messages.forEach((msg, idx) => {
+        if (getUserInputText(msg)) {
+          const id = entryIds[idx];
+          if (id) turnMap.set(id, turnCounter);
+          turnCounter += 1;
+        }
+      });
+      setIndexedEntries(container, entryIds, turnMap);
+    }
     syncRowObservations();
-  }, [entryIds, messages.length, scrollContainerRef]);
+  }, [entryIds, messages, messages.length, scrollContainerRef]);
 
 
   useEffect(() => {
@@ -1237,6 +1274,19 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
       frame = requestAnimationFrame(() => {
         frame = null;
         foldAnchorRef.current = captureFoldAnchor(container, foldRowsRef.current);
+        const total = totalRenderedCountRef.current;
+        if (total > VIRTUAL_RENDER_LIMIT) {
+          if (isScrollAtTail(container.scrollTop, container.clientHeight, container.scrollHeight)) {
+            setVirtualAnchorIndex((prev) => (prev === null ? prev : null));
+          } else {
+            const ratio = Math.max(0, Math.min(1, (container.scrollTop + container.clientHeight * 0.5) / Math.max(container.scrollHeight, 1)));
+            const estimatedCenter = Math.round(ratio * (total - 1));
+            setVirtualAnchorIndex((prev) => {
+              const currentCenter = prev ?? (total - 1);
+              return Math.abs(estimatedCenter - currentCenter) >= 16 ? estimatedCenter : prev;
+            });
+          }
+        }
       });
     };
     document.addEventListener("scroll", onScroll, { capture: true, passive: true });
@@ -1480,11 +1530,23 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
     };
   }, [isEmptyNew, scrollContainerRef]);
 
+  const handleLoadMoreHistory = useCallback(() => {
+    userScrollIntentRef.current = true;
+    requestOlderPage();
+  }, [requestOlderPage]);
+
   // Plus: while live work is grouped, the streaming entry's reasoning and tool
   // calls go into the live group; only its trailing answer text stays outside
   // (see ./LiveStream for the split).
   // Plus: in-conversation find (Ctrl/Cmd+F), including folded work.
-  const chatFind = useChatFind({ messages, entryIds, toolResults: toolResultsMap, scrollContainerRef });
+  const chatFind = useChatFind({
+    messages,
+    entryIds,
+    toolResults: toolResultsMap,
+    scrollContainerRef,
+    hasMore: hasEarlierMessages,
+    onLoadMore: handleLoadMoreHistory,
+  });
   const findReveal = chatFind.revealEntryId;
   // Set while rendering the message list; the live row then carries the phase
   // label, so the separate "Waiting for model…" line is not repeated below it.
@@ -1623,6 +1685,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
   // messages.length alone left the first turn outside the window.
   const selectConversationTurn = useCallback((turnIndex: number) => {
     setVisibleCount((current) => Math.max(current, messages.length * 2));
+    setVirtualAnchorIndex(null);
     requestAnimationFrame(() => requestAnimationFrame(() => {
       const container = scrollContainerRef.current;
       const anchor = container?.querySelector<HTMLElement>(`[data-conversation-turn="${turnIndex}"]`);
@@ -1945,7 +2008,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
                     compactStep={options.compactStep}
                     branchDecisions={branchDecisions}
                     onBranchSwitch={handleBranchPagerSwitch}
-                    branchSwitchLocked={branchView?.locked ?? false}
+                    branchSwitchLocked={branchSwitchLocked}
                     branchPager={options.branchPager !== false}
                   />
                 );
@@ -2216,6 +2279,24 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
               }
               const { startIndex } = getVisibleRenderWindow(rendered.length, visibleCount);
               const hasMore = startIndex > 0 || hasEarlierMessages;
+              const windowSlice = rendered.slice(startIndex);
+              totalRenderedCountRef.current = windowSlice.length;
+              const shouldVirtualizeSlice = windowSlice.length > VIRTUAL_RENDER_LIMIT
+                && !findReveal
+                && !pendingSearchScroll
+                && !pendingScrollRestore
+                && !editEntryId
+                && !promptAnchorActive;
+              const centerIdx = virtualAnchorIndex ?? (windowSlice.length - 1);
+              const halfWindow = Math.floor(VIRTUAL_RENDER_LIMIT / 2);
+              const virtualStart = shouldVirtualizeSlice
+                ? Math.max(0, Math.min(windowSlice.length - VIRTUAL_RENDER_LIMIT, centerIdx - halfWindow))
+                : 0;
+              const virtualEnd = shouldVirtualizeSlice
+                ? Math.min(windowSlice.length, virtualStart + VIRTUAL_RENDER_LIMIT)
+                : windowSlice.length;
+              const topVirtualSpacer = virtualStart * VIRTUAL_DEFAULT_ITEM_HEIGHT;
+              const bottomVirtualSpacer = (windowSlice.length - virtualEnd) * VIRTUAL_DEFAULT_ITEM_HEIGHT;
               return (
                 <>
                   {hasMore && (
@@ -2236,7 +2317,9 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
                        ) : t("chat.loadEarlier")}
                     </div>
                   )}
-                  {rendered.slice(startIndex).map((item) => (typeof item === "function" ? item() : item))}
+                  {topVirtualSpacer > 0 && <div data-virtual-spacer="top" aria-hidden="true" style={{ height: topVirtualSpacer }} />}
+                  {windowSlice.slice(virtualStart, virtualEnd).map((item) => (typeof item === "function" ? item() : item))}
+                  {bottomVirtualSpacer > 0 && <div data-virtual-spacer="bottom" aria-hidden="true" style={{ height: bottomVirtualSpacer }} />}
                 </>
               );
             })()}
@@ -2288,6 +2371,8 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
             turns={conversationTurns}
             scrollContainerRef={scrollContainerRef}
             onSelect={selectConversationTurn}
+            hasMore={hasEarlierMessages}
+            onLoadMore={handleLoadMoreHistory}
           />
           <ChatFindBar find={chatFind} />
         </>
@@ -2452,7 +2537,7 @@ function NoticeShelf({ notices, floating = false, onPauseChange }: { notices: No
           : notice.type === "warning"
             ? "var(--warning)"
             : notice.type === "success"
-              ? "#10b981"
+              ? "var(--success)"
               : "var(--accent)";
         return (
           <div

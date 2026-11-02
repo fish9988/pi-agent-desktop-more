@@ -41,15 +41,18 @@ const ZOOM_STEP = 0.25;
 const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 3;
 
-export function downloadMermaidSvg(svg: SVGSVGElement): void {
-  // Mermaid's HTML serialization can leave void tags such as <br> unclosed.
-  const xml = new XMLSerializer().serializeToString(svg);
+export function downloadSvgFile(xml: string, filename: string): void {
   const url = URL.createObjectURL(new Blob([xml], { type: "image/svg+xml;charset=utf-8" }));
   const link = document.createElement("a");
   link.href = url;
-  link.download = "mermaid-diagram.svg";
+  link.download = filename;
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+export function downloadMermaidSvg(svg: SVGSVGElement): void {
+  // Mermaid's HTML serialization can leave void tags such as <br> unclosed.
+  downloadSvgFile(new XMLSerializer().serializeToString(svg), "mermaid-diagram.svg");
 }
 
 type RenderState =
@@ -131,15 +134,12 @@ export function MermaidBlock({ code, isStreaming, defaultPreview = false, fit = 
   }, [code, currentKey, isDark, previewVisible]);
 
   const previewButton = useMemo(() => (
-    <button
-      type="button"
-      onClick={() => setShowPreview((v) => !v)}
-      disabled={isStreaming}
-      title={isStreaming ? t("i18n.previewAfterStreaming") : (previewVisible ? t("i18n.showMermaidSource") : t("i18n.previewMermaid"))}
-      className={["markdown-code-action", previewVisible ? "is-active" : ""].filter(Boolean).join(" ")}
-    >
-      {previewVisible ? t("i18n.source") : t("i18n.preview")}
-    </button>
+    <PreviewToggleButton
+      isStreaming={isStreaming}
+      previewVisible={previewVisible}
+      onToggle={() => setShowPreview((v) => !v)}
+      title={previewVisible ? t("i18n.showMermaidSource") : t("i18n.previewMermaid")}
+    />
   ), [isStreaming, previewVisible, t]);
 
   if (!previewVisible) {
@@ -186,39 +186,94 @@ export function MermaidBlock({ code, isStreaming, defaultPreview = false, fit = 
             dangerouslySetInnerHTML={{ __html: renderState.svg }}
           />
         )}
-        {zoomOpen && <MermaidZoomDialog svg={renderState.svg} onClose={() => setZoomOpen(false)} />}
+        {zoomOpen && (
+          <DiagramZoomDialog title={t("i18n.mermaidDiagram")} label={t("i18n.mermaidViewer")} onClose={() => setZoomOpen(false)}>
+            <div dangerouslySetInnerHTML={{ __html: renderState.svg }} />
+          </DiagramZoomDialog>
+        )}
       </>
     );
 
   return (
-    <div className="markdown-code-block">
-      <div className="markdown-code-header">
-        <span className="markdown-code-lang">mermaid</span>
-        <div className="markdown-code-actions">
+    <PreviewFrame
+      lang="mermaid"
+      actions={
+        <>
           {headerAction}
           {renderState?.key === currentKey && renderState.status === "ready" && (
-            <button
-              type="button"
-              className="markdown-code-action"
-              title={`${t("i18n.downloadFile")} (SVG)`}
-              aria-label={`${t("i18n.downloadFile")} (SVG)`}
+            <SvgDownloadButton
               onClick={() => {
                 const svg = previewRef.current?.querySelector("svg");
                 if (svg) downloadMermaidSvg(svg);
               }}
-            >
-              SVG
-            </button>
+            />
           )}
           {previewButton}
-        </div>
-      </div>
+        </>
+      }
+    >
       {body}
+    </PreviewFrame>
+  );
+}
+
+// What a previewed fence (mermaid here, svg in components/SvgBlock.tsx) shares:
+// the header with its toggle and download button, and the zoom viewer.
+
+export function PreviewToggleButton({ isStreaming, previewVisible, onToggle, title }: {
+  isStreaming?: boolean;
+  previewVisible: boolean;
+  onToggle: () => void;
+  /** What a click shows: the source while the preview is visible, else the preview. */
+  title: string;
+}) {
+  const { t } = useI18n();
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={isStreaming}
+      title={isStreaming ? t("i18n.previewAfterStreaming") : title}
+      className={["markdown-code-action", previewVisible ? "is-active" : ""].filter(Boolean).join(" ")}
+    >
+      {previewVisible ? t("i18n.source") : t("i18n.preview")}
+    </button>
+  );
+}
+
+export function SvgDownloadButton({ onClick }: { onClick: () => void }) {
+  const { t } = useI18n();
+  return (
+    <button
+      type="button"
+      className="markdown-code-action"
+      title={`${t("i18n.downloadFile")} (SVG)`}
+      aria-label={`${t("i18n.downloadFile")} (SVG)`}
+      onClick={onClick}
+    >
+      SVG
+    </button>
+  );
+}
+
+export function PreviewFrame({ lang, actions, children }: { lang: string; actions: ReactNode; children: ReactNode }) {
+  return (
+    <div className="markdown-code-block">
+      <div className="markdown-code-header">
+        <span className="markdown-code-lang">{lang}</span>
+        <div className="markdown-code-actions">{actions}</div>
+      </div>
+      {children}
     </div>
   );
 }
 
-function MermaidZoomDialog({ svg, onClose }: { svg: string; onClose: () => void }) {
+export function DiagramZoomDialog({ title, label, onClose, children }: {
+  title: string;
+  label: string;
+  onClose: () => void;
+  children: ReactNode;
+}) {
   const { t } = useI18n();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [zoom, setZoom] = useState(1);
@@ -241,7 +296,7 @@ function MermaidZoomDialog({ svg, onClose }: { svg: string; onClose: () => void 
     <dialog
       ref={dialogRef}
       className="mermaid-zoom-dialog"
-      aria-label={t("i18n.mermaidViewer")}
+      aria-label={label}
       onCancel={(event) => {
         event.preventDefault();
         onClose();
@@ -254,7 +309,7 @@ function MermaidZoomDialog({ svg, onClose }: { svg: string; onClose: () => void 
     >
       <div className="mermaid-zoom-layout">
         <div className="mermaid-zoom-toolbar">
-          <span className="mermaid-zoom-title">{t("i18n.mermaidDiagram")}</span>
+          <span className="mermaid-zoom-title">{title}</span>
           <div className="mermaid-zoom-actions">
             <div className="mermaid-zoom-stepper">
               <button
@@ -311,15 +366,22 @@ function MermaidZoomDialog({ svg, onClose }: { svg: string; onClose: () => void 
             if (event.target === event.currentTarget) onClose();
           }}
         >
-          <div
-            className="mermaid-zoom-canvas"
-            style={{ width: `${zoom * 100}%` }}
-            dangerouslySetInnerHTML={{ __html: svg }}
-          />
+          <div className="mermaid-zoom-canvas" style={{ width: `${zoom * 100}%` }}>
+            {children}
+          </div>
         </div>
       </div>
     </dialog>
   );
+}
+
+/** Blocks longer than this fold to their first lines until expanded. */
+export const CODE_FOLD_LINES = 30;
+/** A one- or two-line snippet (a command, a path) reads better without a gutter. */
+export const CODE_LINE_NUMBER_MIN_LINES = 3;
+
+export function codeLineCount(code: string): number {
+  return code.replace(/\n$/, "").split("\n").length;
 }
 
 interface CodeBlockProps {
@@ -350,8 +412,15 @@ delete codeBlockDarkTheme['pre[class*="language-"]'].background;
  */
 export const CodeBlock = memo(function CodeBlock({ code, lang, headerAction, isStreaming }: CodeBlockProps) {
   const { isDark } = useTheme();
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const [copied, setCopied] = useState(false);
+  const [wrap, setWrap] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const lineCount = codeLineCount(code);
+  // A block keeps growing while it streams, so it only folds once complete.
+  const foldable = !isStreaming && lineCount > CODE_FOLD_LINES;
+  const folded = foldable && !expanded;
+  const showLineNumbers = lineCount >= CODE_LINE_NUMBER_MIN_LINES;
   // pi-web #1181: past this task's highlight budget a block renders as plain
   // text (same lines, numbers and box) and takes its colours in an idle slice.
   const [highlighted, setHighlighted] = useState(() => !isStreaming && takeHighlightBudget(code.length));
@@ -375,6 +444,16 @@ export const CodeBlock = memo(function CodeBlock({ code, lang, headerAction, isS
         <div className="markdown-code-actions">
           {headerAction}
           <button
+            type="button"
+            onClick={() => setWrap((value) => !value)}
+            className={`markdown-code-action${wrap ? " is-active" : ""}`}
+            aria-pressed={wrap}
+          >
+            {wrap
+              ? (locale.startsWith("zh") ? "不换行" : "No wrap")
+              : (locale.startsWith("zh") ? "自动换行" : "Wrap")}
+          </button>
+          <button
             onClick={copy}
             className="markdown-code-action"
           >
@@ -382,6 +461,15 @@ export const CodeBlock = memo(function CodeBlock({ code, lang, headerAction, isS
           </button>
         </div>
       </div>
+      <div
+        className={`markdown-code-body${folded ? " is-folded" : ""}${wrap ? " is-wrapped" : ""}`}
+        style={folded ? {
+          maxHeight: "26em",
+          overflow: "hidden",
+          WebkitMaskImage: "linear-gradient(to bottom, var(--text) calc(100% - 3.5em), transparent)",
+          maskImage: "linear-gradient(to bottom, var(--text) calc(100% - 3.5em), transparent)",
+        } : undefined}
+      >
       {isStreaming ? (
         <pre
           style={{
@@ -391,16 +479,17 @@ export const CodeBlock = memo(function CodeBlock({ code, lang, headerAction, isS
             lineHeight: 1.62,
             overflowX: "auto",
             backgroundColor: "color-mix(in srgb, var(--bg) 92%, var(--bg-panel))",
+            ...(wrap ? { whiteSpace: "pre-wrap", overflowWrap: "anywhere", wordBreak: "break-word" } : {}),
           }}
         >
-          <code style={{ fontFamily: "var(--font-mono)" }}>{code}</code>
+          <code style={{ fontFamily: "var(--font-mono)", ...(wrap ? { whiteSpace: "pre-wrap", overflowWrap: "anywhere", wordBreak: "break-word" } : {}) }}>{code}</code>
         </pre>
       ) : (
         <SyntaxHighlighter
           language={highlighted ? lang || "text" : "text"}
           style={isDark ? codeBlockDarkTheme : vs}
-          showLineNumbers
-          lineNumberStyle={{ color: "var(--text-dim)", fontStyle: "normal" }}
+          showLineNumbers={showLineNumbers}
+          lineNumberStyle={{ color: "var(--text-dim)", fontStyle: "normal", userSelect: "none" }}
           customStyle={{
             margin: 0,
             padding: "11px 13px",
@@ -411,11 +500,37 @@ export const CodeBlock = memo(function CodeBlock({ code, lang, headerAction, isS
             border: "none",
             borderRadius: 0,
             backgroundColor: "color-mix(in srgb, var(--bg) 92%, var(--bg-panel))",
+            ...(wrap ? { whiteSpace: "pre-wrap", overflowWrap: "anywhere", wordBreak: "break-word" } : {}),
           }}
-          codeTagProps={{ style: { fontFamily: "var(--font-mono)" } }}
+          codeTagProps={{ style: { fontFamily: "var(--font-mono)", ...(wrap ? { whiteSpace: "pre-wrap", overflowWrap: "anywhere", wordBreak: "break-word" } : {}) } }}
         >
           {code}
         </SyntaxHighlighter>
+      )}
+      </div>
+      {foldable && (
+        <button
+          type="button"
+          className="markdown-code-fold"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((value) => !value)}
+          style={{
+            display: "block",
+            width: "100%",
+            padding: "5px 10px",
+            border: 0,
+            borderTop: "var(--hairline) solid color-mix(in srgb, var(--border) 55%, transparent)",
+            background: "var(--bg-panel)",
+            color: "var(--text-muted)",
+            cursor: "pointer",
+            font: "inherit",
+            fontSize: 12,
+          }}
+        >
+          {expanded
+            ? (locale.startsWith("zh") ? "收起代码" : "Collapse")
+            : (locale.startsWith("zh") ? `展开全部 ${lineCount} 行` : `Show all ${lineCount} lines`)}
+        </button>
       )}
     </div>
   );
