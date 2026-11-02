@@ -110,6 +110,25 @@ _最后更新：2026-11-02_
 
 ## 待办 / 候选
 
+### 1.19.0 调研里明确要做、还没动的（按性价比排序）
+
+- [ ] **真正的消息列表虚拟化**。前置三步必须先做，否则高度会抖、`‹ 2/3 ›`/查找跳转/跨条目选区都会断：① `.chat-scroll-container` 上 `overflow-anchor: none`；② 已挂载条目加 `ResizeObserver` 高度补偿；③ prepend 恢复改用 entryId + 偏移（`app/plus-theme.css` 里给 `[data-entry-id]` 设的 `contain-intrinsic-size: auto 240px` 也要从“所有消息”收窄到代码块/折叠组）。做完再上 `react-virtuoso`（只用核心包，`MessageList` 是商业 EULA）。当前只是“分页渲染 + 手动锚点”，`content-visibility` 只省 paint。
+- [ ] **分支交互下沉到回答 footer**（`‹ 2/3 ›`），完整树降级成“高级地图”；只暴露真正的决策点（root / 重新回答 / 编辑后重发 / 分叉），切换目标用分支 `tipId`，滚动锚点用最近用户消息。1.19.0 已经把“工具调用扇出不算分支”和 420px 面板做了，但入口仍在顶栏。
+- [ ] **`ChatFindBar` / 会话导航的定位改成 entryId/turnIndex 映射**，别再每帧 `querySelectorAll + getBoundingClientRect`（也是虚拟化的前提）。
+- [ ] **首批历史改成增量推送**：先推尾部窗口、后台补历史，而不是“算完整窗口一次返回”。现在首屏仍是整窗一次性 JSON。
+
+### 1.19.x 留下的小口子
+
+- [ ] 设置窗口的 `window.open`（同源）目前被当外链处理；正解是 Tauri 的 `on_new_window` / `on_navigation`（要改 Rust，只能靠 CI 构建验证）。
+- [ ] 拖 .html 进窗口、以及带修饰键（Ctrl/Shift）点外链，仍可能顶掉 UI（拖放在合成器层，JS 点击兜底管不到）。
+- [ ] `/api/sessions/[id]` 首屏仍有约 10–20 ms 的同步 tree/stats 计算（解析已经异步了）。
+- [ ] 超大单行（几 MB 的**有效**内容、非可裁 `details`）仍无法中途让出；>1 GB 会话回退同步解析；`lib/session-context-cache.ts` 只是进程内 LRU，不跨进程、不持久化。
+- [ ] 分支面板的判定逻辑只有单元测试（`hasNavigableBranches` / `restsOnMoreHistory`），**没在真分支上截过图**：本机 21 个会话都没有真分支。
+- [ ] 统计面板在应用内只验了 1440/900 两档；420 窄宽只有静态复刻（`temp/stats-*.png`，已删）。
+- [ ] `demo/` 是独立副本（tsconfig 已 exclude），没同步 1.19.0 的外链兜底等改动。
+
+### 更早的待办（仍在）
+
 - [ ] **WSL 支持**（用户 2026-10-21 提出，参考 Codex）：方案已给用户，等确认。要点见下方「WSL 调研」。
 - [ ] 暂缓的上游项：#1324 工具参数按行显示（先出预览）、1280e4f6 模型页文案。
 - [ ] 1.5.0 / 1.6.0 的使用反馈（时间线、外观页预览、扩展标签）。
