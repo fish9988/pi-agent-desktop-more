@@ -1266,30 +1266,36 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     return shown;
   }, [archiveProject, onOpenTerminal, revealProjectInFileManager, revealProjectLabel, showNativeBranchMenu, showNativeWorktreeMenu, t]);
 
-  const openProjectMenu = useCallback((e: React.MouseEvent<HTMLButtonElement>, projectRoot: string) => {
-    e.stopPropagation();
+  const openProjectMenuAt = useCallback((projectRoot: string, at: { x: number; y: number }, anchor?: HTMLElement | null) => {
     resetWorktreeActions();
     if (canUseNativeMenu()) {
-      void showNativeProjectMenu(projectRoot, menuPointBelow(e.currentTarget));
+      void showNativeProjectMenu(projectRoot, anchor ? menuPointBelow(anchor) : at);
       return;
     }
-    if (projectMenu?.root === projectRoot) {
-      closeProjectMenu();
-      return;
-    }
-    const rect = e.currentTarget.getBoundingClientRect();
     const menuWidth = 168;
-    const menuHeight = 42;
-    const left = Math.max(8, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8));
-    const top = rect.bottom + menuHeight > window.innerHeight - 8
-      ? rect.top - menuHeight - 4
-      : rect.bottom + 4;
+    const menuHeight = 160;
+    const rect = anchor?.getBoundingClientRect();
+    const baseLeft = rect ? rect.right - menuWidth : at.x;
+    const baseTop = rect ? rect.bottom + 4 : at.y + 4;
+    const left = Math.max(8, Math.min(baseLeft, window.innerWidth - menuWidth - 8));
+    const top = baseTop + menuHeight > window.innerHeight - 8
+      ? Math.max(8, (rect ? rect.top : at.y) - menuHeight - 4)
+      : baseTop;
     setProjectMenu({ root: projectRoot });
     setProjectMenuPos({ top, left });
     setProjectBranchMenu(null);
     setProjectMenuView("actions");
     setProjectRevealError(null);
-  }, [closeProjectMenu, projectMenu, resetWorktreeActions, showNativeProjectMenu]);
+  }, [resetWorktreeActions, showNativeProjectMenu]);
+
+  const openProjectMenu = useCallback((e: React.MouseEvent<HTMLButtonElement>, projectRoot: string) => {
+    e.stopPropagation();
+    if (!canUseNativeMenu() && projectMenu?.root === projectRoot) {
+      closeProjectMenu();
+      return;
+    }
+    openProjectMenuAt(projectRoot, { x: e.clientX, y: e.clientY }, e.currentTarget);
+  }, [closeProjectMenu, openProjectMenuAt, projectMenu]);
 
   // Phase A: project tree — groups sessions by project root. Sorting is
   const trimmedSessionQuery = sessionQuery.trim().toLowerCase();
@@ -1448,7 +1454,14 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
 
     return (
       <div key={group.projectRoot} className={`sidebar-project-tree-group${isCollapsed ? " is-collapsed" : ""}${isActive ? " is-active" : ""}`}>
-        <div className={`sidebar-project-tree-row${isMenuOpen ? " is-menu-open" : ""}`}>
+        <div
+          className={`sidebar-project-tree-row${isMenuOpen ? " is-menu-open" : ""}`}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            openProjectMenuAt(group.projectRoot, { x: e.clientX, y: e.clientY });
+          }}
+        >
           <button
             type="button"
             className="sidebar-project-tree-row-main"
@@ -2242,6 +2255,10 @@ function SessionFamilyItem({
       data-session-depth={depth}
       aria-level={depth + 1}
       style={depth > 0 ? { marginLeft: depth * 14 } : undefined}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }}
     >
       <div style={{ position: "relative" }}>
         <SessionItem
@@ -2376,7 +2393,7 @@ function showProjectActivity(
         <span
           title={t("sidebar.newSessionActivity")}
           aria-label={`${t("sidebar.newSessionActivity")} (${activity.unread})`}
-          style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "#0891b2", fontSize: 10, fontFamily: "var(--font-mono)" }}
+          style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "var(--accent)", fontSize: 10, fontFamily: "var(--font-mono)" }}
         >
           <span style={{ width: 6, height: 6, borderRadius: "50%", background: "currentColor", display: "inline-block" }} />
           {activity.unread}
@@ -2464,9 +2481,9 @@ function SessionItem({
 
   const startRename = useCallback(() => {
     if (session.transient) return;
-    setRenameValue(session.name ?? "");
+    setRenameValue(session.name || title);
     setRenaming(true);
-  }, [session.name, session.transient]);
+  }, [session.name, session.transient, title]);
 
   const beginDeleteConfirmation = useCallback(() => {
     if (session.transient) return;
@@ -2598,6 +2615,29 @@ function SessionItem({
     return shown;
   }, [beginDeleteConfirmation, chatActions, copySessionId, copySessionRef, exportSessionHtml, isZh, onContinueInProject, revealSessionFile, session, locale, startRename, t]);
 
+  const openSessionMenuAt = useCallback((clientX: number, clientY: number, anchor?: HTMLElement | null) => {
+    const openDomMenu = () => {
+      const estHeight = 250 + (onContinueInProject ? 30 : 0) + (chatActions?.onToggleArchive ? 30 : 0);
+      const rect = anchor?.getBoundingClientRect();
+      const baseLeft = rect ? rect.right - MENU_WIDTH : clientX;
+      const baseTop = rect ? rect.bottom + 4 : clientY + 4;
+      const left = Math.max(8, Math.min(baseLeft, window.innerWidth - MENU_WIDTH - 8));
+      let top = baseTop;
+      if (top + estHeight > window.innerHeight - 8) {
+        top = Math.max(8, (rect ? rect.top : clientY) - estHeight - 4);
+      }
+      setMenuPos({ top, left });
+      setMenuOpen(true);
+    };
+    if (canUseNativeMenu()) {
+      void showNativeSessionMenu(anchor ? menuPointBelow(anchor) : { x: clientX, y: clientY }).then((shown) => {
+        if (!shown) openDomMenu();
+      });
+      return;
+    }
+    openDomMenu();
+  }, [chatActions, onContinueInProject, showNativeSessionMenu]);
+
   const handleContextMenu = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const handled = dispatchSessionRowContextMenu({
       id: session.id,
@@ -2613,36 +2653,17 @@ function SessionItem({
       e.stopPropagation();
       return;
     }
-    // Replace the webview's own context menu (Reload / Inspect) with the row's actions.
-    if (isTauriDesktop() && !session.transient) {
-      // Suppresses the webview menu (Reload / Inspect); the row actions open
-      // natively only while native popups are on, otherwise via the "…" button.
-      e.preventDefault();
-      e.stopPropagation();
-      void showNativeSessionMenu({ x: e.clientX, y: e.clientY });
-    }
-  }, [onRenamed, session.cwd, session.id, session.name, session.path, session.transient, showNativeSessionMenu]);
+    if (session.transient) return;
+    e.preventDefault();
+    e.stopPropagation();
+    openSessionMenuAt(e.clientX, e.clientY);
+  }, [onRenamed, openSessionMenuAt, session.cwd, session.id, session.name, session.path, session.transient]);
 
-  const toggleMenu = useCallback((e: React.MouseEvent) => {
+  const toggleMenu = useCallback((e: React.MouseEvent<HTMLElement>) => {
     e.stopPropagation();
     if (menuOpen) { setMenuOpen(false); return; }
-    const rect = e.currentTarget.getBoundingClientRect();
-    const openDomMenu = () => {
-      const estHeight = 250 + (onContinueInProject ? 30 : 0) + (chatActions?.onToggleArchive ? 30 : 0);
-      const left = Math.max(8, Math.min(rect.right - MENU_WIDTH, window.innerWidth - MENU_WIDTH - 8));
-      let top = rect.bottom + 4;
-      if (top + estHeight > window.innerHeight - 8) top = Math.max(8, rect.top - estHeight - 4);
-      setMenuPos({ top, left });
-      setMenuOpen(true);
-    };
-    if (canUseNativeMenu()) {
-      void showNativeSessionMenu(menuPointBelow(e.currentTarget)).then((shown) => {
-        if (!shown) openDomMenu();
-      });
-      return;
-    }
-    openDomMenu();
-  }, [chatActions, menuOpen, onContinueInProject, showNativeSessionMenu]);
+    openSessionMenuAt(e.clientX, e.clientY, e.currentTarget);
+  }, [menuOpen, openSessionMenuAt]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -2720,11 +2741,15 @@ function SessionItem({
         }
       }}
       style={{
-        height: SESSION_LIST_ITEM_HEIGHT,
+        height: confirmDelete ? "auto" : SESSION_LIST_ITEM_HEIGHT,
+        minHeight: SESSION_LIST_ITEM_HEIGHT,
         display: "flex",
-        alignItems: "center",
+        flexDirection: confirmDelete ? "column" : "row",
+        alignItems: confirmDelete ? "stretch" : "center",
         paddingLeft: 11,
         paddingRight: 8,
+        paddingTop: confirmDelete ? 6 : 0,
+        paddingBottom: confirmDelete ? 6 : 0,
         cursor: confirmDelete || renaming ? "default" : "pointer",
         background: confirmDelete
           ? "color-mix(in srgb, var(--danger) 6%, transparent)"
@@ -2739,19 +2764,31 @@ function SessionItem({
       }}
     >
       {confirmDelete ? (
-        /* ── Delete confirmation: same height, two flat buttons ── */
+        /* ── Delete confirmation: compact two-line layout so the session title is readable ── */
         <>
-          <div style={{ flex: 1, minWidth: 0, fontSize: 12, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {t("sidebar.deleteSession", { title: title.slice(0, 22) + (title.length > 22 ? "…" : "") })}
+          <div
+            title={t("sidebar.deleteSession", { title })}
+            style={{
+              width: "100%",
+              minWidth: 0,
+              fontSize: 12,
+              lineHeight: 1.4,
+              color: "var(--text)",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {t("sidebar.deleteSession", { title })}
           </div>
-          <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 5, flexShrink: 0 }}>
             <button
               onClick={handleDeleteConfirm}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
-                height: 26, padding: "0 9px",
+                height: 24, padding: "0 9px",
                 background: "var(--danger)", border: "none",
-                borderRadius: 6, color: "#fff",
+                borderRadius: 6, color: "var(--plus-fill-text, #fff)",
                 cursor: "pointer", fontSize: 12, fontWeight: 600,
                 whiteSpace: "nowrap",
               }}
@@ -2768,7 +2805,7 @@ function SessionItem({
               onClick={handleDeleteCancel}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
-                height: 26, padding: "0 9px",
+                height: 24, padding: "0 9px",
                 background: "var(--bg)", border: "var(--hairline) solid var(--border)",
                 borderRadius: 6, color: "var(--text-muted)",
                 cursor: "pointer", fontSize: 12, fontWeight: 500,
@@ -2853,24 +2890,30 @@ function SessionItem({
           )}
 
           {/* Collapse toggle — always visible when has children */}
-          {hasChildren && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onToggleCollapse?.(); }}
-              title={t(collapsed ? "sidebar.expandSubagents" : "sidebar.collapseSubagents")}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center",
-                width: 20, height: 20, padding: 0, flexShrink: 0,
-                background: "none", border: "none",
-                color: "var(--text-dim)", cursor: "pointer",
-                transform: collapsed ? "rotate(-90deg)" : "none",
-                transition: "transform 0.15s",
-              }}
-            >
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="2 3.5 5 6.5 8 3.5" />
-              </svg>
-            </button>
-          )}
+          {hasChildren && (() => {
+            const branchToggleLabel = collapsed
+              ? (locale === "zh-TW" ? "展開分支會話" : isZh ? "展开分支会话" : "Expand branch sessions")
+              : (locale === "zh-TW" ? "收起分支會話" : isZh ? "收起分支会话" : "Collapse branch sessions");
+            return (
+              <button
+                onClick={(e) => { e.stopPropagation(); onToggleCollapse?.(); }}
+                title={branchToggleLabel}
+                aria-label={branchToggleLabel}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  width: 20, height: 20, padding: 0, flexShrink: 0,
+                  background: "none", border: "none",
+                  color: "var(--text-dim)", cursor: "pointer",
+                  transform: collapsed ? "rotate(-90deg)" : "none",
+                  transition: "transform 0.15s",
+                }}
+              >
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="2 3.5 5 6.5 8 3.5" />
+                </svg>
+              </button>
+            );
+          })()}
 
           {/* Trailing slot: the row's last-activity time at rest, swapped in
               place for the "…" action button on hover (always the button on
@@ -2886,23 +2929,26 @@ function SessionItem({
                 width: 28, height: 24, flexShrink: 0,
               }}
             >
-              {hovered || treeFocused || touchMode || menuOpen ? (
-                <button
-                  ref={menuButtonRef}
-                  onClick={toggleMenu}
-                  title={t("sidebar.moreActions")}
-                  aria-label={t("sidebar.moreActions")}
-                  aria-haspopup="menu"
-                  aria-expanded={menuOpen}
-                  className={`session-item-more${menuOpen ? " is-open" : ""}`}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                    <circle cx="5" cy="12" r="1.7" />
-                    <circle cx="12" cy="12" r="1.7" />
-                    <circle cx="19" cy="12" r="1.7" />
-                  </svg>
-                </button>
-              ) : (
+              {hovered || treeFocused || touchMode || menuOpen ? (() => {
+                const sessionActionsLabel = locale === "zh-TW" ? "會話操作" : isZh ? "会话操作" : "Session actions";
+                return (
+                  <button
+                    ref={menuButtonRef}
+                    onClick={toggleMenu}
+                    title={sessionActionsLabel}
+                    aria-label={sessionActionsLabel}
+                    aria-haspopup="menu"
+                    aria-expanded={menuOpen}
+                    className={`session-item-more${menuOpen ? " is-open" : ""}`}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <circle cx="5" cy="12" r="1.7" />
+                      <circle cx="12" cy="12" r="1.7" />
+                      <circle cx="19" cy="12" r="1.7" />
+                    </svg>
+                  </button>
+                );
+              })() : (
                 <span
                   className="session-item-time"
                   title={formatRelativeTime(session.modified, locale)}

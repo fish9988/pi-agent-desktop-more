@@ -11,7 +11,7 @@ const jiti = createJiti(import.meta.url, {
 });
 const React = await jiti.import("react");
 const { renderToStaticMarkup } = await jiti.import("react-dom/server");
-const { ChatInput, ModelErrorBanner, ModelScopeWarningBanner, canClearBuiltinCommandInput, canRestoreUserMessage, canRunBuiltinSlashCommandWhileStreaming, compressImageFile, cycleListIndex, filterModelOptions, getTopbarBoundary, getUpwardMenuMaxHeight, getUserMessageText, getUserMessageDraftImages, isExactSlashCommand, modelSupportsImageInput, replaceLinksWithMarkdown, shouldCompressImageFile, offersBuiltinSlashCommandWhileStreaming, submitsSlashCommandOnEnter} = await jiti.import("./ChatInput.tsx");
+const { ChatInput, ModelErrorBanner, ModelScopeWarningBanner, canClearBuiltinCommandInput, canRestoreUserMessage, canRunBuiltinSlashCommandWhileStreaming, cycleListIndex, filterModelOptions, getTopbarBoundary, getUpwardMenuMaxHeight, getUserMessageText, getUserMessageDraftImages, isExactSlashCommand, modelSupportsImageInput, replaceLinksWithMarkdown, readImageFile, offersBuiltinSlashCommandWhileStreaming, submitsSlashCommandOnEnter} = await jiti.import("./ChatInput.tsx");
 
 const { isBareMcpCommand } = await jiti.import("@/lib/mcp-command.ts");
 const { composeMessageWithAttachedFiles } = await jiti.import("@/lib/chat-attachments.ts");
@@ -503,24 +503,12 @@ test("file mention menu remeasures when its layout container shifts the anchor",
   assert.match(block, /anchorObserver\?\.observe\(layoutContainer\)/);
 });
 
-test("compresses large images while preserving small images and GIFs", async () => {
-  assert.equal(shouldCompressImageFile({ size: 1024 * 1024, type: "image/png" }), false);
-  assert.equal(shouldCompressImageFile({ size: 1024 * 1024 + 1, type: "image/png" }), true);
-  assert.equal(shouldCompressImageFile({ size: 2 * 1024 * 1024, type: "image/gif" }), false);
-
+test("reads attached images unchanged, leaving resizing to pi", async () => {
   const originals = {
     FileReader: globalThis.FileReader,
     createImageBitmap: globalThis.createImageBitmap,
-    document: globalThis.document,
   };
   let bitmapCalls = 0;
-  let closed = false;
-  const canvas = {
-    width: 0,
-    height: 0,
-    getContext: () => ({ fillStyle: "", fillRect() {}, drawImage() {} }),
-    toDataURL: () => "data:image/jpeg;base64,COMPRESSED",
-  };
 
   globalThis.FileReader = class {
     readAsDataURL() {
@@ -530,27 +518,18 @@ test("compresses large images while preserving small images and GIFs", async () 
   };
   globalThis.createImageBitmap = async () => {
     bitmapCalls += 1;
-    return { width: 2048, height: 1024, close() { closed = true; } };
+    return { width: 6000, height: 4000, close() {} };
   };
-  globalThis.document = { createElement: () => canvas };
 
   try {
-    assert.deepEqual(await compressImageFile({ size: 1024, type: "image/png" }), {
+    assert.deepEqual(await readImageFile({ size: 8 * 1024 * 1024, type: "image/png" }, "image/png"), {
       data: "ORIGINAL",
       mimeType: "image/png",
     });
-    assert.deepEqual(await compressImageFile({ size: 2 * 1024 * 1024, type: "image/png" }), {
-      data: "COMPRESSED",
-      mimeType: "image/jpeg",
-    });
-    assert.equal(bitmapCalls, 1);
-    assert.equal(canvas.width, 1024);
-    assert.equal(canvas.height, 512);
-    assert.equal(closed, true);
+    assert.equal(bitmapCalls, 0);
   } finally {
     globalThis.FileReader = originals.FileReader;
     globalThis.createImageBitmap = originals.createImageBitmap;
-    globalThis.document = originals.document;
   }
 });
 
@@ -721,10 +700,11 @@ test("handleSend lets a handled /mcp through while streaming and sends an unowne
 });
 
 test("restores text and base64 images when editing a user message", () => {
+  const note = "[Image: original 2100x1180, displayed at 2000x1124. Multiply coordinates by 1.05 to map to original image.]";
   const message = {
     role: "user",
     content: [
-      { type: "text", text: "Review this image @src/example.ts " },
+      { type: "text", text: `Review this image @src/example.ts \n\n${note}` },
       { type: "image", source: { type: "base64", media_type: "image/png", data: "AQID" } },
     ],
   };
@@ -733,6 +713,18 @@ test("restores text and base64 images when editing a user message", () => {
   assert.deepEqual(getUserMessageDraftImages(message), [
     { data: "AQID", mimeType: "image/png" },
   ]);
+});
+
+test("composer resets expanded state on draftKey switch, preserves undo stack on attachment expand, and does not hijack ArrowLeft/ArrowRight in slash menu", () => {
+  const sourceText = readFileSync(new URL("./ChatInput.tsx", import.meta.url), "utf8");
+  assert.match(sourceText, /setHistoryMenuOpen\(false\);\s*setPreviewFileId\(null\);\s*setComposerExpanded\(false\);/);
+  assert.match(sourceText, /const expandAttachedFileIntoInput = useCallback[\s\S]*?nativeTextareaEdit\(ta, 0, ta\.value\.length, nextValue\)/);
+  assert.match(sourceText, /<QuickPhrasesButton/);
+  const slashBlock = sourceText.slice(
+    sourceText.indexOf("if (slashMenuOpen && slashQuery !== null && !isComposing)"),
+    sourceText.indexOf("if (hashMenuOpen && hashQuery !== null && !isComposing)"),
+  );
+  assert.doesNotMatch(slashBlock, /ArrowLeft|ArrowRight/);
 });
 
 test("restores legacy flat image entries when editing a user message", () => {

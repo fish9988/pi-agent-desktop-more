@@ -342,3 +342,14 @@ test("the row menu shows the compaction count only when the session was compacte
     /\{\(session\.compactionCount \?\? 0\) > 0 && \(\s*<div>\{t\("sidebar\.compactionCount", \{ count: session\.compactionCount \?\? 0 \}\)\}<\/div>/,
   );
 });
+
+test("prefills rename with current title, binds context menus, uses accurate labels, and avoids hardcoded colors", () => {
+  assert.match(sessionItemSource, /setRenameValue\(session\.name \|\| title\)/);
+  assert.match(source, /className=\{`sidebar-project-tree-row\$\{isMenuOpen \? " is-menu-open" : ""\}`\}[\s\S]*?onContextMenu=/);
+  assert.match(sessionItemSource, /openSessionMenuAt\(e\.clientX, e\.clientY\)/);
+  assert.match(sessionItemSource, /会话操作/);
+  assert.match(sessionItemSource, /展开分支会话/);
+  assert.match(sessionItemSource, /flexDirection: confirmDelete \? "column" : "row"/);
+  assert.doesNotMatch(source, /#0891b2/);
+  assert.match(sessionItemSource, /var\(--plus-fill-text, #fff\)/);
+});

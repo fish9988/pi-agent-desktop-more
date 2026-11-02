@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { APP_PREF_KEYS, getPrefJson, setPrefJson } from "@/lib/app-prefs";
+import { useI18n } from "@/hooks/useI18n";
 
 export interface UserProfileData {
   name: string;
@@ -107,6 +108,10 @@ async function compressAvatarFile(file: File): Promise<string> {
 }
 
 export function UserProfileControl() {
+  const { locale } = useI18n();
+  const isTw = locale === "zh-TW";
+  const isZh = locale.startsWith("zh");
+  const tr = (zhCN: string, zhTW: string, en: string) => (isTw ? zhTW : isZh ? zhCN : en);
   const [profile, setProfile] = useState<UserProfileData>(() => readProfile());
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<{ top: number; left: number } | null>(null);
@@ -151,8 +156,8 @@ export function UserProfileControl() {
         ref={btnRef}
         type="button"
         className="sidebar-user-profile"
-        title="点击自定义头像与昵称"
-        aria-label="自定义用户画像与昵称"
+        title={tr("点击自定义头像与昵称", "點擊自訂頭像與暱稱", "Customize avatar & display name")}
+        aria-label={tr("自定义用户画像与昵称", "自訂使用者頭像與暱稱", "Customize user profile & display name")}
         aria-expanded={open}
         onClick={(event) => {
           const rect = event.currentTarget.getBoundingClientRect();
@@ -174,7 +179,7 @@ export function UserProfileControl() {
         <div
           ref={popRef}
           role="dialog"
-          aria-label="编辑个人画像"
+          aria-label={tr("编辑个人画像", "編輯個人畫像", "Edit user profile")}
           className="native-popover app-menu sidebar-user-popover"
           style={{
             position: "fixed",
@@ -188,13 +193,13 @@ export function UserProfileControl() {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={avatarSrc} alt="" className="sidebar-user-popover-preview" />
             <div className="sidebar-user-popover-upload">
-              <strong>个人画像与昵称</strong>
+              <strong>{tr("个人画像与昵称", "個人畫像與暱稱", "Profile & Display Name")}</strong>
               <button
                 type="button"
                 className="config-button config-button-small config-button-secondary"
                 onClick={() => fileInputRef.current?.click()}
               >
-                上传本地照片...
+                {tr("上传本地照片...", "上傳本地照片...", "Upload local photo...")}
               </button>
               <input
                 ref={fileInputRef}
@@ -214,30 +219,30 @@ export function UserProfileControl() {
           </div>
 
           <div className="sidebar-user-popover-field">
-            <label htmlFor="plus-user-name-input">显示昵称</label>
+            <label htmlFor="plus-user-name-input">{tr("显示昵称", "顯示暱稱", "Display name")}</label>
             <input
               id="plus-user-name-input"
               type="text"
               value={profile.name}
-              placeholder="输入你的昵称"
+              placeholder={tr("输入你的昵称", "輸入你的暱稱", "Enter your display name")}
               maxLength={24}
               onChange={(event) => saveProfile({ name: event.target.value })}
             />
           </div>
 
           <div className="sidebar-user-popover-field">
-            <label htmlFor="plus-user-sub-input">状态签名（选填）</label>
+            <label htmlFor="plus-user-sub-input">{tr("状态签名（选填）", "狀態簽名（選填）", "Status subtitle (optional)")}</label>
             <input
               id="plus-user-sub-input"
               type="text"
               value={profile.subtitle ?? ""}
-              placeholder="如：专注构建 / Exploring AI"
+              placeholder={tr("如：专注构建 / Exploring AI", "如：專注建構 / Exploring AI", "e.g. Building / Exploring AI")}
               maxLength={32}
               onChange={(event) => saveProfile({ subtitle: event.target.value })}
             />
           </div>
 
-          <div className="sidebar-user-popover-presets-label">精选插画头像</div>
+          <div className="sidebar-user-popover-presets-label">{tr("精选插画头像", "精選插畫頭像", "Illustrated Avatars")}</div>
           <div className="sidebar-user-popover-presets">
             {AVATAR_PRESETS.map((preset) => {
               const active = profile.avatar === preset.id;

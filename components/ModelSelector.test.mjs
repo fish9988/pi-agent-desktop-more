@@ -3,9 +3,28 @@ import { readFile } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { Script } from "node:vm";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { createJiti } from "jiti";
 import ts from "typescript";
 
 const source = await readFile(new URL("./ModelSelector.tsx", import.meta.url), "utf8");
+const jiti = createJiti(import.meta.url, { tsconfigPaths: true, jsx: { runtime: "automatic" } });
+const { ModelSelector, filterModelOptions } = await jiti.import("./ModelSelector.tsx");
+const { I18nProvider } = await jiti.import("@/hooks/useI18n");
+
+function render(props) {
+  return renderToStaticMarkup(
+    createElement(
+      I18nProvider,
+      null,
+      createElement(ModelSelector, {
+        onChange() {},
+        ...props,
+      }),
+    ),
+  );
+}
 
 test("does not autofocus the model filter on mobile", () => {
   // Autofocus would open the on-screen keyboard as soon as the picker opens.
@@ -70,4 +89,31 @@ test("the reselect handler reapplies without a session reload", () => {
   assert.match(handler, /modelSwitchPendingRef\.current/);
   assert.doesNotMatch(handler, /loadSession\(/);
   assert.match(handler, /reloadModelsQuietly\(\)/);
+});
+
+test("filters model options by model name, id, provider, and provider/id", () => {
+  const options = [
+    { provider: "anthropic", modelId: "claude-opus-5", name: "Claude Opus 5" },
+    { provider: "openai", modelId: "gpt-6-luna", name: "GPT-6 Luna" },
+    { provider: "acme", modelId: "custom-one", name: "Custom One" },
+  ];
+
+  assert.deepEqual(filterModelOptions(options, "opus"), [options[0]]);
+  assert.deepEqual(filterModelOptions(options, "gpt-6"), [options[1]]);
+  assert.deepEqual(filterModelOptions(options, "acme/custom"), [options[2]]);
+  assert.deepEqual(filterModelOptions(options, "   "), options);
+  assert.deepEqual(filterModelOptions(options, "nonexistent"), []);
+});
+
+test("names a current model outside the scope from the loaded full list and supports scoped/all toggle", () => {
+  const html = render({
+    options: [{ provider: "anthropic", modelId: "claude-opus-5", name: "Claude Opus 5" }],
+    allOptions: [{ provider: "openai", modelId: "gpt-6-luna", name: "GPT-6 Luna" }],
+    value: { provider: "openai", modelId: "gpt-6-luna" },
+    onShowAll() {},
+  });
+
+  assert.match(html, /GPT-6 Luna/);
+  assert.match(source, /event\.key !== "Tab"/);
+  assert.match(source, /switchScope\(\)/);
 });

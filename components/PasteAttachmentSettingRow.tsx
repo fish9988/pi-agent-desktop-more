@@ -14,7 +14,9 @@ import { useI18n } from "@/hooks/useI18n";
  */
 export function PasteAttachmentSettingRow() {
   const { locale } = useI18n();
+  const isTw = locale === "zh-TW";
   const isZh = locale.startsWith("zh");
+  const tr = (zhCN: string, zhTW: string, en: string) => (isTw ? zhTW : isZh ? zhCN : en);
   const [threshold, setThreshold] = useState<number>(() => getPasteToFileLineThreshold());
 
   const applyThreshold = (next: number) => {
@@ -25,10 +27,12 @@ export function PasteAttachmentSettingRow() {
     setThreshold(normalized);
   };
 
-  const title = isZh ? "长文本粘贴自动转为附件" : "Convert long paste to file attachment";
-  const hint = isZh
-    ? "粘贴达到设定行数的长提示词或日志时，自动转为 .md / .txt 附件卡片，不再塞满输入框"
-    : "Automatically convert pasted text reaching this line count into a .md / .txt attachment chip";
+  const title = tr("长文本粘贴自动转为附件", "長文本貼上自動轉為附件", "Convert long paste to file attachment");
+  const hint = tr(
+    "粘贴达到设定行数的长提示词或日志时，自动转为 .md / .txt 附件卡片，不再塞满输入框",
+    "貼上達到設定行數的長提示詞或日誌時，自動轉為 .md / .txt 附件卡片，不再塞滿輸入框",
+    "Automatically convert pasted text reaching this line count into a .md / .txt attachment chip",
+  );
 
   return (
     <div className="settings-chat-option settings-chat-choice-option settings-work-details-option paste-attachment-setting-row">
@@ -40,8 +44,8 @@ export function PasteAttachmentSettingRow() {
         {PASTE_TO_FILE_PRESETS.map((preset) => {
           const active = threshold === preset;
           const label = preset === 0
-            ? (isZh ? "关闭" : "Off")
-            : (isZh ? `${preset} 行` : `${preset} lines`);
+            ? tr("关闭", "關閉", "Off")
+            : tr(`${preset} 行`, `${preset} 行`, `${preset} lines`);
           return (
             <button
               key={preset}
@@ -54,21 +58,21 @@ export function PasteAttachmentSettingRow() {
             </button>
           );
         })}
-        <label className="paste-threshold-custom-label" title={isZh ? "自定义行数阈值（0 表示关闭）" : "Custom line threshold (0 = off)"}>
+        <label className="paste-threshold-custom-label" title={tr("自定义行数阈值（0 表示关闭）", "自訂行數閾值（0 表示關閉）", "Custom line threshold (0 = off)")}>
           <input
             type="number"
             min={0}
             max={1000}
             step={5}
             value={threshold}
-            aria-label={isZh ? "自定义长粘贴行数阈值" : "Custom paste line threshold"}
+            aria-label={tr("自定义长粘贴行数阈值", "自訂長貼上行數閾值", "Custom paste line threshold")}
             className="paste-threshold-custom-input"
             onChange={(event) => {
               const raw = Number.parseInt(event.target.value, 10);
               if (Number.isFinite(raw)) applyThreshold(raw);
             }}
           />
-          <span>{isZh ? "行" : "ln"}</span>
+          <span>{tr("行", "行", "ln")}</span>
         </label>
       </div>
     </div>

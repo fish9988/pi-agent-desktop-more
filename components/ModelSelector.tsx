@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { modelDotColor } from "@/lib/model-dot";
+import { scaleVar } from "@/lib/plus-design-scale";
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { isImeComposing } from "@/lib/ime";
@@ -33,6 +34,10 @@ interface ModelSelectorProps {
   defaultValue?: { provider: string; modelId: string } | null;
   /** Shows a star on every row that saves it as the default. */
   onSetDefault?: (provider: string, modelId: string) => void;
+  /** Every available model, once loaded; listed under "all". */
+  allOptions?: ModelSelectorOption[] | null;
+  /** Set only while `enabledModels` narrows `options`: shows pi's `/model` "scoped | all" row and loads `allOptions`. */
+  onShowAll?: () => void;
 }
 
 const MODEL_FILTER_THRESHOLD = 8;
@@ -71,8 +76,13 @@ export function ModelSelector({
   placement = "up",
   defaultValue,
   onSetDefault,
+  allOptions,
+  onShowAll,
 }: ModelSelectorProps) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
+  const isTw = locale === "zh-TW";
+  const isZh = locale.startsWith("zh");
+  const tr = (zhCN: string, zhTW: string, en: string) => (isTw ? zhTW : isZh ? zhCN : en);
   const isMobile = useIsMobile();
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -80,10 +90,25 @@ export function ModelSelector({
   const [open, setOpen] = useState(false);
   const [anchorRect, setAnchorRect] = useState<{ top: number; right: number; bottom: number; left: number; width: number } | null>(null);
   const [filter, setFilter] = useState("");
+  // pi's /model starts on the scope; Tab on the filter or a tap switches.
+  const [showAll, setShowAll] = useState(false);
   const locked = disabled || busy;
   const sortedOptions = useMemo(() => [...options].sort(compareModelOptions), [options]);
-  const filteredOptions = filterModelOptions(sortedOptions, filter);
-  const showFilter = sortedOptions.length > MODEL_FILTER_THRESHOLD;
+  const sortedAllOptions = useMemo(
+    () => (allOptions ? [...allOptions].sort(compareModelOptions) : null),
+    [allOptions],
+  );
+  const showScopeToggle = Boolean(onShowAll || (sortedAllOptions && sortedAllOptions.length > sortedOptions.length));
+  const listed = showAll ? sortedAllOptions : sortedOptions;
+  const filteredOptions = filterModelOptions(listed ?? [], filter);
+  const showFilter = showScopeToggle || (listed?.length ?? sortedOptions.length) > MODEL_FILTER_THRESHOLD;
+  const isListed = (list: ModelSelectorOption[] | null | undefined, ref: { provider: string; modelId: string }) => (
+    list?.find((option) => option.modelId === ref.modelId && option.provider === ref.provider)
+  );
+  const switchScope = () => {
+    if (!showAll) onShowAll?.();
+    setShowAll((prev) => !prev);
+  };
   const modelsByProvider: { provider: string; options: ModelSelectorOption[] }[] = [];
 
   for (const option of filteredOptions) {
@@ -92,10 +117,22 @@ export function ModelSelector({
     else modelsByProvider.push({ provider: option.provider, options: [option] });
   }
 
+  const selectModelLabel = tr("选择模型", "選擇模型", "Select model");
+  const noModelsLabel = tr("没有模型", "沒有模型", "No models");
+  const switchingModelLabel = tr("正在切换模型", "正在切換模型", "Switching model");
+  const changeModelLabel = tr("切换模型", "切換模型", "Change model");
+  const noAvailableModelsLabel = tr("没有可用模型", "沒有可用模型", "No available models");
+
   const currentName = selectedLabel ?? (value
-    ? sortedOptions.find((option) => option.modelId === value.modelId && option.provider === value.provider)?.name ?? value.modelId
-    : emptyLabel ?? (sortedOptions.length > 0 ? "Select model" : "No models"));
-  const buttonTitle = busy ? "Switching model" : locked ? currentName : sortedOptions.length > 0 || onClear ? "Change model" : "No available models";
+    ? (isListed(sortedOptions, value) ?? isListed(sortedAllOptions, value))?.name ?? value.modelId
+    : emptyLabel ?? (sortedOptions.length > 0 ? selectModelLabel : noModelsLabel));
+  const buttonTitle = busy
+    ? switchingModelLabel
+    : locked
+      ? currentName
+      : sortedOptions.length > 0 || onClear
+        ? changeModelLabel
+        : noAvailableModelsLabel;
 
   useEffect(() => {
     const handleOutsideClick = (event: MouseEvent) => {
@@ -215,6 +252,7 @@ export function ModelSelector({
           setAnchorRect({ top: rect.top, right: rect.right, bottom: rect.bottom, left: rect.left, width: rect.width });
           setOpen((current) => {
             if (current) setFilter("");
+            else setShowAll(false);
             return !current;
           });
         }}
@@ -299,11 +337,48 @@ export function ModelSelector({
               boxShadow: openAbove ? "0 -4px 16px rgba(0,0,0,0.10)" : "0 4px 16px rgba(0,0,0,0.10)",
             }}
           >
+            {showScopeToggle && (
+              <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "6px 8px 0", fontSize: scaleVar("fs", 1) }}>
+                {[false, true].map((all) => (
+                  <button
+                    key={String(all)}
+                    type="button"
+                    aria-pressed={showAll === all}
+                    onClick={() => { if (showAll !== all) switchScope(); }}
+                    style={{
+                      padding: "2px 8px",
+                      border: "var(--hairline) solid",
+                      borderColor: showAll === all ? "var(--border)" : "transparent",
+                      borderRadius: 4,
+                      background: showAll === all ? "var(--bg-hover)" : "none",
+                      color: showAll === all ? "var(--text)" : "var(--text-muted)",
+                      cursor: "pointer",
+                      fontSize: scaleVar("fs", 1),
+                      fontWeight: showAll === all ? 600 : 400,
+                    }}
+                  >
+                    {all
+                      ? tr("全部", "全部", "all")
+                      : tr("常用", "常用", "scoped")}
+                  </button>
+                ))}
+                {!isMobile && (
+                  <span style={{ marginLeft: "auto", color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: scaleVar("fs", 1) }}>
+                    Tab
+                  </span>
+                )}
+              </div>
+            )}
             {showFilter && (
               <div style={{ flexShrink: 0, padding: "6px 8px", borderBottom: "var(--hairline) solid var(--border)" }}>
                 <input
                   value={filter}
                   onChange={(event) => setFilter(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (!showScopeToggle || event.key !== "Tab") return;
+                    event.preventDefault();
+                    switchScope();
+                  }}
                   placeholder={t("chat.filterModels")}
                   aria-label={t("chat.filterModels")}
                   // On phones, focusing the filter opens the on-screen keyboard,
@@ -335,17 +410,17 @@ export function ModelSelector({
                   setFilter("");
                   onClear();
                 }}>
-                  <OptionLabel label={emptyLabel ?? "Default"} />
+                  <OptionLabel label={emptyLabel ?? tr("默认", "預設", "Default")} />
                 </SelectorRow>
               )}
               {modelsByProvider.length === 0 ? (
                 <div style={{ padding: "8px 12px", color: "var(--text-dim)", fontSize: 12, whiteSpace: "nowrap" }}>
-                  {filter.trim() ? t("chat.noMatchingModels") : "No available models"}
+                  {!listed ? t("agents.modelsLoading") : filter.trim() ? t("chat.noMatchingModels") : noAvailableModelsLabel}
                 </div>
               ) : modelsByProvider.map((group, index) => (
                 <div key={group.provider}>
                   {modelsByProvider.length > 1 && (
-                    <div style={{ padding: "6px 12px 4px", borderTop: index > 0 || onClear ? "1px solid var(--border)" : "none", color: "var(--text-dim)", fontSize: 10, fontWeight: 600, letterSpacing: 0, textTransform: "uppercase" }}>
+                    <div style={{ padding: "6px 12px 4px", borderTop: index > 0 || onClear ? "1px solid var(--border)" : "none", color: "var(--text-dim)", fontSize: scaleVar("fs", 1), fontWeight: 600, letterSpacing: 0, textTransform: "uppercase" }}>
                       {group.provider}
                     </div>
                   )}
@@ -355,7 +430,8 @@ export function ModelSelector({
                         key={`${option.provider}:${option.modelId}`}
                         active={option.modelId === value?.modelId && option.provider === value?.provider}
                         onSelect={() => choose(option)}
-                        star={onSetDefault ? {
+                        // The default is saved only from the scope: PUT /api/models/default refuses others.
+                        star={onSetDefault && (!showAll || isListed(sortedOptions, option)) ? {
                           isDefault: option.modelId === defaultValue?.modelId && option.provider === defaultValue?.provider,
                           saveLabel: t("chat.saveDefaultModel"),
                           defaultLabel: t("chat.defaultModel"),

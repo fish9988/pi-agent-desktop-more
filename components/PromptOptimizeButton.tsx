@@ -18,7 +18,7 @@ interface Props {
  * the button turns into "undo" and restores the original draft.
  */
 export function PromptOptimizeButton({ value, onReplace, model, sessionId, disabled }: Props) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const [busy, setBusy] = useState(false);
   const [undo, setUndo] = useState<{ original: string; optimized: string } | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -26,9 +26,11 @@ export function PromptOptimizeButton({ value, onReplace, model, sessionId, disab
   useEffect(() => () => abortRef.current?.abort(), []);
 
   const canUndo = undo !== null && value === undo.optimized;
-  if (!busy && !canUndo && !value.trim()) return null;
+  const isEmpty = !busy && !canUndo && !value.trim();
+  const isDisabled = (Boolean(disabled) && !busy) || isEmpty;
 
   const run = async () => {
+    if (isEmpty || (disabled && !busy)) return;
     if (busy) {
       abortRef.current?.abort();
       return;
@@ -66,15 +68,39 @@ export function PromptOptimizeButton({ value, onReplace, model, sessionId, disab
     }
   };
 
-  const label = busy ? t("composer.optimizeCancel") : canUndo ? t("composer.optimizeUndo") : t("composer.optimize");
+  const emptyHint = locale === "zh-TW"
+    ? "輸入內容後可一鍵優化提示詞"
+    : locale.startsWith("zh")
+      ? "输入内容后可一键优化提示词"
+      : "Enter text to optimize prompt";
+  const label = busy
+    ? t("composer.optimizeCancel")
+    : canUndo
+      ? t("composer.optimizeUndo")
+      : isEmpty
+        ? emptyHint
+        : t("composer.optimize");
   return (
     <button
       type="button"
-      className={`native-toolbar-button composer-optimize-button${busy ? " is-busy" : ""}${canUndo ? " is-undo" : ""}`}
+      className={`native-toolbar-button composer-optimize-button${busy ? " is-busy" : ""}${canUndo ? " is-undo" : ""}${isEmpty ? " is-empty" : ""}`}
       onClick={() => void run()}
-      disabled={disabled && !busy}
+      disabled={isDisabled}
       title={label}
       aria-label={label}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: 26,
+        height: 26,
+        padding: 0,
+        flexShrink: 0,
+        alignSelf: "flex-end",
+        borderRadius: "var(--plus-r-card, 8px)",
+        opacity: isDisabled ? 0.42 : 1,
+        cursor: isDisabled ? "not-allowed" : "pointer",
+      }}
     >
       {busy ? (
         <svg className="composer-optimize-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.2-8.56" /></svg>

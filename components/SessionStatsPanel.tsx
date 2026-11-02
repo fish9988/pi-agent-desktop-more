@@ -84,7 +84,7 @@ function StatsCard({ icon, title, total, totalTitle, children }: {
   children: ReactNode;
 }) {
   return (
-    <section className="plus-stats-card">
+    <section className="plus-stats-card" style={icon === "files" ? { gridColumn: "1 / -1" } : undefined}>
       <div className="plus-stats-card-head">
         <span className="plus-stats-card-icon" aria-hidden="true">{CARD_ICONS[icon]}</span>
         <h3 className="plus-stats-card-title">{title}</h3>
@@ -247,7 +247,11 @@ export function SessionStatsPanel({
   const copyRow = (label: string, value: string, field: SessionCopyField, startEllipsis = false) => (
     <div className="plus-stats-copy-row" key={field}>
       <span className="plus-stats-copy-label">{label}</span>
-      <span className={startEllipsis ? "plus-stats-copy-value is-start-ellipsis" : "plus-stats-copy-value"} title={value}>
+      <span
+        className={startEllipsis ? "plus-stats-copy-value is-start-ellipsis" : "plus-stats-copy-value"}
+        title={value}
+        style={field === "id" ? { overflowWrap: "anywhere", whiteSpace: "normal" } : undefined}
+      >
         {startEllipsis ? <bdi>{value}</bdi> : value}
       </span>
       {copyButton(field, value)}
@@ -277,7 +281,14 @@ export function SessionStatsPanel({
   };
 
   return (
-    <div className={panelClass()}>
+    <div
+      className={panelClass()}
+      style={{
+        gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(220px, 1fr))",
+        maxHeight: "calc(100vh - 72px)",
+        overflowY: "auto",
+      }}
+    >
       <StatsCard
         icon="token"
         title={translate("plus.stats.cardTokens")}
