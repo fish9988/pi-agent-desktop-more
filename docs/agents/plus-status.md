@@ -5,7 +5,7 @@
 
 _最后更新：2026-11-02_
 
-- **最新发布：v1.19.2**（2026-11-02）：上滚分页的第三层。恢复滚动位置的 effect 依赖 `visibleCount`，而它往往已经很大（`Math.max` 无变化）→ effect 不跑 → 新页插到上面后视口停在“新页顶部”，看起来没加载。现在 `visibleCount` 在 render 阶段跟随 `messages.length`，恢复改成 `useLayoutEffect` + 依赖 `messages.length`。实测同一会话连续 5 轮上滑 = 14 次分页（1832→44749px），10 个会话无空白。遗留：一页落地后视口停在“新页与旧内容的分界”，不是精确锁在同一条消息上。上一版 v1.19.1（2026-11-02）：① 分页停滞判据从 `scrollHeight` 改成“这页有没有带回消息”（原来在微任务里读到旧高度，两个成功的页也会计成停滞，两次后永久关闭）；② `scrollTop === 0` 时滚轮不派发 scroll 事件，现在 `wheel` 本身是触发条件；③ 服务端 `hasMore` 不再把渲染不出来的簿记条目算成“还有历史”。
+- **最新发布：v1.20.0**（2026-11-02）：清完 1.19.x 的待办清单。① 虚拟化前置三件（`overflow-anchor: none`、240px 估算收窄到代码块/折叠组 + `ResizeObserver` 高度补偿、翻页恢复改成 entryId + 偏移 + 1.5s pin），实测连续 8 次翻页锚点偏移 6 次 ≤0.5px；② 回答 footer 的 `‹ 2/3 ›` 分支切换（`lib/branch-decisions.ts`，工具扇出不算决策点）；③ 查找/导航走 `lib/message-index.ts` 索引（导航条 7421 次 rect → 0）；④ 详情接口阻塞 13.8ms → 3.4ms、超大单行 67–81ms → 8.9–12.8ms（超 2MiB 文本截断并标记）、>1GB 不再回退同步、窗口载荷落盘缓存让重启后首开 244ms → 13ms；⑤ 设置页搜索；⑥ WSL 终端后端（终端面板 + `!`，六种降级，真机实测）；⑦ 工具参数按行（#1324）；⑧ 修饰键外链与文件拖放不再顶掉应用；⑨ 4 个陈年失败测试修掉，`npm test` 从挂死变成 105 秒跑完（根因是 MCP 集成测试泄漏 fixture 子进程）。
 ## 当前状态
 
 - 上一版 v1.6.1：修复文件树下载按钮无反应、「在资源管理器中显示」打开错目录（正斜杠路径 + Rust 引号问题，改用 `raw_arg`）。v1.6.0 是上游周报 #1 的移植。
@@ -110,33 +110,32 @@ _最后更新：2026-11-02_
 
 ## 待办 / 候选
 
-### 1.19.0 调研里明确要做、还没动的（按性价比排序）
+### 1.20.0 已清掉的（留档，别再派一遍）
 
-- [ ] **真正的消息列表虚拟化**。前置三步必须先做，否则高度会抖、`‹ 2/3 ›`/查找跳转/跨条目选区都会断：① `.chat-scroll-container` 上 `overflow-anchor: none`；② 已挂载条目加 `ResizeObserver` 高度补偿；③ prepend 恢复改用 entryId + 偏移（`app/plus-theme.css` 里给 `[data-entry-id]` 设的 `contain-intrinsic-size: auto 240px` 也要从“所有消息”收窄到代码块/折叠组）。做完再上 `react-virtuoso`（只用核心包，`MessageList` 是商业 EULA）。当前只是“分页渲染 + 手动锚点”，`content-visibility` 只省 paint。
-- [ ] **分支交互下沉到回答 footer**（`‹ 2/3 ›`），完整树降级成“高级地图”；只暴露真正的决策点（root / 重新回答 / 编辑后重发 / 分叉），切换目标用分支 `tipId`，滚动锚点用最近用户消息。1.19.0 已经把“工具调用扇出不算分支”和 420px 面板做了，但入口仍在顶栏。
-- [ ] **`ChatFindBar` / 会话导航的定位改成 entryId/turnIndex 映射**，别再每帧 `querySelectorAll + getBoundingClientRect`（也是虚拟化的前提）。
-- [ ] **首批历史改成增量推送**：先推尾部窗口、后台补历史，而不是“算完整窗口一次返回”。现在首屏仍是整窗一次性 JSON。
+分支切换 footer、查找/导航索引、虚拟化三前置、详情接口/超大单行/>1GB/载荷落盘、设置页搜索、WSL 终端后端、工具参数按行（#1324）、修饰键与拖放兜底、4 个陈年失败测试、`npm test` 挂死。实现位置见 CHANGELOG-PLUS 的 1.20.0。
 
-### 1.19.x 留下的小口子
+### 真正接虚拟列表（下一步，前置已完成）
 
-- [ ] 设置窗口的 `window.open`（同源）目前被当外链处理；正解是 Tauri 的 `on_new_window` / `on_navigation`（要改 Rust，只能靠 CI 构建验证）。
-- [ ] 拖 .html 进窗口、以及带修饰键（Ctrl/Shift）点外链，仍可能顶掉 UI（拖放在合成器层，JS 点击兜底管不到）。
-- [ ] `/api/sessions/[id]` 首屏仍有约 10–20 ms 的同步 tree/stats 计算（解析已经异步了）。
-- [ ] 超大单行（几 MB 的**有效**内容、非可裁 `details`）仍无法中途让出；>1 GB 会话回退同步解析；`lib/session-context-cache.ts` 只是进程内 LRU，不跨进程、不持久化。
-- [ ] 分支面板的判定逻辑只有单元测试（`hasNavigableBranches` / `restsOnMoreHistory`），**没在真分支上截过图**：本机 21 个会话都没有真分支。
-- [ ] 统计面板在应用内只验了 1440/900 两档；420 窄宽只有静态复刻（`temp/stats-*.png`，已删）。
-- [ ] `demo/` 是独立副本（tsconfig 已 exclude），没同步 1.19.0 的外链兜底等改动。
+- [ ] `components/ChatWindow.tsx` 换成 `react-virtuoso`（只用核心包；`MessageList` 是商业 EULA）。接的时候：`lib/message-index.ts` 的 `buildIndex(container, entryIds)` 改成按数组下标建索引（未挂载行返回插值几何，已经有 `estimated` 标记）；高度补偿改成"写高度缓存 + 校正总偏移"而不是直接改 `scrollTop`；prepend 恢复合并成唯一入口（`firstItemIndex` 变化 + entryId 偏移）。`ChatFindBar`/`ConversationNavigator` 可以直接吃这份索引。
+- [ ] 翻页时“折叠组占位符在请求飞行中收缩”仍会造成 2/8 次 −44px 的偏移；虚拟化时把捕获时机提前到请求发出那一刻可消掉。
+
+### 1.20.0 明确没做
+
+- [ ] **`demo/` 整仓同步欠着**：落后 83 个提交，`node demo/scripts/sync-from-app.mjs --check` = added 69 / updated 86 / removed 2，FileViewer(36)/FileExplorer(47)/MarkdownBody(7) 等 95 处补丁冲突，demo 还缺 5 个依赖。要单独开一次，`npm ci` 后逐张解冲突并跑 `typecheck`/`build`。这次只同步了外链兜底。
+- [ ] `components/TerminalSettingsSection.tsx` 的 WSL 文案沿用了该文件既有的 `isZh` 双语写法（zh-TW 会看到简体）；要治理就把整个文件迁到 `t()` + `lib/i18n/patches/`。
+- [ ] `1280e4f6` 模型页文案（一直没做）。
+- [ ] iframe 预览内的拖放（独立 document，顶层 guard 看不到；要堵得改 `HtmlPreviewBlock` 的 sandbox）。
+- [ ] 设置页搜索对“折叠且条件渲染”的项只索引到展开按钮（打开后才进索引）。
+- [ ] 桌面端「独立窗口」按钮已隐藏（`window.open` 在 Tauri 里只有系统浏览器）。真要做多窗口需要 Rust 侧 `on_new_window` 建 Tauri 窗口，只能靠 CI 验证。
 
 ### 更早的待办（仍在）
 
-- [ ] **WSL 支持**（用户 2026-10-21 提出，参考 Codex）：方案已给用户，等确认。要点见下方「WSL 调研」。
-- [ ] 暂缓的上游项：#1324 工具参数按行显示（先出预览）、1280e4f6 模型页文案。
-- [ ] 1.5.0 / 1.6.0 的使用反馈（时间线、外观页预览、扩展标签）。
-- [ ] 设置页搜索（老点子，未做）。
-- [ ] `components/AppShell.file-viewer-state.test.mjs` 4 项在本机工作区（CRLF）上失败，改动前就如此：测试用 `\n` 在源码里找文本。CI 上是 LF，应该能过；要么让测试先把 CRLF 换成 LF。
-- [ ] 两个历史遗留的失败测试（1.6.0 之前就失败，与本次无关）：`components/fork-extractions.test.mjs` 的 artifacts 哨兵（`useArtifactPublisher(` 标记）、`components/restored-wiring.test.mjs` 第 5 项（运行结束刷新右侧文件树）。值得查一下是测试过时还是功能丢了。
+- [ ] **WSL 支持**：终端面板 + `!` 命令已做（1.20.0）；**Agent 自己的 `bash` 工具仍走原生**——要像 Codex 那样统一，在 `lib/project-command-env.ts` 的 `createProjectCommandBashExtension` 里也换成 `resolveProjectBashOperations()`（一行）。另外 `PI_*` 会话变量不会进 WSL（需要 `WSLENV`）。
+- [ ] 工具参数按行（#1324）已做；剩 `1280e4f6` 模型页文案。
+- [ ] 设置页搜索已做。
+- [ ] `components/AppShell.file-viewer-state.test.mjs`、`fork-extractions`、`restored-wiring`、`runtime-route` 的 CRLF/哨兵问题已在 1.20.0 修掉。
+- [ ] `npm test` 已能跑完（105s）；剩下的 56 项失败里 31 项是**本机没有 symlink 权限**（`EPERM`）的环境问题，其余多为并行改动期间的临时失败，改动前就有。
 - [ ] 不做的事：会话标题的悬停提示、主题卡片的悬停预览、#1183。
-
 ## WSL 调研（2026-10-21，实测）
 
 - 机器：WSL2 Ubuntu-24.04（默认发行版），**没有** `C:\Windows\System32\bash.exe`；WSL 里没有 node（`pi` 通过 interop 找到的是 Windows 的）。Git Bash 在 `C:\Program Files\Git\bin\bash.exe`；pwsh 7 是商店版（PATH 里的 `WindowsApps\pwsh.exe`）。

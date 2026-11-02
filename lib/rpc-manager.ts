@@ -10,9 +10,9 @@ import { invalidateModelsCache } from "./models-cache";
 import { resolveVisibleModels, selectInitialModelScope } from "./model-scope";
 import {
   createProjectCommandBashExtension,
-  createProjectCommandBashOperations,
   preferUserBashExtension,
 } from "./project-command-env";
+import { resolveProjectBashOperations } from "./wsl-bash";
 import { cacheSessionPath, getLatestModelChange, getLatestResponseModel, getSessionListVersion, invalidateSessionListCache, readLatestSessionEntryId, resolveSessionPath } from "./session-reader";
 import { getProjectTrustStatus, projectTrustReloadOptions } from "./project-trust";
 import { computeLiveSessionTotalActiveMs } from "./session-timing";
@@ -1402,7 +1402,9 @@ export class AgentSessionWrapper {
           undefined,
           {
             excludeFromContext: command.excludeFromContext as boolean | undefined,
-            operations: createProjectCommandBashOperations({
+            // `lib/wsl-bash` answers the unchanged local operations unless the
+            // terminal backend is WSL and "run shell commands in WSL" is on.
+            operations: resolveProjectBashOperations({
               shellPath: this.inner.settingsManager.getShellPath(),
             }),
           },

@@ -7,6 +7,7 @@ import { terminalFontSize, useChatAppearance } from "@/hooks/useChatAppearance";
 import { useI18n } from "@/hooks/useI18n";
 import { createTerminalWriter, terminalRequest } from "@/lib/terminal-client";
 import type { TerminalEvent } from "@/lib/terminal-manager";
+import type { TerminalBackendInfo } from "@/lib/wsl-types";
 import type { TerminalTab } from "./terminal-tab-state";
 
 interface Props {
@@ -28,6 +29,9 @@ export function TerminalPanel({ tab, active, onRestart, onClosed, onCloseError }
   callbacksRef.current = { onClosed, onCloseError };
   const [status, setStatus] = useState<"connecting" | "ready" | "exited" | "error">("connecting");
   const [error, setError] = useState<string | null>(null);
+  // Which shell this tab actually got. The server resolves it before the PTY
+  // exists, so a WSL request that had to fall back also arrives with a warning.
+  const [backend, setBackend] = useState<TerminalBackendInfo | null>(null);
   const [exitCode, setExitCode] = useState<number | null>(null);
   const [reconnectKey, setReconnectKey] = useState(0);
   // Plus: ported pi-web 35af7102 (#1329) — the terminal follows the chat font
@@ -49,6 +53,7 @@ export function TerminalPanel({ tab, active, onRestart, onClosed, onCloseError }
     let inputFailed = false;
     setStatus("connecting");
     setError(null);
+    setBackend(null);
     setExitCode(null);
 
     const terminal = new Terminal({
@@ -142,16 +147,15 @@ export function TerminalPanel({ tab, active, onRestart, onClosed, onCloseError }
 
     startRef.current = (async () => {
       fitAndResize();
-      if (restored || reconnectKey > 0) {
+      const info = restored || reconnectKey > 0
         // Restoring a tab must never silently launch a replacement shell.
-        await terminalRequest(`/api/terminal/${encodeURIComponent(id)}`);
-      } else {
-        await terminalRequest("/api/terminal", {
+        ? await terminalRequest(`/api/terminal/${encodeURIComponent(id)}`)
+        : await terminalRequest("/api/terminal", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id, cwd, cols: terminal.cols, rows: terminal.rows }),
         });
-      }
+      if (!disposed) setBackend(info.backend ?? null);
       connect();
     })().catch((reason: Error) => {
       if (disposed) return;
@@ -222,7 +226,10 @@ export function TerminalPanel({ tab, active, onRestart, onClosed, onCloseError }
       <header className="terminal-panel-header">
         <div className="terminal-panel-path">
           <span className={`terminal-status-dot is-${status}`} title={t(`terminal.${status}`)} />
-          <span title={cwd}>{cwd}</span>
+          {backend?.kind === "wsl" && (
+            <span title={`${backend.distro ?? "WSL"} · ${cwd}`}>{`WSL · ${backend.distro ?? ""}`.trimEnd()}</span>
+          )}
+          <span title={cwd}>{backend?.kind === "wsl" ? backend.linuxCwd ?? cwd : cwd}</span>
         </div>
         {status === "error" && (
           <button type="button" onClick={() => setReconnectKey((key) => key + 1)} disabled={Boolean(tab.closing)} title={t("terminal.reconnect")} aria-label={t("terminal.reconnect")}>
@@ -239,6 +246,7 @@ export function TerminalPanel({ tab, active, onRestart, onClosed, onCloseError }
       </header>
       <div>
         {error && <div className="terminal-panel-error" role="alert">{error}</div>}
+        {!error && backend?.warning && <div className="terminal-panel-exit" role="status">{backend.warning}</div>}
         {status === "exited" && <div className="terminal-panel-exit" role="status">{exitCode === null ? t("terminal.exited") : t("terminal.exitCode", { code: exitCode })}</div>}
       </div>
       <div className="terminal-xterm"><div ref={containerRef} className="terminal-xterm-host" /></div>

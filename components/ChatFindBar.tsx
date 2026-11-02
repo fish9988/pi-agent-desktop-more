@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { searchableMessageText } from "@/lib/work-details";
+import { DEFAULT_SCROLL_OFFSET, elementForEntry, scrollToEntry, watchMessageIndex } from "@/lib/message-index";
 import type { AgentMessage, ToolResultMessage } from "@/lib/types";
 
 const HIGHLIGHT_ALL = "pi-chat-find";
@@ -54,6 +55,12 @@ function clearHighlights(): void {
  * reveals the group that holds it (`revealEntryId`) and scrolls to it; visible
  * occurrences are painted with the CSS Custom Highlight API, which never
  * touches React's DOM. Works while the agent is running.
+ *
+ * Plus: row positions come from `lib/message-index.ts`. Jumping to a match uses
+ * that row's cached `offsetTop` instead of a fresh attribute query plus two rect
+ * measurements, and the watcher keeps the index fresh while the bar is open (new
+ * rows, opened groups, streamed text); the index is rebuilt once when the bar
+ * opens.
  */
 export function useChatFind({ messages, entryIds, toolResults, scrollContainerRef }: UseChatFindOptions) {
   const [open, setOpen] = useState(false);
@@ -84,16 +91,26 @@ export function useChatFind({ messages, entryIds, toolResults, scrollContainerRe
   const next = useCallback(() => setIndex((value) => (total === 0 ? 0 : (value + 1) % total)), [total]);
   const prev = useCallback(() => setIndex((value) => (total === 0 ? 0 : (value - 1 + total) % total)), [total]);
 
+  // Keep the row index warm while the bar is open: opening rebuilds it once,
+  // later mounts/groups/streamed text mark it dirty and it rebuilds lazily.
+  useEffect(() => {
+    if (!open) return;
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const watch = watchMessageIndex(container);
+    return () => watch.dispose();
+  }, [open, scrollContainerRef]);
+
   // Scroll to the current match once its group has had a chance to open.
+  // `scrollToEntry` resolves the row through the index (cached offsetTop) and
+  // only falls back to a single measurement when the row mounted just now.
   useEffect(() => {
     if (!revealEntryId) return;
     let frame = requestAnimationFrame(() => {
       frame = requestAnimationFrame(() => {
         const container = scrollContainerRef.current;
-        const element = container?.querySelector<HTMLElement>(`[data-entry-id="${CSS.escape(revealEntryId)}"]`);
-        if (!container || !element) return;
-        const top = element.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop - 72;
-        container.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+        if (!container) return;
+        scrollToEntry(container, revealEntryId, { offset: DEFAULT_SCROLL_OFFSET, behavior: "smooth" });
       });
     });
     return () => cancelAnimationFrame(frame);
@@ -116,9 +133,7 @@ export function useChatFind({ messages, entryIds, toolResults, scrollContainerRe
       timer = null;
       const all: Range[] = [];
       const currentRanges: Range[] = [];
-      const currentElement = revealEntryId
-        ? container.querySelector<HTMLElement>(`[data-entry-id="${CSS.escape(revealEntryId)}"]`)
-        : null;
+      const currentElement = elementForEntry(container, revealEntryId);
       const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
         acceptNode: (node) => (node.parentElement?.closest(".chat-find-bar, script, style") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
       });

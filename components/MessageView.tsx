@@ -13,6 +13,7 @@ import { getAssistantErrorMessage, getThinkingPreview, hasAssistantAnswer, isAss
 import { diffGapLabel, parseUnifiedPatch, type SplitDiffCell, type SplitDiffFile } from "@/lib/patch";
 import { applyPatchPreviewToFiles, applyPatchResultHasFailures, extractApplyPatchPaths, getApplyPatchInputText, parseApplyPatchInput } from "@/lib/apply-patch";
 import { isApplyPatchToolName, isEditToolName, isWriteToolName } from "@/lib/tool-names";
+import { findBranchDecision, type BranchDecisionPoint } from "@/lib/branch-decisions";
 import { isToolCallExpanded, setToolCallExpanded } from "@/lib/tool-call-expansion";
 import { getPrefBool, setPrefBool, APP_PREF_KEYS } from "@/lib/app-prefs";
 import { isThinkingExpandedByDefault, THINKING_EXPANDED_EVENT } from "@/lib/thinking-expansion-preference";
@@ -227,6 +228,26 @@ interface Props {
    * notices still show.
    */
   compactStep?: boolean;
+  /**
+   * Plus: branch decision points for this session, from
+   * `getBranchDecisions(tree, activeLeafId)` (lib/branch-decisions.ts). The
+   * footer pager shows only on the message that owns a decision's anchor and
+   * only when that decision has two or more conversation branches.
+   */
+  branchDecisions?: BranchDecisionPoint[];
+  /**
+   * Plus: switch to another in-session branch by its tip entry id. This is the
+   * `onLeafChange` callback ChatWindow receives from useAgentSession.
+   */
+  onBranchSwitch?: (tipId: string) => void;
+  /** The session is running: the pager stays visible but cannot switch. */
+  branchSwitchLocked?: boolean;
+  /**
+   * Plus: set false on the process half of a split assistant entry. ChatWindow
+   * renders one entry twice (its work prefix inside the work group and the
+   * answer bubble); only the answer bubble should carry the pager.
+   */
+  branchPager?: boolean;
 }
 
 export function getModelDisplayName(
@@ -294,12 +315,16 @@ function haveSameRelevantToolResults(
   return true;
 }
 
-export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, modelNames, cwd, onOpenFile, onOpenSession, entryId, searchBlock, onFork, forking, onEditContent, editDisabled, onCancelEdit, isEditing, showTimestamp, prevTimestamp, sessionId, writtenFiles, onCompact, isCompacting, compactError, compactStep }: Props) {
+export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, modelNames, cwd, onOpenFile, onOpenSession, entryId, searchBlock, onFork, forking, onEditContent, editDisabled, onCancelEdit, isEditing, showTimestamp, prevTimestamp, sessionId, writtenFiles, onCompact, isCompacting, compactError, compactStep, branchDecisions, onBranchSwitch, branchSwitchLocked, branchPager = true }: Props) {
+  const branchDecision = useMemo(
+    () => findBranchDecision(branchDecisions, entryId),
+    [branchDecisions, entryId],
+  );
   if (message.role === "user") {
     return <UserMessageView message={message as UserMessage} cwd={cwd} onOpenFile={onOpenFile} entryId={entryId} onFork={onFork} forking={forking} onEditContent={onEditContent} editDisabled={editDisabled} onCancelEdit={onCancelEdit} isEditing={isEditing} />;
   }
   if (message.role === "assistant") {
-    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} cwd={cwd} onOpenFile={onOpenFile} onOpenSession={onOpenSession} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} sessionId={sessionId} entryId={entryId} searchBlock={searchBlock} writtenFiles={writtenFiles} onCompact={onCompact} isCompacting={isCompacting} compactError={compactError} compactStep={compactStep} />;
+    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} cwd={cwd} onOpenFile={onOpenFile} onOpenSession={onOpenSession} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} sessionId={sessionId} entryId={entryId} searchBlock={searchBlock} writtenFiles={writtenFiles} onCompact={onCompact} isCompacting={isCompacting} compactError={compactError} compactStep={compactStep} branchDecision={branchPager ? branchDecision : undefined} onBranchSwitch={onBranchSwitch} branchSwitchLocked={branchSwitchLocked} />;
   }
   if (message.role === "toolResult") {
     // Rendered inline under its toolCall — skip standalone rendering if paired
@@ -680,6 +705,71 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
   );
 }
 
+/**
+ * Plus: the per-answer branch pager (1.19). Bare chevrons around the position,
+ * e.g. ‹ 2/3 ›, sitting in the answer footer. A single-branch position renders
+ * nothing at all: a linear reply must not grow a control.
+ */
+function BranchPager({ decision, onSwitch, locked = false }: {
+  decision: BranchDecisionPoint;
+  onSwitch: (tipId: string) => void;
+  locked?: boolean;
+}) {
+  const { t } = useI18n();
+  const total = decision.total;
+  if (total < 2) return null;
+  const index = decision.activeIndex;
+  const previous = index > 0 ? index - 1 : -1;
+  const next = index < 0 ? 0 : index < total - 1 ? index + 1 : -1;
+  const position = index >= 0 ? `${index + 1}/${total}` : `?/${total}`;
+  const currentLabel = index >= 0 ? decision.options[index]?.label : undefined;
+  const titleFor = (target: number, fallbackKey: string) => (
+    locked
+      ? t("plus.branch.locked")
+      : target >= 0
+        ? t("plus.branch.switchTo", { label: decision.options[target]?.label ?? "" })
+        : t(fallbackKey)
+  );
+  const switchTo = (target: number) => {
+    if (locked || target < 0) return;
+    const option = decision.options[target];
+    if (option) onSwitch(option.tipId);
+  };
+  return (
+    <span
+      className={`message-branch-pager${locked ? " is-locked" : ""}`}
+      role="group"
+      aria-label={t("plus.branch.group")}
+      data-branch-parent={decision.parentEntryId ?? "root"}
+      data-branch-active={index}
+    >
+      <button
+        type="button"
+        className="message-branch-step"
+        aria-label={t("plus.branch.prev")}
+        title={titleFor(previous, "plus.branch.prev")}
+        data-branch-target={previous >= 0 ? decision.options[previous]?.tipId : undefined}
+        disabled={locked || previous < 0}
+        onClick={() => switchTo(previous)}
+      >
+        <span aria-hidden="true">‹</span>
+      </button>
+      <span className="message-branch-count" title={currentLabel}>{position}</span>
+      <button
+        type="button"
+        className="message-branch-step"
+        aria-label={t("plus.branch.next")}
+        title={titleFor(next, "plus.branch.next")}
+        data-branch-target={next >= 0 ? decision.options[next]?.tipId : undefined}
+        disabled={locked || next < 0}
+        onClick={() => switchTo(next)}
+      >
+        <span aria-hidden="true">›</span>
+      </button>
+    </span>
+  );
+}
+
 function AssistantMessageView({
   message,
   isStreaming,
@@ -698,6 +788,9 @@ function AssistantMessageView({
   isCompacting,
   compactError,
   compactStep = false,
+  branchDecision,
+  onBranchSwitch,
+  branchSwitchLocked = false,
 }: {
   message: AssistantMessage;
   isStreaming?: boolean;
@@ -716,6 +809,9 @@ function AssistantMessageView({
   isCompacting?: boolean;
   compactError?: string | null;
   compactStep?: boolean;
+  branchDecision?: BranchDecisionPoint;
+  onBranchSwitch?: (tipId: string) => void;
+  branchSwitchLocked?: boolean;
 }) {
   const { t } = useI18n();
   const time = showTimestamp ? formatTime(message.timestamp) : null;
@@ -997,6 +1093,9 @@ function AssistantMessageView({
         {time && !isStreaming && (
           <span className="message-meta message-footer-time" style={{ fontSize: 12, color: "var(--text-dim)" }}>{time}</span>
         )}
+        {!isStreaming && branchDecision && onBranchSwitch && (
+          <BranchPager decision={branchDecision} onSwitch={onBranchSwitch} locked={branchSwitchLocked} />
+        )}
         {textContent && !isStreaming && (
           <button
             onClick={copyContent}
@@ -1200,7 +1299,8 @@ export function ToolCallBlock({ block, result, duration, aborted, defaultExpande
     setToolCallExpanded(block.toolCallId, next);
     setExpanded(next);
   };
-  const inputStr = getWrittenFileText(block) ?? getToolCallInputText(block);
+  const writtenInput = getWrittenFileText(block);
+  const inputStr = writtenInput ?? getToolCallInputText(block);
   const isStreamingInput = block.rawInput !== undefined;
   const isEditTool = isEditToolName(block.toolName);
   const resultDiff = result && !result.isError ? getResultDiff(result) : null;
@@ -1214,6 +1314,12 @@ export function ToolCallBlock({ block, result, duration, aborted, defaultExpande
   const codemode = codemodeCode === null ? null : { code: codemodeCode, ...codemodeCalls(result?.details) };
   // A running script's progress snapshot has calls but no content yet.
   const codemodeRunning = codemode !== null && result !== undefined && result.content.length === 0;
+  // Plus (#1324): plain object inputs render one row per parameter instead of a
+  // JSON blob. Streaming input, codemode scripts, applied patches, edit diffs
+  // and a written file's text keep their own views.
+  const argumentRows = expanded && !isStreamingInput && !codemode && !patchFiles && !isEditTool
+    ? getToolArgumentRows(block.toolName, block.input)
+    : [];
 
   // `server/tool` instead of the registered `mcp__server__tool`, as pi's TUI shows it.
   const mcpLabel = mcpToolLabel(block.toolName, result?.details);
@@ -1321,23 +1427,63 @@ export function ToolCallBlock({ block, result, duration, aborted, defaultExpande
 
       {/* ── Expanded: input args (only when no richer view exists); a codemode script in place of its JSON ── */}
       {expanded && (isStreamingInput || !isEditTool) && !patchFiles && (
-        <pre
-          className="plus-tool-io"
-          style={{
-            margin: 0,
-            padding: "8px 10px",
-            color: "var(--text-muted)",
-            fontSize: "calc(12px + var(--chat-font-size-offset, 0px))",
-            lineHeight: 1.5,
-            overflow: "auto",
-            background: "var(--bg-subtle)",
-            borderTop: isError ? "1px solid rgba(248,113,113,0.25)" : "1px solid rgba(34,197,94,0.2)",
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-all",
-          }}
-        >
-          {codemode ? codemode.code.replace(/\r/g, "").trimEnd() : inputStr}
-        </pre>
+        codemode ? (
+          <pre
+            className="plus-tool-io"
+            style={{
+              margin: 0,
+              padding: "8px 10px",
+              color: "var(--text-muted)",
+              fontSize: "calc(12px + var(--chat-font-size-offset, 0px))",
+              lineHeight: 1.5,
+              overflow: "auto",
+              background: "var(--bg-subtle)",
+              borderTop: isError ? "1px solid rgba(248,113,113,0.25)" : "1px solid rgba(34,197,94,0.2)",
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-all",
+            }}
+          >
+            {codemode.code.replace(/\r/g, "").trimEnd()}
+          </pre>
+        ) : isStreamingInput || writtenInput !== null ? (
+          <pre
+            className="plus-tool-io"
+            style={{
+              margin: 0,
+              padding: "8px 10px",
+              color: "var(--text-muted)",
+              fontSize: "calc(12px + var(--chat-font-size-offset, 0px))",
+              lineHeight: 1.5,
+              overflow: "auto",
+              background: "var(--bg-subtle)",
+              borderTop: isError ? "1px solid rgba(248,113,113,0.25)" : "1px solid rgba(34,197,94,0.2)",
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-all",
+            }}
+          >
+            {inputStr}
+          </pre>
+        ) : argumentRows.length > 0 ? (
+          <ToolArgumentList rows={argumentRows} />
+        ) : isRecord(block.input) && Object.keys(block.input).length === 0 ? null : (
+          <pre
+            className="plus-tool-io"
+            style={{
+              margin: 0,
+              padding: "8px 10px",
+              color: "var(--text-muted)",
+              fontSize: "calc(12px + var(--chat-font-size-offset, 0px))",
+              lineHeight: 1.5,
+              overflow: "auto",
+              background: "var(--bg-subtle)",
+              borderTop: isError ? "1px solid rgba(248,113,113,0.25)" : "1px solid rgba(34,197,94,0.2)",
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-all",
+            }}
+          >
+            {inputStr}
+          </pre>
+        )
       )}
 
       {/* ── Expanded: the calls a codemode script made ── */}
@@ -2236,6 +2382,106 @@ function safeJson(value: unknown): string {
 
 export function getToolCallInputText(block: ToolCallContent): string {
   return block.rawInput ?? JSON.stringify(block.input, null, 2);
+}
+
+// Plus (#1324): parameter names whose reading order is fixed, so the same call
+// always lists its arguments the same way. Unknown keys follow alphabetically.
+const TOOL_ARGUMENT_ORDER: Record<string, readonly string[]> = {
+  ls: ["path", "limit", "recursive", "hidden"],
+  read: ["path", "file_path", "offset", "limit"],
+  grep: ["pattern", "path", "glob", "ignoreCase", "context", "limit"],
+  find: ["pattern", "path", "limit"],
+  bash: ["command", "description", "timeout"],
+  write: ["path", "file_path", "content"],
+  edit: ["path", "file_path", "oldText", "newText"],
+};
+
+const TOOL_ARGUMENT_VALUE_MAX = 120;
+const TOOL_ARGUMENT_TITLE_MAX = 4000;
+
+export interface ToolArgumentRow {
+  key: string;
+  /** One-line, truncated value shown in the row. */
+  value: string;
+  /** Full value for the hover title. */
+  title: string;
+  /** The row hid part of the value (longer than the cap, or multi-line). */
+  truncated: boolean;
+}
+
+function toolArgumentOrder(toolName: string): readonly string[] {
+  const name = toolName.toLowerCase();
+  if (TOOL_ARGUMENT_ORDER[name]) return TOOL_ARGUMENT_ORDER[name];
+  for (const base of Object.keys(TOOL_ARGUMENT_ORDER)) {
+    if (name.endsWith(`.${base}`) || name.endsWith(`_${base}`) || name.endsWith(`__${base}`)) {
+      return TOOL_ARGUMENT_ORDER[base];
+    }
+  }
+  return [];
+}
+
+function formatToolArgumentValue(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (value === null) return "null";
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") return String(value);
+  if (value === undefined) return "";
+  try {
+    const json = JSON.stringify(value);
+    return json === undefined ? String(value) : json;
+  } catch {
+    return String(value);
+  }
+}
+
+function clampToolArgumentValue(text: string): { value: string; truncated: boolean } {
+  const normalized = text.replace(/\r\n?/g, "\n");
+  const [firstLine = "", ...rest] = normalized.split("\n");
+  const single = firstLine.replace(/\s+/g, " ").trim();
+  if (single.length > TOOL_ARGUMENT_VALUE_MAX) {
+    return { value: `${single.slice(0, TOOL_ARGUMENT_VALUE_MAX)}…`, truncated: true };
+  }
+  if (rest.length > 0) return { value: `${single} …`, truncated: true };
+  return { value: single, truncated: false };
+}
+
+/**
+ * Plus (#1324): one row per parameter, key on the left and value on the right.
+ * Only for a plain object input; callers keep their richer views (edited diff,
+ * apply_patch, a codemode script, a written file's text) instead.
+ */
+export function getToolArgumentRows(toolName: string, input: unknown): ToolArgumentRow[] {
+  if (!isRecord(input)) return [];
+  const keys = Object.keys(input);
+  if (keys.length === 0) return [];
+  const order = toolArgumentOrder(toolName);
+  const rank = (key: string) => {
+    const index = order.indexOf(key);
+    return index === -1 ? order.length : index;
+  };
+  const ordered = [...keys].sort((a, b) => {
+    const delta = rank(a) - rank(b);
+    return delta !== 0 ? delta : a.localeCompare(b);
+  });
+  return ordered.map((key) => {
+    const full = formatToolArgumentValue((input as Record<string, unknown>)[key]).replace(/\r\n?/g, "\n");
+    const { value, truncated } = clampToolArgumentValue(full);
+    const title = full.length > TOOL_ARGUMENT_TITLE_MAX ? `${full.slice(0, TOOL_ARGUMENT_TITLE_MAX)}…` : full;
+    return { key, value, title, truncated };
+  });
+}
+
+function ToolArgumentList({ rows }: { rows: ToolArgumentRow[] }) {
+  const { t } = useI18n();
+  return (
+    <div className="plus-tool-args" role="group" aria-label={t("plus.tool.arguments")}>
+      {rows.map((row) => (
+        <div key={row.key} className={`plus-tool-arg${row.truncated ? " is-clamped" : ""}`}>
+          <span className="plus-tool-arg-key" title={row.key}>{row.key}</span>
+          <span className="plus-tool-arg-value" title={row.title}>{row.value}</span>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 const WRITE_VIEW_KEYS = new Set(["path", "file_path", "content"]);

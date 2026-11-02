@@ -3,6 +3,7 @@ import { homedir } from "os";
 import type { IPty } from "node-pty";
 import { samePath } from "./paths";
 import { resolveTerminalShell } from "./terminal-settings";
+import type { TerminalBackendInfo, TerminalLaunchPlan } from "./wsl-types";
 
 export type TerminalEvent =
   | { type: "output"; data: string; offset: number; reset?: boolean }
@@ -14,6 +15,7 @@ type TerminalListener = (event: TerminalEvent) => void;
 interface TerminalRecord {
   pty: IPty;
   cwd: string;
+  backend: TerminalBackendInfo;
   listeners: Set<TerminalListener>;
   backlog: string;
   offset: number;
@@ -72,7 +74,14 @@ function dimension(value: number, fallback: number): number {
   return Math.min(1000, Math.max(2, Number.isFinite(value) ? Math.floor(value) : fallback));
 }
 
-export function createTerminal(cwd: string, cols: number, rows: number, id: string = randomUUID()): string {
+export function createTerminal(
+  cwd: string,
+  cols: number,
+  rows: number,
+  id: string = randomUUID(),
+  /** Resolved by the route (native shell or `wsl.exe`); native when omitted. */
+  launch?: TerminalLaunchPlan,
+): string {
   const existing = registry().get(id);
   if (existing) {
     if (!samePath(existing.cwd, cwd)) throw new Error("Terminal belongs to a different workspace");
@@ -93,8 +102,14 @@ export function createTerminal(cwd: string, cols: number, rows: number, id: stri
       { cause: error },
     );
   }
-  const shell = resolveTerminalShell();
-  const pty = spawn(shell.path, shell.args, {
+  // The route resolves the backend before this point; a direct caller (tests,
+  // other hosts) keeps the native shell it always started.
+  let plan = launch;
+  if (!plan) {
+    const shell = resolveTerminalShell();
+    plan = { file: shell.path, args: shell.args, cwd, backend: { kind: "native" } };
+  }
+  const pty = spawn(plan.file, plan.args, {
     name: "xterm-256color",
     cols: dimension(cols, 80),
     rows: dimension(rows, 24),
@@ -104,6 +119,7 @@ export function createTerminal(cwd: string, cols: number, rows: number, id: stri
   const record: TerminalRecord = {
     pty,
     cwd,
+    backend: plan.backend,
     listeners: new Set(),
     backlog: "",
     offset: 0,
@@ -137,6 +153,11 @@ export function hasTerminal(id: string): boolean {
 
 export function getTerminalCwd(id: string): string | undefined {
   return registry().get(id)?.cwd;
+}
+
+/** Which shell a live terminal runs (native or WSL + distro + Linux cwd). */
+export function getTerminalBackend(id: string): TerminalBackendInfo | undefined {
+  return registry().get(id)?.backend;
 }
 
 export function subscribeTerminal(

@@ -2,7 +2,8 @@
 // ?tail bounds the returned chain, ?before rewinds the walk and excludes its own
 // boundary so prepending the page never duplicates it. Data behavior is covered
 // end-to-end in lib/session-reader.pagination.test.mjs; here we assert the route wires
-// the params through to buildSessionContext (excludeLeaf on ?before).
+// the params through to buildSessionContextAsync (excludeLeaf on ?before, and the
+// cooperative builder so a window never blocks the event loop in one stretch).
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -19,7 +20,7 @@ const { buildSessionContext } = await jiti.import("@/lib/session-reader");
 test("context route parses ?tail and ?before, excluding the boundary on paging", () => {
   assert.match(routeSrc, /const tail = Number\.isFinite\(rawTail\) && rawTail > 0 \? Math\.min\(rawTail, 1000\) : 50/);
   assert.match(routeSrc, /const before = url\.searchParams\.get\("before"\)/);
-  assert.match(routeSrc, /buildSessionContext\(sm\.getEntries\(\) as never, before \?\? leafId, \{[^}]*excludeLeaf: Boolean\(before\)/);
+  assert.match(routeSrc, /buildSessionContextAsync\(sm\.getEntries\(\) as never, before \?\? leafId, \{[^}]*excludeLeaf: Boolean\(before\)/);
 });
 
 test("context route: ?before pages upward without duplicating the boundary", () => {

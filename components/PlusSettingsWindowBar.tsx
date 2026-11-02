@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type RefObject } from "react";
 import { useI18n } from "@/hooks/useI18n";
+import { isTauriDesktop } from "@/lib/desktop-native";
 import {
   expandSettingsWindow,
   setSettingsWindowMinimized,
@@ -35,6 +36,8 @@ export function PlusSettingsWindowBar({ dialogRef, onClose, busy }: Props) {
     settingsWindowMinimizedSnapshot,
     settingsWindowMinimizedServerSnapshot,
   );
+  // Desktop shell: no separate OS window for settings (see the pop-out button).
+  const [desktopShell] = useState(() => typeof window !== "undefined" && isTauriDesktop());
   const [isStandalonePopup] = useState(() => (
     typeof window !== "undefined" && new URLSearchParams(window.location.search).get("plusStandaloneSettings") === "1"
   ));
@@ -233,6 +236,11 @@ export function PlusSettingsWindowBar({ dialogRef, onClose, busy }: Props) {
                   </svg>
                   <span>{mode === "dock-right" ? (isZh ? "浮动" : "Float") : (isZh ? "并排" : "Dock")}</span>
                 </button>
+                {/* `window.open` cannot produce a real app window here: the Tauri
+                    shell hands every new window to the system browser, which loses
+                    the desktop token (native dialogs, exports, updates). The
+                    in-app floating/docked modes cover the same need. */}
+                {!desktopShell && (
                 <button
                   type="button"
                   className="plus-settings-win-btn"
@@ -248,6 +256,7 @@ export function PlusSettingsWindowBar({ dialogRef, onClose, busy }: Props) {
                   </svg>
                   <span>{isZh ? "独立窗口" : "Pop out"}</span>
                 </button>
+                )}
               </>
             )}
           </>

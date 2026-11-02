@@ -1,4 +1,6 @@
-export async function terminalRequest(path: string, options?: RequestInit): Promise<{ id?: string; cwd?: string }> {
+import type { TerminalBackendInfo } from "./wsl-types";
+
+export async function terminalRequest(path: string, options?: RequestInit): Promise<{ id?: string; cwd?: string; backend?: TerminalBackendInfo }> {
   const response = await fetch(path, { ...options, signal: AbortSignal.timeout(15_000) });
   const data = await response.json().catch(() => {
     throw new Error(`Terminal request failed (HTTP ${response.status}): server returned an empty or invalid JSON response. Check the pi-web server log.`);

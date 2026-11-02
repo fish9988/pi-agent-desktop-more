@@ -3,6 +3,7 @@ import { resolve } from "path";
 import { NextResponse } from "next/server";
 import { getAllowedFileRoots, isExistingFilePathAllowed } from "@/lib/file-access";
 import { createTerminal } from "@/lib/terminal-manager";
+import { resolveTerminalLaunch } from "@/lib/wsl-terminal";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -26,13 +27,18 @@ export async function POST(req: Request) {
     if (!(await stat(cwd)).isDirectory()) {
       return NextResponse.json({ error: "cwd must be a directory" }, { status: 400 });
     }
+    // Backend choice happens here, before any PTY exists: a WSL that cannot be
+    // listed or cannot enter the translated cwd answers the native shell plus a
+    // warning, never a dead terminal.
+    const launch = await resolveTerminalLaunch(cwd);
     const id = createTerminal(
       cwd,
       typeof body.cols === "number" ? body.cols : 80,
       typeof body.rows === "number" ? body.rows : 24,
       body.id as string | undefined,
+      launch,
     );
-    return NextResponse.json({ id });
+    return NextResponse.json({ id, backend: launch.backend });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }

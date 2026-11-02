@@ -12,7 +12,9 @@ import {
   invalidateSessionPathCache,
   invalidateSessionListCache,
   invalidateSessionManagerCache,
-  buildSessionContext,
+  buildSessionContextAsync,
+  getSessionDerivationAsync,
+  yieldToEventLoop,
   readSessionHeader,
 } from "@/lib/session-reader";
 import { sessionPathKey } from "@/lib/session-path";
@@ -61,18 +63,83 @@ export async function GET(
     const filePath = liveRpc?.sessionFile || sm.getSessionFile() || resolvedPath || "";
     const entries = sm.getEntries();
     const leafId = sm.getLeafId();
+    const header = sm.getHeader();
     const summaryTree = searchParams.get("tree") === "summary";
-    const tree = summaryTree
-      ? toSummaryTree(projectTreeForResponse(sm.getTree()))
-      : projectTreeForResponse(sm.getTree());
-    perf?.span("tree");
     const deferThinking = searchParams.has("deferThinking");
     const deferToolResultImages = searchParams.has("deferMedia");
     const rawTail = Number(searchParams.get("tail"));
     const tail = Number.isFinite(rawTail) && rawTail > 0 ? Math.min(rawTail, 1000) : 50;
     // Chat-view loads ask for whole turns; the default keeps `tail` an exact cap.
     const wholeTurns = searchParams.has("wholeTurns");
-    const context = buildSessionContext(entries as never, leafId, {
+    const latestEntry = entries[entries.length - 1] as { id?: string } | undefined;
+    const latestEntryId = typeof latestEntry?.id === "string" ? latestEntry.id : null;
+    // Opaque freshness token for the session view cache. Derived from the
+    // disk fingerprint and the actual read source; null tells the client the
+    // snapshot is unstable and must not be cached as fresh. The server's own
+    // derivation cache keys on the same token, so both invalidate together.
+    const snapshotRevision = computeSessionRevision({
+      filePath,
+      sourceId: liveRpc ? `runtime:${String(liveRpc.inner.sessionId)}` : "disk",
+      entryCount: entries.length,
+      latestEntryId,
+      leafId: leafId ?? null,
+    });
+
+    // Tree, stats, active time and the info extras depend only on the entry
+    // set, so they are derived once per revision. A derivation is sliced with
+    // yieldToEventLoop() between phases: this route must never hold the event
+    // loop for a whole tree + stats pass (SSE and other API routes wait there).
+    const derived = await getSessionDerivationAsync({
+      // The session id leads the key: `snapshotRevision` hashes the *fingerprint*
+      // (not the path), so two unflushed live sessions can share one revision.
+      key: snapshotRevision ? `${id}|${snapshotRevision}|${summaryTree ? "summary" : "tree"}` : null,
+      sizeOf: (value) => (
+        JSON.stringify(value.tree).length
+        + (value.summaryTree ? JSON.stringify(value.summaryTree).length : 0)
+      ),
+      compute: async () => {
+        const projectedTree = projectTreeForResponse(sm.getTree());
+        // Building the SDK tree is the longest single call left (a few ms on a
+        // very large session), so release the loop before the next phase.
+        await yieldToEventLoop();
+        const summary = summaryTree ? toSummaryTree(projectedTree) : undefined;
+        await yieldToEventLoop();
+        const stats = computeSessionStats(entries as unknown as SessionEntry[]);
+        await yieldToEventLoop();
+        const totalActiveMs = computeSessionTotalActiveMs(entries);
+        await yieldToEventLoop();
+        const subagent = header
+          ? readSubagentRun(entries as never, header.id, filePath)
+          : null;
+        const toolNames = readSubagentSessionResources(entries as never)?.tools
+          ?? readSessionToolSelection(entries as never);
+        await yieldToEventLoop();
+        const firstUserEntry = entries.find((entry) => entry.type === "message" && entry.message.role === "user");
+        const firstUserMessage = firstUserEntry?.type === "message" ? firstUserEntry.message : undefined;
+        const firstMessageContent = firstUserMessage
+          ? (firstUserMessage as { content: unknown }).content
+          : undefined;
+        const firstUserMessageText = firstUserMessage
+          ? (typeof firstMessageContent === "string"
+              ? firstMessageContent
+              : (Array.isArray(firstMessageContent)
+                  ? (firstMessageContent.find((b: { type: string }) => b.type === "text") as { text: string } | undefined)?.text ?? ""
+                  : "")) || "(no messages)"
+          : "(no messages)";
+        return {
+          tree: projectedTree,
+          ...(summary ? { summaryTree: summary } : {}),
+          stats,
+          totalActiveMs,
+          subagent,
+          toolNames,
+          firstUserMessageText,
+        };
+      },
+    });
+    perf?.span("derive");
+    const { tree, stats, totalActiveMs, subagent, toolNames, firstUserMessageText } = derived;
+    const context = await buildSessionContextAsync(entries as never, leafId, {
       deferThinking,
       deferToolResultImages,
       tail,
@@ -80,38 +147,14 @@ export async function GET(
       sessionId: id, // local: lazy URLs for historical tool-result images
     });
     perf?.span("context");
-    const totalActiveMs = computeSessionTotalActiveMs(entries);
-    // Cumulative usage over ALL entries, including history compacted away —
-    // the same aggregation the SDK's getSessionStats() uses. Lets the client
-    // keep monotonic token/cost counters across compaction and page reloads.
-    const stats = computeSessionStats(entries as unknown as SessionEntry[]);
-    perf?.span("stats");
-    // Opaque freshness token for the session view cache. Derived from the
-    // disk fingerprint and the actual read source; null tells the client the
-    // snapshot is unstable and must not be cached as fresh.
-    const latestEntry = entries[entries.length - 1] as { id?: string } | undefined;
-    const snapshotRevision = computeSessionRevision({
-      filePath,
-      sourceId: liveRpc ? `runtime:${String(liveRpc.inner.sessionId)}` : "disk",
-      entryCount: entries.length,
-      latestEntryId: typeof latestEntry?.id === "string" ? latestEntry.id : null,
-      leafId: leafId ?? null,
-    });
-    const sessionName = sm.getSessionName();
-    const firstUserEntry = entries.find((entry) => entry.type === "message" && entry.message.role === "user");
-    const firstUserMessage = firstUserEntry?.type === "message" ? firstUserEntry.message : undefined;
 
-    const header = sm.getHeader();
+    const sessionName = sm.getSessionName();
+
     let modified = header?.timestamp ?? new Date().toISOString();
     try { modified = statSync(filePath).mtime.toISOString(); } catch { /* use header timestamp */ }
     const parentSessionId = header?.parentSession
       ? await resolveSessionIdByPath(header.parentSession)
       : undefined;
-    const subagent = header
-      ? readSubagentRun(entries as never, header.id, filePath)
-      : null;
-    const toolNames = readSubagentSessionResources(entries as never)?.tools
-      ?? readSessionToolSelection(entries as never);
     const info = header ? (await attachSessionProjectInfo([{
       path: filePath,
       id: header.id,
@@ -120,12 +163,7 @@ export async function GET(
       created: header.timestamp,
       modified,
       messageCount: stats.totalMessages,
-      firstMessage: firstUserMessage
-        ? (() => {
-            const c = (firstUserMessage as { content: unknown }).content;
-            return typeof c === "string" ? c : (Array.isArray(c) ? (c.find((b: { type: string }) => b.type === "text") as { text: string } | undefined)?.text ?? "" : "") || "(no messages)";
-          })()
-        : "(no messages)",
+      firstMessage: firstUserMessageText,
       parentSessionId,
       ...(subagent
         ? { relation: { kind: "subagent" as const, parentSessionId: subagent.parentSessionId, profile: subagent.profile, description: subagent.description, status: liveRpc?.isRunning() ? "running" as const : subagent.status } }
@@ -135,39 +173,22 @@ export async function GET(
       transient: !filePath || !existsSync(filePath),
     }]))[0] : null;
 
-    return perf?.attach(jsonResponse(
-      req,
-      {
-        sessionId: id,
-        filePath,
-        info,
-        leafId,
-        tree,
-        ...(summaryTree ? { treeFormat: "summary" as const } : {}),
-        snapshotRevision,
-        context,
-        stats,
-        totalActiveMs,
-        ...(toolNames !== undefined ? { toolNames } : {}),
-        ...(wrapperRebuilt ? { wrapperRebuilt: true } : {}),
-      },
-    )) ?? jsonResponse(
-      req,
-      {
-        sessionId: id,
-        filePath,
-        info,
-        leafId,
-        tree,
-        ...(summaryTree ? { treeFormat: "summary" as const } : {}),
-        snapshotRevision,
-        context,
-        stats,
-        totalActiveMs,
-        ...(toolNames !== undefined ? { toolNames } : {}),
-        ...(wrapperRebuilt ? { wrapperRebuilt: true } : {}),
-      },
-    );
+    const payload = {
+      sessionId: id,
+      filePath,
+      info,
+      leafId,
+      tree,
+      ...(summaryTree ? { treeFormat: "summary" as const } : {}),
+      snapshotRevision,
+      context,
+      stats,
+      totalActiveMs,
+      ...(toolNames !== undefined ? { toolNames } : {}),
+      ...(wrapperRebuilt ? { wrapperRebuilt: true } : {}),
+    };
+    const response = jsonResponse(req, payload);
+    return perf ? perf.attach(response) : response;
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }

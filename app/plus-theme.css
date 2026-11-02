@@ -210,10 +210,12 @@ html[data-plus-style="clean"] .app-shell::before {
 html[data-plus-style="clean"][data-plus-standalone-settings="1"] .app-shell > :not(.settings-dialog-backdrop, .project-trust-backdrop) {
   content-visibility: hidden;
 }
-html[data-plus-style="clean"] .chat-scroll-container [data-entry-id] {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 240px;
-}
+/* Height estimates are confined to the blocks that really get skipped while
+   offscreen: code blocks, tables, math and folded work groups. Message rows are
+   always laid out for real — an estimated row height is what made a prepended
+   page land the viewport in the wrong place, and the transcript's ResizeObserver
+   compensation needs the true height to be right. (This used to be
+   `[data-entry-id] { contain-intrinsic-size: auto 240px }`.) */
 html[data-plus-style="clean"] .chat-scroll-container .markdown-body :is(pre, table, .katex-display),
 html[data-plus-style="clean"] .chat-scroll-container .process-details.work-group:not(.is-open) {
   content-visibility: auto;

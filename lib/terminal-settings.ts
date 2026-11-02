@@ -2,6 +2,8 @@ import { getPiWebSettingsPath, readStored, updatePiWebSettings } from "./artifac
 import { discoverTerminalShells, type TerminalShell } from "./terminal-shells";
 import type { TerminalSettingsResponse } from "./api-types";
 import { samePath } from "./paths";
+import { readWslPreferences, writeWslPreferences } from "./wsl-preferences";
+import type { WslPreferences, WslSettingsFields } from "./wsl-types";
 
 export function readTerminalShellPreference(path = getPiWebSettingsPath()): string {
   try {
@@ -16,16 +18,25 @@ export function writeTerminalShellPreference(shell: string, path = getPiWebSetti
   updatePiWebSettings({ terminalShell: shell }, path);
 }
 
-export function getTerminalSettings(): TerminalSettingsResponse {
+export function getTerminalSettings(): TerminalSettingsResponse & WslSettingsFields {
   const { shells, defaultPath } = discoverTerminalShells();
   const shell = readTerminalShellPreference();
   const selected = shells.find(option => samePath(option.path, shell));
+  const wsl = readWslPreferences();
   return {
     shell: selected?.path ?? shell,
     defaultShell: shells.find(option => option.path === defaultPath)?.label ?? null,
     options: shells.map(option => ({ value: option.path, label: option.label })),
     unavailable: shell !== "auto" && !selected,
+    backend: wsl.backend,
+    wslDistro: wsl.distro,
+    wslShellCommands: wsl.shellCommands,
   };
+}
+
+/** Merge the WSL half of the terminal settings; the native shell keeps its own writer. */
+export function writeTerminalWslPreferences(patch: Partial<WslPreferences>): WslPreferences {
+  return writeWslPreferences(patch);
 }
 
 export function resolveTerminalShell(): TerminalShell {

@@ -12,7 +12,7 @@ export const SETTINGS_NAV_GROUPS: { id: "preferences" | "agent"; sections: Setti
 ];
 
 const SETTINGS_KEYWORDS: Partial<Record<SettingsSection, string>> = {
-  general: "language 语言 語言 update 更新 version 版本 powershell bash shell sound 提示音 提示音 thinking 思考 work details 工作详情 工作詳情 enter 发送 傳送 diff 对比 quote 引用 artifact 预览 預覽 chats 对话 對話 prompt optimize 优化 優化 tray 托盘 autostart 开机 開機",
+  general: "language 语言 語言 update 更新 version 版本 powershell bash shell terminal 终端 終端 wsl distro 发行版 發行版 ubuntu sound 提示音 提示音 thinking 思考 work details 工作详情 工作詳情 enter 发送 傳送 diff 对比 quote 引用 artifact 预览 預覽 chats 对话 對話 prompt optimize 优化 優化 tray 托盘 autostart 开机 開機",
   appearance: "theme 主题 主題 font 字体 字體 color 颜色 顏色 配色 width 宽度 寬度 size 字号 字號 dark 深色 light 浅色 淺色 css",
   models: "model 模型 provider 服务商 服務商 api key 密钥 金鑰 base url price 价格 價格 cost context 上下文 oauth login 登录 登入 image 图像 圖像 classifier 分类 分類",
   skills: "skill 技能 skills.sh",

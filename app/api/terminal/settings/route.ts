@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
 import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
-import { getTerminalSettings, writeTerminalShellPreference } from "@/lib/terminal-settings";
+import { getTerminalSettings, writeTerminalShellPreference, writeTerminalWslPreferences } from "@/lib/terminal-settings";
 
 export const dynamic = "force-dynamic";
+
+// One PUT, one change: the native shell dropdown and the WSL backend switch
+// share this route so the panel reloads a single settings object.
+
+const WSL_DISTRO_NAME_RE = /^[\w.-]{1,64}$/;
 
 export async function GET() {
   try {
@@ -21,14 +26,50 @@ export async function PUT(req: Request) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
-  const shell = body && typeof body === "object" && !Array.isArray(body) && "shell" in body ? body.shell : undefined;
-  if (typeof shell !== "string" || !shell) return NextResponse.json({ error: "Invalid terminal" }, { status: 400 });
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return NextResponse.json({ error: "Expected a JSON object" }, { status: 400 });
+  }
+  const changes = body as { shell?: unknown; backend?: unknown; wslDistro?: unknown; wslShellCommands?: unknown };
+  const keys = ["shell", "backend", "wslDistro", "wslShellCommands"].filter((key) => key in changes);
+  if (keys.length !== 1) {
+    return NextResponse.json({ error: "Send one of shell, backend, wslDistro or wslShellCommands" }, { status: 400 });
+  }
+
   try {
-    const settings = getTerminalSettings();
-    if (shell !== "auto" && !settings.options.some(option => option.value === shell)) {
-      return NextResponse.json({ error: "Terminal is unavailable" }, { status: 400 });
+    if (keys[0] === "shell") {
+      const shell = changes.shell;
+      if (typeof shell !== "string" || !shell) return NextResponse.json({ error: "Invalid terminal" }, { status: 400 });
+      const settings = getTerminalSettings();
+      if (shell !== "auto" && !settings.options.some(option => option.value === shell)) {
+        return NextResponse.json({ error: "Terminal is unavailable" }, { status: 400 });
+      }
+      writeTerminalShellPreference(shell);
+      return NextResponse.json(getTerminalSettings());
     }
-    writeTerminalShellPreference(shell);
+
+    if (keys[0] === "backend") {
+      if (changes.backend !== "native" && changes.backend !== "wsl") {
+        return NextResponse.json({ error: "backend must be native or wsl" }, { status: 400 });
+      }
+      writeTerminalWslPreferences({ backend: changes.backend });
+      return NextResponse.json(getTerminalSettings());
+    }
+
+    if (keys[0] === "wslDistro") {
+      const distro = changes.wslDistro;
+      // "" means the WSL default distribution; the list is not authoritative
+      // here because it may be temporarily unreadable while WSL is stopped.
+      if (typeof distro !== "string" || (distro !== "" && !WSL_DISTRO_NAME_RE.test(distro.trim()))) {
+        return NextResponse.json({ error: "Invalid WSL distribution" }, { status: 400 });
+      }
+      writeTerminalWslPreferences({ distro });
+      return NextResponse.json(getTerminalSettings());
+    }
+
+    if (typeof changes.wslShellCommands !== "boolean") {
+      return NextResponse.json({ error: "wslShellCommands must be a boolean" }, { status: 400 });
+    }
+    writeTerminalWslPreferences({ shellCommands: changes.wslShellCommands });
     return NextResponse.json(getTerminalSettings());
   } catch {
     return NextResponse.json({ error: "Could not save terminal settings" }, { status: 500 });

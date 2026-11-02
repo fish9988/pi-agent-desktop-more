@@ -51,7 +51,7 @@ scripts/prepare-demo-files.mjs
 | `app/layout.tsx`, `app/page.tsx`, `app/DemoRoot.tsx` | Load the mock, no service worker or manifest (demo-owned, never synced) |
 | `components/AppShell.tsx` | Open the README preview by default, base-path-safe `router.replace`, in-browser "Full history" |
 | `components/FileIcons.tsx`, `ProviderIcon.tsx` | Prefix static assets with the Pages base path |
-| `components/FileViewer.tsx`, `FileExplorer.tsx`, `MarkdownBody.tsx` | Load images, media and downloads from the static snapshot |
+| `components/FileViewer.tsx`, `FileExplorer.tsx`, `MarkdownBody.tsx` | Load images, media and downloads from the static snapshot; `FileViewer` also sends external links in a preview to a new tab, because the desktop link guard only acts inside Tauri |
 | `lib/subagent-extension.ts`, `lib/terminal-manager.ts` | Types only; the originals are server code |
 
 The same list is `PATCHED` in `scripts/sync-from-app.mjs`; keep the two in step.

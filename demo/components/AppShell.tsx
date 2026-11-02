@@ -35,7 +35,7 @@ import { APP_PREF_KEYS, getPrefBool, getPrefJson, setPref } from "@/lib/app-pref
 import { useViewportHeight } from "@/hooks/useViewportHeight";
 import { useResizablePanel } from "@/hooks/useResizablePanel";
 import { useDesktopConnection } from "@/lib/desktop-connection";
-import { isTauriDesktop, setCloseQuitsNative } from "@/lib/desktop-native";
+import { isTauriDesktop, installExternalLinkGuard, setCloseQuitsNative } from "@/lib/desktop-native";
 import { canUseNativeMenu, menuPointBelow, showNativeMenu } from "@/lib/desktop-menu";
 import { useNativeContextMenu } from "@/hooks/useNativeContextMenu";
 import { DomContextMenuHost } from "./DomContextMenuHost";
@@ -141,6 +141,12 @@ export function AppShell() {
   const { locale, t: translate } = useI18n();
   const isMobile = useIsMobile();
   useViewportHeight();
+
+  // Backstop for external links: any `<a href="https…">` that no component
+  // intercepted would otherwise navigate the WebView and replace the whole app
+  // UI with that page. Installed once, capture phase, no rendering; in-app
+  // routes, fragments and relative paths are left to the app.
+  useEffect(() => installExternalLinkGuard(), []);
 
   // Once the user has granted notification permission, register a Web Push
   // subscription so the server can notify backgrounded PWAs (notably iOS,

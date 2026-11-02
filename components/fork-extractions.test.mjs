@@ -350,8 +350,18 @@ const FORK_FEATURES = [
     markers: ["onOpenFile={onOpenFile} artifacts>{block.text}"],
   },
   {
-    name: "artifacts: ChatWindow publishes the session's artifacts",
+    name: "artifacts: ChatWindow mounts the session's artifact publisher",
     file: "components/ChatWindow.tsx",
+    // Plus 1.5.0 (pi-web #1191, the streaming store) moved the hook call out of
+    // ChatWindow into components/LiveStream.tsx; ChatWindow keeps the mount
+    // point, so both halves are pinned by an entry of their own.
+    markers: ["<StreamingArtifactPublisher"],
+  },
+  {
+    name: "artifacts: the transcript publishes the session's artifacts",
+    file: "components/LiveStream.tsx",
+    // StreamingArtifactPublisher calls useArtifactPublisher(sessionId, messages,
+    // streaming, send): the transcript's artifacts plus the reply still streaming.
     markers: ["useArtifactPublisher("],
   },
   {

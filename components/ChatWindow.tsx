@@ -3,6 +3,7 @@ import { registerAbortHandler } from "@/hooks/useKeyboardShortcuts";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { UnavailableWorkspace } from "@/lib/workspace-availability";
+import { getBranchDecisions } from "@/lib/branch-decisions";
 import type { AgentMessage, AssistantContentBlock, AssistantMessage, BashExecutionMessage, BlockingExtensionUiRequest, ExtensionUiRequest, LeafChangeOptions, SessionInfo, SessionTreeNode, SessionWorkspaceKind, ToolResultMessage } from "@/lib/types";
 import { normalizeCustomPanelLines } from "@/lib/ansi";
 import { asBracketedPaste, toTerminalKeyData } from "@/lib/terminal-input";
@@ -107,6 +108,135 @@ interface Props {
 // the overlay keeps the name with zero width so the toast column spans full width.
 const CHAT_MINIMAP_WIDTH = 0;
 const CHAT_COLUMN_PADDING = 16;
+
+// --- Transcript anchoring (the ground work for list virtualization) ---------
+// Two things move the reading position that the browser cannot fix for us:
+// a prepended page (heights above the viewport are estimates whenever
+// `content-visibility` is in play) and a mounted row that changes height under
+// a still reader (a folded group opening, an image decoding, markdown/KaTeX
+// settling). Both are handled by "which element owns the viewport's top edge":
+// if that element keeps its offset, the reader keeps their line. Chrome's own
+// scroll anchoring is switched off on `.chat-scroll-container` (app/plus.css)
+// because it competes with the prepend restore for the same scrollTop.
+
+interface ChatFoldAnchor {
+  /** The message row ([data-entry-id]) the viewport's top edge is in. */
+  row: HTMLElement;
+  /** The deepest box the top edge lands in — a change above it moves it. */
+  element: HTMLElement;
+  /** `element`'s top relative to the scrollport's top (usually negative). */
+  offset: number;
+  /** scrollTop when this was measured; a different one makes it stale. */
+  scrollTop: number;
+}
+
+interface ChatPrependAnchor {
+  entryId: string;
+  /** The row's top relative to the scrollport's top before the page landed. */
+  offset: number;
+}
+
+const FOLD_DESCENT_DEPTH = 12;
+const FOLD_DELTA_EPSILON = 0.5;
+
+/**
+ * Index of the row that owns `foldY` (the last one starting at or above it),
+ * given rows in document order. Binary search: a long transcript can mount
+ * thousands of rows, and this runs once per frame while scrolling.
+ */
+export function findFoldRowIndex(
+  count: number,
+  foldY: number,
+  rectAt: (index: number) => { top: number; bottom: number },
+): number {
+  let low = 0;
+  let high = count - 1;
+  let found = -1;
+  while (low <= high) {
+    const middle = (low + high) >> 1;
+    const rect = rectAt(middle);
+    if (rect.bottom <= foldY) {
+      found = middle;
+      low = middle + 1;
+      continue;
+    }
+    if (rect.top <= foldY) return middle;
+    high = middle - 1;
+  }
+  if (found >= 0) return found;
+  // The fold sits above every row (scrolled to the very top, or the rows start
+  // below the padding): the topmost row is the reader's anchor. Anchoring there
+  // is what makes the first prepend land the same message in the same place
+  // instead of falling back to the estimated distance.
+  return count > 0 ? 0 : -1;
+}
+
+/** How far scrollTop must move so the anchored element's offset is restored. */
+export function foldAnchorScrollDelta(currentOffset: number, recordedOffset: number): number {
+  const delta = currentOffset - recordedOffset;
+  return Math.abs(delta) <= FOLD_DELTA_EPSILON ? 0 : delta;
+}
+
+/** The rendered message rows, in document order. */
+function messageRowElements(content: HTMLElement): HTMLElement[] {
+  return Array.from(content.children).filter(
+    (child): child is HTMLElement => child instanceof HTMLElement && Boolean(child.dataset.entryId),
+  );
+}
+
+function captureFoldAnchor(container: HTMLElement, rows: HTMLElement[]): ChatFoldAnchor | null {
+  if (rows.length === 0) return null;
+  const foldY = container.getBoundingClientRect().top;
+  const rowIndex = findFoldRowIndex(rows.length, foldY, (index) => rows[index].getBoundingClientRect());
+  if (rowIndex < 0) return null;
+  const row = rows[rowIndex];
+  let element = row;
+  // Descend to the innermost box the fold sits in. Anchoring on the row alone
+  // made a change *below* the fold inside a tall row (a folded group in the same
+  // long message) look like a change above it, and the compensation then
+  // scrolled the reader's line away.
+  for (let depth = 0; depth < FOLD_DESCENT_DEPTH; depth += 1) {
+    if (element.getBoundingClientRect().bottom <= foldY) break;
+    let next: HTMLElement | null = null;
+    for (const child of Array.from(element.children)) {
+      if (!(child instanceof HTMLElement)) continue;
+      const childRect = child.getBoundingClientRect();
+      if (childRect.height <= 0) continue;
+      if (childRect.top > foldY) break;
+      next = child;
+      if (childRect.bottom > foldY) break;
+    }
+    if (!next || next === element) break;
+    element = next;
+  }
+  return {
+    row,
+    element,
+    offset: element.getBoundingClientRect().top - foldY,
+    scrollTop: container.scrollTop,
+  };
+}
+
+/** The entry id + offset to hold across a prepend, or null when the fold sits
+ *  outside every message row (empty transcript, only the load-earlier row). */
+function capturePrependAnchor(container: HTMLElement, anchor: ChatFoldAnchor | null): ChatPrependAnchor | null {
+  const entryId = anchor?.row.dataset.entryId;
+  if (!anchor || !entryId) return null;
+  return {
+    entryId,
+    offset: anchor.row.getBoundingClientRect().top - container.getBoundingClientRect().top,
+  };
+}
+
+/** ScrollTop that puts the anchored row back where it was, or null when that
+ *  row is no longer rendered (the caller falls back to the old distance). */
+function restorePrependAnchor(container: HTMLElement, anchor: ChatPrependAnchor): number | null {
+  const row = Array.from(container.querySelectorAll<HTMLElement>("[data-entry-id]"))
+    .find((element) => element.dataset.entryId === anchor.entryId);
+  if (!row) return null;
+  const offsetNow = row.getBoundingClientRect().top - container.getBoundingClientRect().top;
+  return container.scrollTop + (offsetNow - anchor.offset);
+}
 
 function hasFinalAssistantAnswer(message: AgentMessage): boolean {
   if (message.role !== "assistant") return false;
@@ -266,6 +396,39 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
   });
   const [restoreAnchorReady, setRestoreAnchorReady] = useState(false);
 
+  // Per-answer branch pager (< 2/3 >): the session hook reports the tree, the
+  // active leaf and the switch callback once per change; keep them here so a
+  // message footer can page without routing through the top-bar panel.
+  const [branchView, setBranchView] = useState<{
+    tree: SessionTreeNode[];
+    leafId: string | null;
+    onLeafChange: (leafId: string | null, options?: LeafChangeOptions) => void;
+    locked: boolean;
+  } | null>(null);
+  const forwardBranchData = useCallback((
+    tree: SessionTreeNode[],
+    leafId: string | null,
+    onLeafChange: (leafId: string | null, options?: LeafChangeOptions) => void,
+    locked: boolean,
+  ) => {
+    setBranchView((current) => (
+      current
+        && current.tree === tree
+        && current.leafId === leafId
+        && current.locked === locked
+        && current.onLeafChange === onLeafChange
+        ? current
+        : { tree, leafId, onLeafChange, locked }
+    ));
+    onBranchDataChange?.(tree, leafId, onLeafChange, locked);
+  }, [onBranchDataChange]);
+  const branchDecisions = useMemo(
+    () => (branchView ? getBranchDecisions(branchView.tree, branchView.leafId) : []),
+    [branchView],
+  );
+  const handleBranchPagerSwitch = useCallback((tipId: string) => {
+    branchView?.onLeafChange(tipId);
+  }, [branchView]);
   const {
     loading, error, messages, activeToolResults, entryIds, historyCursor, hasEarlierMessages, streamingStore,
     agentRunning, bashRunning, pendingBash, modelNames, modelList, modelError, modelScopeWarnings, modelThinkingLevels, modelThinkingLevelMaps, toolPreset, thinkingLevel,
@@ -296,7 +459,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
   } = useAgentSession({
     session, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd: wrappedOnAgentEnd, onAttentionNeeded, onSessionCreated, onSessionForked,
     chatWorkspace: chatOnly,
-    modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemToolsChange, onSystemInfoLoaderChange, onSessionStatsPanelOpen,
+    modelsRefreshKey, chatInputRef, onBranchDataChange: forwardBranchData, onSystemPromptChange, onSystemToolsChange, onSystemInfoLoaderChange, onSessionStatsPanelOpen,
     onOpenSettings,
     deferInitialScroll: Boolean(pendingScrollRestore),
     onScrollPositionChange,
@@ -515,6 +678,18 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
   const sentinelRef = useRef<HTMLDivElement>(null);
   const messageContentRef = useRef<HTMLDivElement | null>(null);
   const prevScrollDistanceRef = useRef<number | null>(null);
+  // Baseline for height compensation (see captureFoldAnchor) and the row held
+  // across a prepend. Kept apart from prevScrollDistanceRef, which stays the
+  // fallback and is also used by the find-in-conversation page load.
+  const foldAnchorRef = useRef<ChatFoldAnchor | null>(null);
+  const foldRowsRef = useRef<HTMLElement[]>([]);
+  const prependAnchorRef = useRef<ChatPrependAnchor | null>(null);
+  const rowObserverRef = useRef<ResizeObserver | null>(null);
+  const observedRowsRef = useRef<Set<HTMLElement>>(new Set());
+  const observedContentRef = useRef<HTMLElement | null>(null);
+  // The prepend pin's pending frame. Declared up here because the session-switch
+  // reset below stops it during render (the helpers themselves are hoisted).
+  const pinFrameRef = useRef<number | null>(null);
   const loadingOlderRef = useRef(false);
   // Set by a real user gesture on the transcript (wheel, drag, key, touch).
   const userScrollIntentRef = useRef(false);
@@ -549,6 +724,9 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
     setPendingSearchScroll(null);
     userScrollIntentRef.current = false;
     stalledOlderLoadsRef.current = 0;
+    foldAnchorRef.current = null;
+    prependAnchorRef.current = null;
+    stopPrependPin();
   }
   const searchMessage = messages[entryIds.indexOf(pendingSearchScroll?.entryId ?? "")];
   const searchBlock = searchMessage?.role === "assistant"
@@ -754,6 +932,12 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
     if (stalledOlderLoadsRef.current >= 2) return;
     loadingOlderRef.current = true;
     lastOlderLoadAtRef.current = Date.now();
+    const content = messageContentRef.current;
+    // Hold the message that owns the viewport's top edge, not the distance to
+    // the bottom of the list: heights above the fold are estimates while
+    // `content-visibility` applies, so the distance lands the viewport at the
+    // top of the freshly inserted page instead of on the same message.
+    prependAnchorRef.current = content ? capturePrependAnchor(container, captureFoldAnchor(container, foldRowsRef.current)) : null;
     prevScrollDistanceRef.current = captureScrollDistance(container.scrollHeight, container.scrollTop);
     void loadContext(sid, activeLeafId, oldestId).then((page) => {
       // Whether a page arrived is the signal, not how many pixels the list grew:
@@ -762,6 +946,12 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
       // and latched older history off for the rest of the session.
       const added = page ? page.messages?.length ?? 0 : 0;
       stalledOlderLoadsRef.current = added > 0 ? 0 : stalledOlderLoadsRef.current + 1;
+      // An empty page never commits a new list, so its pending restore would sit
+      // there and be applied by the next unrelated commit (a streamed message).
+      if (added === 0) {
+        prependAnchorRef.current = null;
+        prevScrollDistanceRef.current = null;
+      }
     }).finally(() => {
       loadingOlderRef.current = false;
     });
@@ -866,20 +1056,195 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
   // measured a list that had not grown.
   if (messages.length > visibleCount) setVisibleCount(messages.length);
 
-  // Restore the reading position right after a prepend, before paint: the
-  // distance from the viewport top to the end of the content is unchanged by
-  // inserting history above, so keeping it leaves the same message on screen.
-  // Keyed on messages.length, not visibleCount: growing visibleCount can be a
-  // no-op (it was already large), and the restore then never ran — the view
-  // stayed at the top of the freshly inserted page, which read as "scrolling up
-  // does nothing" even though a page had loaded.
+  // Restore the reading position right after a prepend, before paint.
+  // Primary path: the message that owned the viewport's top edge is scrolled
+  // back to the same offset, so the reader stays on their line even when the
+  // heights above it are only estimates (`contain-intrinsic-size`). Fallback:
+  // the distance from the viewport top to the end of the content, unchanged by
+  // inserting history above — used when that message is no longer rendered.
+  // Keyed on messages.length (and entryIds), not visibleCount: growing
+  // visibleCount can be a no-op (it was already large), and the restore then
+  // never ran — the view stayed at the top of the freshly inserted page, which
+  // read as "scrolling up does nothing" even though a page had loaded.
   useLayoutEffect(() => {
-    if (prevScrollDistanceRef.current == null) return;
     const container = scrollContainerRef.current;
     if (!container) return;
-    container.scrollTop = restoreScrollTop(container.scrollHeight, prevScrollDistanceRef.current);
+    const prepend = prependAnchorRef.current;
+    const savedDistance = prevScrollDistanceRef.current;
+    if (prepend == null && savedDistance == null) return;
+    const restored = prepend ? restorePrependAnchor(container, prepend) : null;
+    if (restored != null) {
+      container.scrollTop = restored;
+      // The page's own geometry is not final yet: placeholders above the fold
+      // (`contain-intrinsic-size`) resolve over the next frames. Hold the
+      // message on the reader's line for a moment instead of trusting one
+      // measurement — the observed drift after a single restore was 30-190px.
+      if (prepend) pinPrependAnchor(container, prepend);
+    } else if (savedDistance != null) {
+      container.scrollTop = restoreScrollTop(container.scrollHeight, savedDistance);
+    }
+    prependAnchorRef.current = null;
     prevScrollDistanceRef.current = null;
-  }, [messages.length, scrollContainerRef]);
+  }, [entryIds, messages.length, scrollContainerRef]);
+
+  // The baseline the height compensation compares against: which element owns
+  // the viewport's top edge right now. Re-taken after every commit that changes
+  // the list (this effect is declared after the prepend restore above, so it
+  // sees the restored scrollTop) and after every scroll the transcript makes.
+  useLayoutEffect(() => {
+    const container = scrollContainerRef.current;
+    const content = messageContentRef.current;
+    if (!container || !content) return;
+    foldRowsRef.current = messageRowElements(content);
+    foldAnchorRef.current = captureFoldAnchor(container, foldRowsRef.current);
+  }, [entryIds, messages.length, pendingScrollRestore, scrollContainerRef]);
+
+  // Observe the message rows that are mounted right now, plus the list box.
+  // Only the difference is touched: rows that are already watched keep their
+  // observations, so their next size change is still reported.
+  function syncRowObservations() {
+    const observer = rowObserverRef.current;
+    const content = messageContentRef.current;
+    if (!observer || !content) return;
+    const rows = messageRowElements(content);
+    foldRowsRef.current = rows;
+    const mounted = new Set<HTMLElement>(rows);
+    for (const element of observedRowsRef.current) {
+      if (mounted.has(element) && element.isConnected) continue;
+      observer.unobserve(element);
+      observedRowsRef.current.delete(element);
+    }
+    for (const row of rows) {
+      if (observedRowsRef.current.has(row)) continue;
+      observer.observe(row);
+      observedRowsRef.current.add(row);
+    }
+    // The list box itself: a folded work group sits in a wrapper that carries
+    // no entry id, and its `contain-intrinsic-size` estimate resolving changes
+    // the height of everything below it without resizing a row wrapper.
+    if (observedContentRef.current !== content) {
+      if (observedContentRef.current) observer.unobserve(observedContentRef.current);
+      observer.observe(content);
+      observedContentRef.current = content;
+    }
+  }
+
+  // Hold a prepended page's anchor for a few frames: `contain-intrinsic-size`
+  // placeholders above the fold resolve after the restore has run, so one
+  // measurement is not enough to know where the message ended up. Bounded, and
+  // abandoned the moment anything else moves the scrollport (the reader's own
+  // scrolling, the tail follow).
+  function stopPrependPin() {
+    if (pinFrameRef.current !== null) cancelAnimationFrame(pinFrameRef.current);
+    pinFrameRef.current = null;
+  }
+  function pinPrependAnchor(container: HTMLElement, anchor: ChatPrependAnchor) {
+    stopPrependPin();
+    let expected = container.scrollTop;
+    let frames = 0;
+    const tick = () => {
+      pinFrameRef.current = null;
+      frames += 1;
+      // Long enough for the estimate above the fold to resolve (several hundred
+      // ms in the observed cases) but short enough to never feel like the app is
+      // fighting the wheel: ~1.5s, abandoned as soon as anything else scrolls.
+      if (frames > 90) return;
+      // Someone else owns the scrollport now.
+      if (Math.abs(container.scrollTop - expected) > 1) return;
+      const target = restorePrependAnchor(container, anchor);
+      if (target == null) return;
+      if (Math.abs(target - container.scrollTop) > 0.5) {
+        container.scrollTop = target;
+        expected = container.scrollTop;
+        // The baseline recorded before this adjustment no longer describes the
+        // screen; let the next observer batch re-take it instead of comparing
+        // against a stale offset (that produced 44px over-corrections).
+        foldAnchorRef.current = null;
+      }
+      pinFrameRef.current = requestAnimationFrame(tick);
+    };
+    pinFrameRef.current = requestAnimationFrame(tick);
+  }
+
+  // Height compensation for mounted message rows. A row that changes height
+  // under a still reader (folded group opening, image decoding, markdown/KaTeX
+  // settling) would otherwise push the reader's line down the screen. The height
+  // change alone is not enough to decide: what matters is whether the change was
+  // above the viewport's top edge, which is exactly "did the element under the
+  // edge move". Changes below the edge leave that offset alone and cost nothing,
+  // so opening a group further down a long message no longer scrolls at all.
+  //
+  // The observer outlives renders and only gains/loses targets. Re-creating it
+  // per page (the first version did) lost every change that landed in the same
+  // frame as the commit: a fresh target's first notification already carries the
+  // new size, so a `contain-intrinsic-size` estimate resolving 72px -> 28px right
+  // after a prepend was invisible and the reader drifted 44px.
+  useEffect(() => {
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      const container = scrollContainerRef.current;
+      const content = messageContentRef.current;
+      if (!container || !content) return;
+      const anchor = foldAnchorRef.current;
+      // The prepend pin owns the scrollport while it runs; compensating as well
+      // would move the line twice (44px over-corrections were exactly that).
+      if (pinFrameRef.current !== null) return;
+      // A scrollTop nobody sampled (the tail follow, a jump, a drag between
+      // frames) makes the baseline unusable: re-take it instead of adding the
+      // scroll distance to the reading position.
+      if (!anchor || !anchor.element.isConnected || anchor.scrollTop !== container.scrollTop) {
+        foldAnchorRef.current = captureFoldAnchor(container, foldRowsRef.current);
+        return;
+      }
+      const delta = foldAnchorScrollDelta(
+        anchor.element.getBoundingClientRect().top - container.getBoundingClientRect().top,
+        anchor.offset,
+      );
+      if (delta !== 0) container.scrollTop += delta;
+      foldAnchorRef.current = captureFoldAnchor(container, foldRowsRef.current);
+    });
+    rowObserverRef.current = observer;
+    syncRowObservations();
+    return () => {
+      observer.disconnect();
+      observedRowsRef.current.clear();
+      observedContentRef.current = null;
+      rowObserverRef.current = null;
+    };
+  }, [scrollContainerRef]);
+
+  // New pages add rows; a session switch replaces them all. Only the difference
+  // is touched, so rows that are already being watched keep their baseline.
+  useLayoutEffect(() => {
+    syncRowObservations();
+  }, [entryIds, messages.length, scrollContainerRef]);
+
+
+  useEffect(() => {
+    // Bound on the document in the capture phase for the same reason the paging
+    // gesture gate is: the scrollport mounts after this effect first runs.
+    let frame: number | null = null;
+    const onScroll = (event: Event) => {
+      const container = scrollContainerRef.current;
+      const content = messageContentRef.current;
+      if (!container || !content || event.target !== container) return;
+      // Deferred by a frame on purpose. `scroll` is dispatched before the same
+      // frame's ResizeObserver callbacks, which still have to compare against the
+      // pre-scroll baseline: re-taking it here made the compensation read its own
+      // zero (a 44px estimate resolving right after a prepend's restore was
+      // swallowed that way).
+      if (frame !== null) return;
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        foldAnchorRef.current = captureFoldAnchor(container, foldRowsRef.current);
+      });
+    };
+    document.addEventListener("scroll", onScroll, { capture: true, passive: true });
+    return () => {
+      document.removeEventListener("scroll", onScroll, { capture: true });
+      if (frame !== null) cancelAnimationFrame(frame);
+    };
+  }, [scrollContainerRef]);
   // Push session stats up to AppShell for the stats panel and ring hover summary.
   // Compare scalar fields to avoid loops from new object identity each render.
   const statsKey = sessionStats
@@ -1533,7 +1898,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
                 if (idx === lastUserIdx) { (lastUserMsgRef as { current: HTMLDivElement | null }).current = el; }
               };
 
-              const renderMessage = (idx: number, options: { attachRef?: boolean; keyPrefix?: string; messageOverride?: AgentMessage; showTimestamp?: boolean; writtenFiles?: WrittenFile[]; recoverTruncation?: boolean; compactStep?: boolean } = {}): ReactNode => {
+              const renderMessage = (idx: number, options: { attachRef?: boolean; keyPrefix?: string; messageOverride?: AgentMessage; showTimestamp?: boolean; writtenFiles?: WrittenFile[]; recoverTruncation?: boolean; compactStep?: boolean; branchPager?: boolean } = {}): ReactNode => {
                 const msg = options.messageOverride ?? messages[idx];
                 const isVisible = isMessageGroupAnchor(msg) || msg.role === "assistant";
                 const currentRefIdx = visibleRefIndexByMessage.get(idx);
@@ -1578,6 +1943,10 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
                     isCompacting={options.recoverTruncation ? isCompacting : undefined}
                     compactError={options.recoverTruncation ? compactError : undefined}
                     compactStep={options.compactStep}
+                    branchDecisions={branchDecisions}
+                    onBranchSwitch={handleBranchPagerSwitch}
+                    branchSwitchLocked={branchView?.locked ?? false}
+                    branchPager={options.branchPager !== false}
                   />
                 );
                 if (!isVisible || currentRefIdx === undefined) return view;
@@ -1783,6 +2152,9 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
                         messageOverride: message,
                         showTimestamp: false,
                         compactStep: workPolicy.foldCompletedTurns && workPolicy.compactSteps,
+                        // The final answer is also rendered outside this folded
+                        // group; only that copy carries the branch pager.
+                        branchPager: !(finalAnswerMessage && processIdx === capturedFinalAssistantIdx),
                       }));
                     }
                     return (

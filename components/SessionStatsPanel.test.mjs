@@ -26,7 +26,13 @@ const read = async (path) => (await readFile(new URL(path, import.meta.url), "ut
 const panelSource = await read("./SessionStatsPanel.tsx");
 const plusCss = await read("../app/plus.css");
 // Only the block this panel owns: everything from its header comment on.
-const statsCss = plusCss.slice(plusCss.indexOf("/* -- Plus: session stats panel"));
+// The section runs until the next Plus section marker: appended sections further
+// down belong to other features and have their own ratchets.
+const statsStart = plusCss.indexOf("/* -- Plus: session stats panel");
+const statsEnd = plusCss.indexOf("/* -- Plus:", statsStart + 1);
+const statsCssRaw = plusCss.slice(statsStart);
+// Comments are not declarations: an issue number like "(#1324)" is not a colour.
+const statsCss = statsCssRaw.replace(/\/\*[\s\S]*?\*\//g, "");
 const messagesByLocale = Object.fromEntries(forkLocalePlugins.map(({ id, messages }) => [id, messages]));
 
 test("counts are formatted for scale, from the same rule at every magnitude", () => {

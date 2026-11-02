@@ -350,7 +350,142 @@ export async function importLocalFiles(options: {
   return { status: response.status, data };
 }
 
-/** Intercept primary clicks on external anchors so desktop uses the system browser. */
+/** Schemes the shell hands to the system browser (`open_external_url` allows these). */
+const EXTERNAL_LINK_SCHEMES = /^(?:https?:\/\/|mailto:)/i;
+
+/**
+ * The URL a click should open outside the app, or null when it stays inside it.
+ * An in-app route (`?session=…`), a fragment (`#…`) or a relative path never
+ * matches; `data-allow-navigation` opts a single anchor out.
+ */
+export function externalLinkHref(
+  href: string | null | undefined,
+  allowNavigation = false,
+): string | null {
+  if (allowNavigation) return null;
+  const trimmed = (href ?? "").trim();
+  return EXTERNAL_LINK_SCHEMES.test(trimmed) ? trimmed : null;
+}
+
+/**
+ * Elements that already own their drop handling: the chat window's file drop
+ * (image attachments, project imports) and any future zone that opts in. A
+ * drop inside one of them is never touched, so app-internal drag & drop keeps
+ * working exactly as before.
+ */
+const APP_DROP_ZONE_SELECTOR = "[data-allow-file-drop], .chat-window";
+
+/** A field turns a dropped URL or text into its value; it never navigates. */
+const EDITABLE_DROP_SELECTOR =
+  "input, textarea, [contenteditable=''], [contenteditable='true']";
+
+/**
+ * Drag payloads WebView2 answers by navigating to what was dropped: a file
+ * (`.html` replaces the app with the file's contents), a dragged link, or
+ * dragged text (Chromium treats it as a search/URL to load).
+ */
+const NAVIGATING_DRAG_TYPES = ["files", "text/uri-list", "text/plain"];
+
+function isNavigatingDrag(dataTransfer: DataTransfer | null): boolean {
+  if (!dataTransfer?.types) return false;
+  // `types` is a frozen array in Chromium and a DOMStringList elsewhere; both
+  // are array-likes, and the comparison is case-insensitive.
+  return Array.from(dataTransfer.types).some((type) =>
+    NAVIGATING_DRAG_TYPES.includes(String(type).toLowerCase()),
+  );
+}
+
+/** Nearest ancestor (or self) matching `selector`; drag targets are elements. */
+function closestFrom(target: EventTarget | null, selector: string): Element | null {
+  return target instanceof Element ? target.closest(selector) : null;
+}
+
+/** True when this drop belongs to an in-app handler or to an editable field. */
+function keepsOwnDrop(target: EventTarget | null): boolean {
+  return Boolean(
+    closestFrom(target, APP_DROP_ZONE_SELECTOR) ?? closestFrom(target, EDITABLE_DROP_SELECTOR),
+  );
+}
+
+/**
+ * Document-level backstop, installed once by `AppShell`. Two compositor-level
+ * escapes from the React handlers, both of which replace the whole app UI with
+ * another page and leave no way back (the window has no address bar, back
+ * button or tabs):
+ *
+ * 1. an external anchor no component intercepted — including a modified click
+ *    (Ctrl/Shift/Meta/Alt), which a browser answers with a new tab/window or a
+ *    download, none of which WebView2 has;
+ * 2. a file, link or text dragged into the window, which the WebView opens as
+ *    a navigation.
+ *
+ * Both are capture-phase, so a handler that stops propagation cannot leak
+ * them. The click is cancelled synchronously and the link opened one microtask
+ * later: React's `onClick` handlers run *after* a document capture listener,
+ * and by then they see `defaultPrevented` (see `handleExternalLinkClick`) and
+ * stay out of the way, so the link opens exactly once. Drops are only
+ * cancelled, never forwarded: the app has no use for a foreign file. Passive:
+ * it only reads the DOM and never renders.
+ */
+export function installExternalLinkGuard(doc: Document = document): () => void {
+  const handleClick = (event: MouseEvent) => {
+    if (!isTauriDesktop()) return;
+    if (event.button !== 0 || event.defaultPrevented) return;
+    const target = event.target;
+    const anchor = target instanceof Element ? target.closest("a[href]") : null;
+    if (!anchor) return;
+    const href = externalLinkHref(
+      anchor.getAttribute("href"),
+      anchor.hasAttribute("data-allow-navigation"),
+    );
+    if (!href) return;
+    // A modifier is a request for a new tab/window (Ctrl, Shift, Meta) or a
+    // download (Alt). WebView2 has none of those, so honouring it would
+    // navigate the app's only webview: every click, modified or not, is
+    // claimed here and handed to the system browser instead.
+    event.preventDefault();
+    queueMicrotask(() => void openExternal(href));
+  };
+
+  const handleDragOver = (event: DragEvent) => {
+    if (!isTauriDesktop()) return;
+    if (!isNavigatingDrag(event.dataTransfer)) return;
+    if (keepsOwnDrop(event.target)) return;
+    // Without this the default action of dropping a file on the webview is to
+    // open it; `dropEffect = "none"` also shows the "not allowed" cursor so
+    // the window never invites a drop it will refuse.
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "none";
+  };
+
+  const handleDrop = (event: DragEvent) => {
+    if (!isTauriDesktop()) return;
+    if (!isNavigatingDrag(event.dataTransfer)) return;
+    if (keepsOwnDrop(event.target)) return;
+    // Second half of the backstop: dragover already refused the drop, but a
+    // drag source that ignores `dropEffect` still fires one, and its default
+    // action is the navigation that must not happen.
+    event.preventDefault();
+  };
+
+  doc.addEventListener("click", handleClick, true);
+  doc.addEventListener("dragover", handleDragOver, true);
+  doc.addEventListener("drop", handleDrop, true);
+  return () => {
+    doc.removeEventListener("click", handleClick, true);
+    doc.removeEventListener("dragover", handleDragOver, true);
+    doc.removeEventListener("drop", handleDrop, true);
+  };
+}
+
+/**
+ * Intercept primary clicks on external anchors so desktop uses the system
+ * browser. Modified clicks (Ctrl/Shift/Meta/Alt) take the same path: they ask
+ * for a new tab/window or a download, which the WebView cannot give them, so
+ * leaving the click alone would navigate the app itself. When the document
+ * guard already claimed the click, `defaultPrevented` is set and this bails
+ * out, keeping the link opened exactly once.
+ */
 export function handleExternalLinkClick(
   event: {
     preventDefault(): void;
@@ -365,7 +500,6 @@ export function handleExternalLinkClick(
 ): void {
   if (!url || !isTauriDesktop()) return;
   if (event.defaultPrevented || event.button !== 0) return;
-  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
   event.preventDefault();
   void openExternal(url);
 }
@@ -407,6 +541,26 @@ export async function showMainWindowNative(): Promise<void> {
   if (!isTauriDesktop()) return;
   const { invoke } = await import("@tauri-apps/api/core");
   await invoke("show_main_window_cmd");
+}
+
+let desktopReadyReported = false;
+
+/**
+ * Tells the shell the first screen is on the page, which shows the main window
+ * (it is built hidden so the user never sees an empty webview). Reports once
+ * per page load; the shell shows the window by itself shortly after the page
+ * load event even if this never arrives.
+ */
+export async function reportDesktopReadyNative(source: string): Promise<void> {
+  if (desktopReadyReported || !isTauriDesktop()) return;
+  desktopReadyReported = true;
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const sincePageStart = Math.round(performance.now());
+    await invoke("app_ready", { reason: `${source}, page +${sincePageStart}ms` });
+  } catch {
+    // The shell's own fallback shows the window.
+  }
 }
 
 /** Relaunch the desktop shell and its packaged local server. */

@@ -25,6 +25,8 @@ const {
   clearSessionContextCacheForTests,
   getCachedSessionContextBody,
   sessionContextCacheKey,
+  clearSessionContextDiskCacheForTests,
+  flushSessionContextDiskWritesForTests,
 } = await jiti.import("../../../lib/session-context-cache.ts");
 
 test("the context route caches the serialized window and misses after an append", async (t) => {
@@ -47,6 +49,10 @@ test("the context route caches the serialized window and misses after an append"
     invalidateSessionManagerCache(filePath);
     invalidateSessionListCache();
     clearSessionContextCacheForTests();
+    // The persisted window layer writes in the background; let it finish before
+    // the agent dir goes away (the cache dir lives inside it).
+    await flushSessionContextDiskWritesForTests();
+    await clearSessionContextDiskCacheForTests();
     await rm(dir, { recursive: true, force: true });
   });
 

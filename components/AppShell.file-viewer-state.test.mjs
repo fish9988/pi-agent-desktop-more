@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const source = await readFile(new URL("./AppShell.tsx", import.meta.url), "utf8");
+// Windows working trees check this file out with CRLF (git core.autocrlf) while
+// the block markers below are written with LF. Normalise before searching so the
+// test passes in both, as CI (LF) and a local checkout (CRLF) see the same text.
+const source = (await readFile(new URL("./AppShell.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 
 function fileContentBlock() {
   const start = source.indexOf("{/* Only the active viewer");

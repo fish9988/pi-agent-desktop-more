@@ -2,6 +2,8 @@ import { enLocale } from "./messages/en.ts";
 import { zhCNLocale } from "./messages/zh-CN.ts";
 import { zhTWLocale } from "./messages/zh-TW.ts";
 import type { Locale, LocalePlugin } from "./types";
+import { patch as branchPatch } from "./patches/branches.ts";
+import { patch as settingsSearchPatch } from "./patches/settings-search.ts";
 
 /**
  * Fork message patches.
@@ -1848,13 +1850,35 @@ const FORK_MESSAGE_PATCHES: Record<Locale, {
   }
 };
 
+/**
+ * Feature patches kept in their own modules (`lib/i18n/patches/*.ts`) so several
+ * Plus features can add strings without editing this registry at the same time.
+ * Later entries win, so a dedicated patch may also override a key above.
+ */
+const FEATURE_PATCHES: ReadonlyArray<Record<Locale, { set: Record<string, string> }>> = [
+  branchPatch,
+  settingsSearchPatch,
+];
+
+function applyFeaturePatches(
+  messages: Record<string, string>,
+  locale: Locale,
+): Record<string, string> {
+  let next = messages;
+  for (const patchSet of FEATURE_PATCHES) {
+    const set = patchSet[locale]?.set;
+    if (set) next = { ...next, ...set };
+  }
+  return next;
+}
+
 function withForkMessages(
   plugin: LocalePlugin,
   patch: (typeof FORK_MESSAGE_PATCHES)[Locale],
 ): LocalePlugin {
   const messages = { ...plugin.messages, ...patch.set };
   for (const key of patch.remove) delete messages[key];
-  return { ...plugin, messages };
+  return { ...plugin, messages: applyFeaturePatches(messages, plugin.id as Locale) };
 }
 
 export const forkLocalePlugins: LocalePlugin[] = [

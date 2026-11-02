@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 import { useI18n } from "../hooks/useI18n";
+import { ACTIVE_TURN_PROBE, turnIndexAtOffset, watchMessageIndex } from "../lib/message-index";
 
 export interface ConversationTurnLocation {
   index: number;
@@ -65,34 +66,28 @@ export function ConversationNavigator({ turns, scrollContainerRef, onSelect }: P
   }, [cancelHide]);
   useEffect(() => cancelHide, [cancelHide]);
 
+  // Plus: the active turn is read from the cached row index
+  // (`lib/message-index.ts`), not by measuring every `[data-conversation-turn]`
+  // anchor on each scroll frame. The probe offset keeps the old rule: the turn
+  // whose anchor top is closest to 28px below the scrollport's top edge wins.
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container || turns.length < 2) return;
 
     const updateActive = () => {
-      const containerTop = container.getBoundingClientRect().top;
-      const anchors = Array.from(container.querySelectorAll<HTMLElement>("[data-conversation-turn]"));
-      if (anchors.length === 0) return;
-      let closest = Number(anchors[0].dataset.conversationTurn ?? 0);
-      let closestDistance = Number.POSITIVE_INFINITY;
-      for (const anchor of anchors) {
-        const index = Number(anchor.dataset.conversationTurn);
-        const distance = Math.abs(anchor.getBoundingClientRect().top - containerTop - 28);
-        if (distance < closestDistance) {
-          closest = index;
-          closestDistance = distance;
-        }
-      }
-      setActiveIndex(closest);
+      const turn = turnIndexAtOffset(container, container.scrollTop + ACTIVE_TURN_PROBE);
+      if (turn === null || turn < 0 || turn >= turns.length) return;
+      setActiveIndex(turn);
     };
 
     updateActive();
     container.addEventListener("scroll", updateActive, { passive: true });
-    const observer = new ResizeObserver(updateActive);
-    observer.observe(container);
+    // The watcher rebuilds on container resize and lazily after rows mount or
+    // change height (a group opening, streamed output), then re-runs the search.
+    const watch = watchMessageIndex(container, updateActive);
     return () => {
       container.removeEventListener("scroll", updateActive);
-      observer.disconnect();
+      watch.dispose();
     };
   }, [scrollContainerRef, turns.length]);
 

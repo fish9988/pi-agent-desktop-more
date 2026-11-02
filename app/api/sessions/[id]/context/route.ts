@@ -2,15 +2,15 @@ import { NextResponse } from "next/server";
 import {
   resolveSessionPath,
   openSessionManagerAsync,
-  buildSessionContext,
+  buildSessionContextAsync,
   getSessionFileFingerprint,
 } from "@/lib/session-reader";
 import { getRpcSession } from "@/lib/rpc-manager";
 import { jsonResponseFromBody } from "@/lib/json-response";
 import {
-  cacheSessionContextBody,
-  getCachedSessionContextBody,
+  loadSessionContextBody,
   sessionContextCacheKey,
+  storeSessionContextBody,
 } from "@/lib/session-context-cache";
 
 export async function GET(
@@ -57,7 +57,7 @@ export async function GET(
           wholeTurns,
         })
       : null;
-    const cachedBody = getCachedSessionContextBody(cacheKey);
+    const cachedBody = await loadSessionContextBody(cacheKey);
     if (cachedBody !== null) {
       return jsonResponseFromBody(req, cachedBody);
     }
@@ -65,7 +65,7 @@ export async function GET(
     const sm = liveRpc?.inner.sessionManager ?? await openSessionManagerAsync(filePath!);
     // `before` is the oldest entry already on the client; fetch its ancestors
     // only (excludeLeaf) so prepending the page does not duplicate `before`.
-    const context = buildSessionContext(sm.getEntries() as never, before ?? leafId, {
+    const context = await buildSessionContextAsync(sm.getEntries() as never, before ?? leafId, {
       deferThinking,
       deferToolResultImages,
       tail,
@@ -75,9 +75,10 @@ export async function GET(
     });
 
     // Cache the exact serialized response so repeat loads skip both the window
-    // rebuild and JSON.stringify, not just the JSONL parse.
+    // rebuild and JSON.stringify, not just the JSONL parse. The persisted copy
+    // is what makes a page reusable after a process restart.
     const body = JSON.stringify({ context, tail, before: before ?? null });
-    cacheSessionContextBody(cacheKey, body);
+    storeSessionContextBody(cacheKey, body);
     return jsonResponseFromBody(req, body);
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });

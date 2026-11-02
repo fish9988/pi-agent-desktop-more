@@ -594,7 +594,12 @@ function estimateRetainedBytes(sm: SessionManager, fileBytes: number): number {
   }
 }
 
-function yieldToEventLoop(): Promise<void> {
+/**
+ * One event-loop turn. Exported because the detail route splits its derivation
+ * into slices with it: the read path must never hold the loop for the whole
+ * tree + stats + context build (SSE and other API routes wait behind it).
+ */
+export function yieldToEventLoop(): Promise<void> {
   return new Promise<void>((resolveImmediate) => setImmediate(resolveImmediate));
 }
 
@@ -620,6 +625,124 @@ async function slimCachedEntriesAsync(sm: SessionManager): Promise<boolean> {
     }
   }
   return slimmed;
+}
+
+// ---------------------------------------------------------------------------
+// Revision-keyed derivation cache.
+//
+// GET /api/sessions/[id] derives a navigation tree, session stats and an
+// activity total from the same entries on every request. All three depend only
+// on the entry set, so one revision token identifies them exactly (the route
+// already computes that token as `snapshotRevision`, and its inputs include the
+// on-disk fingerprint). Caching the derived view turns the second and later
+// loads of a large session into map hits, and the first load is sliced with
+// `yieldToEventLoop()` so no single synchronous stretch is long.
+//
+// Budget: projected trees are small (ids, types, timestamps, a 40-char preview
+// per node), so entries are bounded by count and by an insert-time serialized
+// size. Cache values are never mutated by callers (treat them as frozen).
+// ---------------------------------------------------------------------------
+
+interface DerivationCacheEntry {
+  value: unknown;
+  bytes: number;
+}
+
+declare global {
+  var __piSessionDerivationCache: Map<string, DerivationCacheEntry> | undefined;
+  var __piSessionDerivationPending: Map<string, Promise<unknown>> | undefined;
+}
+
+/** Limits are exported so tests can shrink them; production never reassigns them. */
+export const SESSION_DERIVATION_CACHE_LIMITS = {
+  maxEntries: 8,
+  maxTotalBytes: 12 * 1024 * 1024,
+  /** A single derived view larger than this is returned fresh, never cached. */
+  maxEntryBytes: 4 * 1024 * 1024,
+};
+
+function getDerivationCache(): Map<string, DerivationCacheEntry> {
+  if (!globalThis.__piSessionDerivationCache) globalThis.__piSessionDerivationCache = new Map();
+  return globalThis.__piSessionDerivationCache;
+}
+
+function evictDerivationCache(cache: Map<string, DerivationCacheEntry>): void {
+  let total = 0;
+  for (const entry of cache.values()) total += entry.bytes;
+  while (cache.size > SESSION_DERIVATION_CACHE_LIMITS.maxEntries || total > SESSION_DERIVATION_CACHE_LIMITS.maxTotalBytes) {
+    const oldestKey = cache.keys().next().value;
+    if (oldestKey === undefined) break;
+    total -= cache.get(oldestKey)?.bytes ?? 0;
+    cache.delete(oldestKey);
+  }
+}
+
+function getDerivationPending(): Map<string, Promise<unknown>> {
+  if (!globalThis.__piSessionDerivationPending) globalThis.__piSessionDerivationPending = new Map();
+  return globalThis.__piSessionDerivationPending;
+}
+
+/**
+ * Return a cached derived view for `key`, or compute it and remember it.
+ *
+ * `key` must change whenever any input of the derivation changes; the detail
+ * route passes its snapshot revision (file fingerprint + entry count + newest
+ * entry id + leaf). A null key computes without caching (unknown fingerprint).
+ * Concurrent misses on one key share a single derivation, and a rejected
+ * compute is not cached.
+ */
+export async function getSessionDerivationAsync<T>(options: {
+  key: string | null;
+  /** Approximate retained size, used only on insert. */
+  sizeOf?: (value: T) => number;
+  compute: () => Promise<T>;
+}): Promise<T> {
+  const cache = getDerivationCache();
+  if (options.key) {
+    const cached = cache.get(options.key);
+    if (cached) {
+      // LRU touch.
+      cache.delete(options.key);
+      cache.set(options.key, cached);
+      return cached.value as T;
+    }
+  }
+
+  const pending = options.key ? getDerivationPending() : undefined;
+  if (options.key && pending) {
+    const inFlight = pending.get(options.key);
+    if (inFlight) return inFlight as Promise<T>;
+  }
+
+  const computePromise = (async () => {
+    const value = await options.compute();
+    if (!options.key) return value;
+    const bytes = Math.max(0, options.sizeOf?.(value) ?? 0);
+    if (bytes > SESSION_DERIVATION_CACHE_LIMITS.maxEntryBytes) return value;
+    cache.set(options.key, { value, bytes });
+    evictDerivationCache(cache);
+    return value;
+  })();
+  if (!options.key || !pending) return computePromise;
+
+  pending.set(options.key, computePromise);
+  try {
+    return await computePromise;
+  } finally {
+    if (pending.get(options.key) === computePromise) pending.delete(options.key);
+  }
+}
+
+export function invalidateSessionDerivationCache(): void {
+  getDerivationCache().clear();
+  getDerivationPending().clear();
+}
+
+/** Test seam: entry count and summed approximated bytes. */
+export function getSessionDerivationCacheStatsForTests(): { entries: number; bytes: number } {
+  let bytes = 0;
+  for (const entry of getDerivationCache().values()) bytes += entry.bytes;
+  return { entries: getDerivationCache().size, bytes };
 }
 
 async function estimateRetainedBytesAsync(sm: SessionManager, fileBytes: number): Promise<number> {
@@ -887,9 +1010,16 @@ export function getLatestResponseModel(entries: SessionEntry[]): SessionContext[
   return null;
 }
 
-function getSessionSettings(entries: SessionEntry[], leafId?: string | null): Pick<SessionContext, "thinkingLevel" | "model"> {
+/** Entry-id index of one entry list; several passes of a context build need it. */
+type EntryIndex = Map<string, SessionEntry>;
+
+function getSessionSettings(
+  entries: SessionEntry[],
+  leafId?: string | null,
+  byId?: EntryIndex,
+): Pick<SessionContext, "thinkingLevel" | "model"> {
   if (leafId === null) return { thinkingLevel: "off", model: null };
-  const branch = sliceActiveBranch(entries, leafId ?? null, entries.length);
+  const branch = sliceActiveBranch(entries, leafId ?? null, entries.length, false, false, byId);
   let thinkingLevel: string | undefined;
 
   for (let i = branch.length - 1; i >= 0 && thinkingLevel === undefined; i--) {
@@ -932,10 +1062,8 @@ export interface BuildSessionContextOptions {
  * in nothing, on a session that had nothing left to page: the row looked alive
  * and completely ignored every scroll.
  */
-function restsOnMoreHistory(first: SessionEntry | undefined, entries: SessionEntry[]): boolean {
+function restsOnMoreHistory(first: SessionEntry | undefined, byId: EntryIndex): boolean {
   if (!first?.parentId) return false;
-  const byId = new Map<string, SessionEntry>();
-  for (const entry of entries) byId.set(entry.id, entry);
   let cursor = byId.get(first.parentId);
   let guard = 0;
   while (cursor && guard < 1_000_000) {
@@ -956,31 +1084,85 @@ export function buildSessionContext(
   leafId?: string | null,
   options: BuildSessionContextOptions = {},
 ): SessionContext {
+  const steps = buildSessionContextSteps(entries, leafId, options);
+  let step = steps.next();
+  while (!step.done) step = steps.next();
+  return step.value;
+}
+
+/** Checkpoint interval for the cooperative driver, in milliseconds. */
+const CONTEXT_YIELD_INTERVAL_MS = 1;
+
+/**
+ * Cooperative buildSessionContext: identical result, but the event loop is
+ * released about once per millisecond (long windows, huge entries).
+ */
+export async function buildSessionContextAsync(
+  entries: SessionEntry[],
+  leafId?: string | null,
+  options: BuildSessionContextOptions = {},
+): Promise<SessionContext> {
+  const steps = buildSessionContextSteps(entries, leafId, options);
+  let step = steps.next();
+  let lastYield = Date.now();
+  while (!step.done) {
+    if (Date.now() - lastYield >= CONTEXT_YIELD_INTERVAL_MS) {
+      await yieldToEventLoop();
+      lastYield = Date.now();
+    }
+    step = steps.next();
+  }
+  return step.value;
+}
+
+/**
+ * The one implementation both drivers run. A `yield` is a resume point only —
+ * the synchronous driver drains them immediately, so timing and behaviour are
+ * exactly those of a straight-line build.
+ */
+function* buildSessionContextSteps(
+  entries: SessionEntry[],
+  leafId: string | null | undefined,
+  options: BuildSessionContextOptions,
+): Generator<void, SessionContext, void> {
   const { tail, excludeLeaf, wholeTurns } = options;
+  // One index for the whole build (it used to be rebuilt for the slice, the
+  // "more history" walk and the settings branch).
+  const byId: EntryIndex = new Map();
+  for (let index = 0; index < entries.length; index += 1) {
+    byId.set(entries[index].id, entries[index]);
+    if ((index & 0x3ff) === 0x3ff) yield;
+  }
+  yield;
+
   // History pages retain the original branch order, including compacted messages.
   // SDK context filtering can drop a page's messages when firstKeptEntryId is outside it.
   const sliced = leafId === null ? [] : sliceActiveBranch(
-    entries, leafId ?? null, tail && tail > 0 ? tail : entries.length, excludeLeaf, wholeTurns,
+    entries, leafId ?? null, tail && tail > 0 ? tail : entries.length, excludeLeaf, wholeTurns, byId,
   );
-  const hasMore = Boolean(tail && tail > 0 && restsOnMoreHistory(sliced[0], entries));
+  yield;
+  const hasMore = Boolean(tail && tail > 0 && restsOnMoreHistory(sliced[0], byId));
 
   // Convert messages and their IDs together to keep fork/navigation targets aligned.
   const messages: AgentMessage[] = [];
   const entryIds: string[] = [];
-  for (const entry of sliced) {
+  for (let index = 0; index < sliced.length; index += 1) {
+    const entry = sliced[index];
     const m = entryToUiMessage(entry, options);
     if (m) {
       messages.push(m);
       entryIds.push(entry.id);
     }
+    if ((index & 0x3) === 0x3) yield;
   }
+  yield;
 
   return {
     messages,
     entryIds,
     oldestEntryId: sliced[0]?.id ?? null,
     hasMore,
-    ...getSessionSettings(entries, leafId),
+    ...getSessionSettings(entries, leafId, byId),
   };
 }
 
@@ -1021,10 +1203,11 @@ export function sliceActiveBranch(
   tail: number,
   excludeLeaf = false,
   wholeTurns = false,
+  index?: EntryIndex,
 ): SessionEntry[] {
   if (tail <= 0) return entries;
-  const byId = new Map<string, SessionEntry>();
-  for (const e of entries) byId.set(e.id, e);
+  const byId = index ?? new Map<string, SessionEntry>();
+  if (!index) for (const e of entries) byId.set(e.id, e);
 
   let leaf = leafId ? byId.get(leafId) : entries[entries.length - 1];
   // Pagination: `before` is the oldest entry already loaded, so the next page

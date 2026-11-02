@@ -24,7 +24,12 @@ import { SessionManager } from "@earendil-works/pi-coding-agent";
 const SLIM_MIN_LINE_BYTES = 32 * 1024;
 /** Files below this size keep the SDK's own open path. */
 export const SLIM_LOAD_MIN_FILE_BYTES = 2 * 1024 * 1024;
-/** Beyond this, a single Buffer is the wrong tool; let the SDK stream it. */
+/**
+ * Ceiling for the *synchronous* loader only: it reads the file into one Buffer,
+ * so a bigger file would have to be materialized whole. The cooperative loader
+ * streams instead and has no size ceiling — a >1 GB session used to fall back to
+ * `SessionManager.open()`, which parses the entire file without a single yield.
+ */
 const SLIM_LOAD_MAX_FILE_BYTES = 1024 * 1024 * 1024;
 /** `"role":"toolResult"` sits right after the first few short keys. */
 const ROLE_PROBE_BYTES = 1024;
@@ -32,6 +37,33 @@ const ROLE_PROBE_BYTES = 1024;
 const ASYNC_READ_CHUNK_BYTES = 1024 * 1024;
 /** Cooperative reader yields after roughly this much synchronous line work. */
 const ASYNC_YIELD_INTERVAL_MS = 1;
+/**
+ * A line at least this big is parsed on a fresh event-loop turn. Its cost can
+ * only be paid whole (a JSON text cannot be parsed in pieces), but it must not
+ * be *added* to the work that came before it in the same turn.
+ */
+const BIG_LINE_YIELD_BYTES = 256 * 1024;
+/**
+ * Beyond this, one line may carry megabytes of *live* content (tool-result
+ * text, base64 image data) that `details` stripping cannot touch. Such a line
+ * goes through a cooperative path: an oversized `text` value is cut and marked
+ * (see trimOversizedTextValuesSteps) so the unavoidable `JSON.parse` stays
+ * bounded, and every phase runs on its own event-loop turn. Image payloads are
+ * never cut — the lazy image route serves them.
+ */
+export const OVERSIZE_LINE_BYTES = 8 * 1024 * 1024;
+/** Longest `"text"` value kept verbatim inside one oversized line. */
+export const MAX_TEXT_FIELD_BYTES = 2 * 1024 * 1024;
+/**
+ * Where the oversized `text` key is looked for. A live value is a content block
+ * of the message, so its key sits in the first few hundred bytes; a key outside
+ * this window means a details-heavy line, which the details path handles.
+ */
+const OVERSIZE_TEXT_PROBE_BYTES = 64 * 1024;
+/** At most this many text values are cut in one line. */
+const MAX_TRIMMED_TEXT_VALUES = 4;
+/** Rebuilding the line must free at least this much, or the plain parse runs. */
+const MIN_TRIMMED_SAVING_BYTES = 1024 * 1024;
 
 const MESSAGE_KEYS = new Set(["role", "toolCallId", "toolName", "content", "details", "isError", "timestamp"]);
 
@@ -40,6 +72,7 @@ const CONTENT_KEY = Buffer.from('"content":');
 const DETAILS_KEY = Buffer.from('"details":');
 const IS_ERROR_KEY = Buffer.from(',"isError":');
 const TIMESTAMP_KEY = Buffer.from(',"timestamp":');
+const TEXT_KEY = Buffer.from('"text":');
 // Details the UI renders must survive (KEPT_DETAIL_KEYS + subagent cards in
 // lib/tool-result-details.ts). Seeing any of them means "use the normal path".
 // Tested on a latin1 view of the span: ASCII bytes map 1:1, so this cannot miss
@@ -95,8 +128,222 @@ function isPlainSlimmedToolResult(entry: RawEntry | null): entry is RawEntry {
   return true;
 }
 
-/** One JSONL line, with oversized dead tool-result details never parsed. */
-function parseSessionLineBuffer(buf: Buffer, start: number, end: number): RawEntry | null {
+/** One JSON string value that gets cut, in the coordinate space of the line. */
+interface TrimmableStringSpan {
+  contentStart: number;
+  contentEnd: number;
+  /** Where to stop keeping bytes: never inside an escape sequence or a UTF-8 character. */
+  keepEnd: number;
+}
+
+/** Bytes of a giant value examined per event-loop turn. */
+const SCAN_WINDOW_BYTES = 1024 * 1024;
+
+/**
+ * End of a JSON string value that starts at `from`, or -1 when it is
+ * unterminated. Scans window by window and yields once per window of progress,
+ * so walking 30 MB of text is never one turn's work.
+ */
+function* findJsonStringEndSteps(line: Buffer, from: number): Generator<void, number, void> {
+  let position = from;
+  let nextYieldAt = from + SCAN_WINDOW_BYTES;
+  while (position < line.length) {
+    const windowEnd = Math.min(line.length, position + SCAN_WINDOW_BYTES);
+    const window = line.subarray(position, windowEnd);
+    const quoteRel = window.indexOf(0x22);
+    const backslashRel = window.indexOf(0x5c);
+    const quote = quoteRel < 0 ? -1 : position + quoteRel;
+    const backslash = backslashRel < 0 ? -1 : position + backslashRel;
+    // No escape before the quote: that quote closes the string.
+    if (quote >= 0 && (backslash < 0 || quote < backslash)) return quote;
+    if (backslash < 0) {
+      position = windowEnd;
+      yield;
+      nextYieldAt = position + SCAN_WINDOW_BYTES;
+      continue;
+    }
+    // Step over the escape token; it may run past the window edge.
+    position = backslash + (line[backslash + 1] === 0x75 ? 6 : 2);
+    if (position >= nextYieldAt) {
+      yield;
+      nextYieldAt = position + SCAN_WINDOW_BYTES;
+    }
+  }
+  return -1;
+}
+
+/**
+ * Locate one `"text"` value and decide where a cut is safe. `keepEnd` is the
+ * last position at or below `limit` bytes that does not split an escape
+ * sequence (`\\n`, `\\uXXXX`) or a multi-byte UTF-8 character.
+ */
+function* scanOversizedStringSteps(
+  line: Buffer,
+  quoteAt: number,
+  limit: number,
+): Generator<void, TrimmableStringSpan | null, void> {
+  const contentStart = quoteAt + 1;
+  const limitAt = contentStart + limit;
+  let position = contentStart;
+  let keepEnd = contentStart;
+  let nextYieldAt = contentStart + SCAN_WINDOW_BYTES;
+
+  while (position < line.length) {
+    const windowEnd = Math.min(line.length, position + SCAN_WINDOW_BYTES);
+    const window = line.subarray(position, windowEnd);
+    const quoteRel = window.indexOf(0x22);
+    const backslashRel = window.indexOf(0x5c);
+    const quote = quoteRel < 0 ? -1 : position + quoteRel;
+    const backslash = backslashRel < 0 ? -1 : position + backslashRel;
+
+    if (quote >= 0 && (backslash < 0 || quote < backslash)) {
+      // Plain run up to the closing quote.
+      let cut = Math.min(quote, limitAt);
+      while (cut > contentStart && (line[cut] & 0xc0) === 0x80) cut -= 1;
+      return { contentStart, contentEnd: quote, keepEnd: Math.max(keepEnd, cut) };
+    }
+    if (backslash < 0) {
+      // Neither closed nor escaped inside this window: keep reading.
+      position = windowEnd;
+      yield;
+      nextYieldAt = position + SCAN_WINDOW_BYTES;
+      continue;
+    }
+    const tokenEnd = backslash + (line[backslash + 1] === 0x75 ? 6 : 2);
+    if (tokenEnd > limitAt) {
+      // Past the budget: only the end of the value still matters.
+      const contentEnd = yield* findJsonStringEndSteps(line, tokenEnd);
+      return contentEnd < 0 ? null : { contentStart, contentEnd, keepEnd };
+    }
+    keepEnd = tokenEnd;
+    position = tokenEnd;
+    if (position >= nextYieldAt) {
+      yield;
+      nextYieldAt = position + SCAN_WINDOW_BYTES;
+    }
+  }
+  return null;
+}
+
+/**
+ * Cut any single oversized `"text"` value in an oversized line and leave a
+ * visible marker in its place. Returns null when nothing needed cutting.
+ *
+ * Only `text` blocks are touched: they are rendered as text, so a marked cut is
+ * honest; image `data` (served by the lazy image route), `thinking` (served by
+ * the deferred-thinking route) and kept `details` are left intact, and callers
+ * verify the trimmed line still parses — if it does not, the untrimmed line is
+ * parsed instead.
+ *
+ * A giant *live* value is a message content block, so its key sits in the first
+ * few hundred bytes of the line. A key outside the probe window means a
+ * details-heavy line instead: that case pays only the 64 KB probe and goes to
+ * the details path, which cuts its span out as bytes anyway.
+ */
+function* trimOversizedTextValuesSteps(
+  buf: Buffer,
+  start: number,
+  end: number,
+): Generator<void, string | null, void> {
+  const line = buf.subarray(start, end);
+  const probeEnd = Math.min(line.length, OVERSIZE_TEXT_PROBE_BYTES);
+  const firstKey = line.indexOf(TEXT_KEY, 0);
+  if (firstKey < 0 || firstKey >= probeEnd) return null;
+
+  const spans: TrimmableStringSpan[] = [];
+  let searchAt = firstKey;
+
+  while (searchAt < line.length && spans.length < MAX_TRIMMED_TEXT_VALUES) {
+    const keyAt = line.indexOf(TEXT_KEY, searchAt);
+    if (keyAt < 0) break;
+    let quoteAt = keyAt + TEXT_KEY.length;
+    while (quoteAt < line.length && line[quoteAt] === 0x20) quoteAt += 1;
+    searchAt = keyAt + TEXT_KEY.length;
+    if (line[quoteAt] !== 0x22) continue;
+    const span = yield* scanOversizedStringSteps(line, quoteAt, MAX_TEXT_FIELD_BYTES);
+    if (!span) continue;
+    searchAt = span.contentEnd + 1;
+    if (span.contentEnd - span.contentStart <= MAX_TEXT_FIELD_BYTES) continue;
+    if (span.keepEnd <= span.contentStart) continue;
+    spans.push(span);
+  }
+  if (spans.length === 0) return null;
+
+  const parts: Buffer[] = [];
+  let cursor = 0;
+  let saved = 0;
+  for (const span of spans) {
+    const dropped = span.contentEnd - span.keepEnd;
+    parts.push(line.subarray(cursor, span.keepEnd));
+    // Inside a JSON string: the marker needs escaped newlines, nothing else.
+    parts.push(Buffer.from(
+      `\\n\\n[... pi-web truncated the remaining ${dropped} bytes of this text: one session line carried more than ${MAX_TEXT_FIELD_BYTES / (1024 * 1024)} MB of live content ...]`,
+      "utf8",
+    ));
+    saved += dropped;
+    cursor = span.contentEnd;
+  }
+  // Not worth rebuilding unless a real amount of bytes goes away.
+  if (saved < MIN_TRIMMED_SAVING_BYTES) return null;
+  parts.push(line.subarray(cursor));
+  return Buffer.concat(parts).toString("utf8");
+}
+
+/**
+ * One JSONL line, with oversized dead `details` stripped and (only for a line
+ * that is still enormous afterwards) oversized live text values cut + marked.
+ *
+ * A `yield` is a resume point: the synchronous driver drains it, and the
+ * cooperative driver turns it into a real event-loop turn. The order matters —
+ * the trim probe runs *before* the `details` scan because it is bounded to the
+ * head of the line, so a details-heavy line pays just the 64 KB probe, while a
+ * text-heavy line avoids the full-line `details` scan that used to run first and
+ * fail. `details` is then stripped from the (small) trimmed line, and every
+ * shortcut is verified by parsing — a surprising shape falls back to parsing
+ * the untouched line.
+ *
+ * Only lines at or above OVERSIZE_LINE_BYTES come here: an ordinary line's worst
+ * case (decode + parse of a few MB) is already inside the read path's budget, so
+ * the common case pays neither a generator nor an extra scan.
+ */
+function* parseOversizedLineSteps(
+  buf: Buffer,
+  start: number,
+  end: number,
+): Generator<void, RawEntry | null, void> {
+  const trimmed = yield* trimOversizedTextValuesSteps(buf, start, end);
+  if (trimmed !== null) {
+    // Each of these is a separate turn: none of them is allowed to stack on the
+    // next (decode of the trimmed line, its `details` strip, its parse).
+    yield;
+    const small = Buffer.from(trimmed, "utf8");
+    yield;
+    const strippedSmall = stripDetails(small, 0, small.length);
+    yield;
+    const candidate = parseLine(strippedSmall ?? trimmed);
+    if (candidate && typeof candidate.type === "string") return candidate;
+  }
+
+  // Nothing to cut (an image payload, or a `details` line too big to reach the
+  // probe window): fall back to the ordinary path, but never let its `details`
+  // scan and its decode+parse stack in one turn.
+  yield;
+  let entry: RawEntry | null = null;
+  const stripped = stripDetails(buf, start, end);
+  if (stripped !== null) {
+    yield;
+    const candidate = parseLine(stripped);
+    if (isPlainSlimmedToolResult(candidate)) entry = candidate;
+  }
+  if (!entry) {
+    yield;
+    entry = parseLine(buf.toString("utf8", start, end));
+  }
+  return entry;
+}
+
+/** The ordinary line path: `details` strip for big lines, then decode + parse. */
+function parseOrdinaryLine(buf: Buffer, start: number, end: number): RawEntry | null {
   let entry: RawEntry | null = null;
   if (end - start >= SLIM_MIN_LINE_BYTES) {
     const stripped = stripDetails(buf, start, end);
@@ -107,6 +354,27 @@ function parseSessionLineBuffer(buf: Buffer, start: number, end: number): RawEnt
   }
   if (!entry) entry = parseLine(buf.toString("utf8", start, end));
   return entry;
+}
+
+/** Synchronous line parse (same shortcut code, driven straight through). */
+function parseSessionLineBuffer(buf: Buffer, start: number, end: number): RawEntry | null {
+  if (end - start < OVERSIZE_LINE_BYTES) return parseOrdinaryLine(buf, start, end);
+  const steps = parseOversizedLineSteps(buf, start, end);
+  let step = steps.next();
+  while (!step.done) step = steps.next();
+  return step.value;
+}
+
+/** Cooperative line parse: yields between scan windows and between phases. */
+async function parseSessionLineBufferAsync(buf: Buffer, start: number, end: number): Promise<RawEntry | null> {
+  if (end - start < OVERSIZE_LINE_BYTES) return parseOrdinaryLine(buf, start, end);
+  const steps = parseOversizedLineSteps(buf, start, end);
+  let step = steps.next();
+  while (!step.done) {
+    await new Promise<void>((resolveImmediate) => setImmediate(resolveImmediate));
+    step = steps.next();
+  }
+  return step.value;
 }
 
 /** Entries of a session file, with oversized dead tool-result details never parsed. */
@@ -150,6 +418,20 @@ export async function loadSlimSessionEntriesFromFile(
       lastYield = Date.now();
     };
 
+    /**
+     * One line's parse cannot be interrupted in its innermost step (a JSON text
+     * is indivisible), but it is split into windows and phases, each on its own
+     * event-loop turn, so an oversized line never extends the turn that read it.
+     */
+    const parseLineCooperatively = async (lineBuf: Buffer): Promise<void> => {
+      if (lineBuf.length >= BIG_LINE_YIELD_BYTES) {
+        await new Promise<void>((resolveImmediate) => setImmediate(resolveImmediate));
+      }
+      const entry = await parseSessionLineBufferAsync(lineBuf, 0, lineBuf.length);
+      lastYield = Date.now();
+      if (entry) entries.push(entry);
+    };
+
     while (true) {
       const { bytesRead } = await handle.read(chunk, 0, chunk.length, null);
       if (bytesRead === 0) break;
@@ -177,8 +459,7 @@ export async function loadSlimSessionEntriesFromFile(
         } else {
           lineBuf = chunk.subarray(pos, newline);
         }
-        const entry = parseSessionLineBuffer(lineBuf, 0, lineBuf.length);
-        if (entry) entries.push(entry);
+        await parseLineCooperatively(lineBuf);
         pos = newline + 1;
         await yieldIfDue();
       }
@@ -186,8 +467,7 @@ export async function loadSlimSessionEntriesFromFile(
 
     if (pendingBytes > 0) {
       const lineBuf = Buffer.concat(pendingParts, pendingBytes);
-      const entry = parseSessionLineBuffer(lineBuf, 0, lineBuf.length);
-      if (entry) entries.push(entry);
+      await parseLineCooperatively(lineBuf);
     }
     await yieldIfDue();
     return entries;
@@ -242,6 +522,11 @@ export function openSlimSessionManager(filePath: string): SessionManager | undef
  *
  * `minFileBytes: 0` lets read-only routes use this for every session size, not
  * just the oversized ones the synchronous slim path was written for.
+ *
+ * There is deliberately no upper size bound here: the loader reads in fixed
+ * chunks and yields between them, so a session above the synchronous ceiling is
+ * simply slow, not blocking — the old ceiling sent those files to a full
+ * synchronous `SessionManager.open()` parse.
  */
 export async function openSlimSessionManagerAsync(
   filePath: string,
@@ -251,7 +536,7 @@ export async function openSlimSessionManagerAsync(
     const resolved = resolve(filePath);
     const { size } = await stat(resolved);
     const minFileBytes = options.minFileBytes ?? SLIM_LOAD_MIN_FILE_BYTES;
-    if (size < minFileBytes || size > SLIM_LOAD_MAX_FILE_BYTES) return undefined;
+    if (size < minFileBytes) return undefined;
 
     return buildSlimSessionManager(resolved, await loadSlimSessionEntriesFromFile(resolved));
   } catch {

@@ -90,7 +90,10 @@ test("promoting a new session to its real id keeps the transcript on screen", as
   assert.doesNotMatch(switchBlock, /setMessages\(\[\]\)/);
   // ...and the mount load re-reads without the loading state or a stale snapshot
   const effect = functionSlice(source, "// Load session on mount and whenever", "useEffect(() => {\n    onSystemPromptChange");
-  assert.match(effect, /const cached = promoted \? null : getSessionViewSnapshot\(session\.id\)/);
+  assert.match(effect, /const cachedSnapshot = promoted \? null : getSessionViewSnapshot\(session\.id\)/);
+  // ...and an empty snapshot is treated as absent, so a broken cache entry cannot
+  // render a blank transcript (Plus 1.18.2).
+  assert.match(effect, /const cached = cachedSnapshot && cachedSnapshot\.messages\.length > 0 \? cachedSnapshot : null;/);
 });
 
 test("session loads reject A-B-A responses from an older generation", async () => {

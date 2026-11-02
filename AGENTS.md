@@ -103,6 +103,7 @@ app/api/
   skills/install/route.ts         POST install skills through npx skills add
   skills/search/route.ts          GET/POST skills.sh search
   scheduled-tasks/**              GET/POST tasks, PATCH/DELETE [id], POST [id]/run, GET [id]/runs, POST run seen, POST preview, GET events (SSE)
+  wsl/distros/route.ts            GET WSL distribution list for the terminal backend
   worktrees/route.ts              GET list / POST create / PUT switch branch / DELETE git worktrees
   worktrees/fetch/route.ts        POST git fetch --prune + fresh branch lists
   desktop/read-images/route.ts    POST read natively-picked images into attachment payloads
@@ -136,6 +137,11 @@ lib/
   normalize.ts        normalizeToolCalls() — field name mismatch between file format and our types
   workspace-state.ts  persisted session/cwd/file-tab restore for desktop cold starts
   worktree.ts         project/worktree resolution and git worktree operations
+  branch-decisions.ts per-answer branch decisions (< 2/3 > pager) + which splits count
+  message-index.ts    sparse entryId -> position/element index for find, navigator and virtualization
+  settings-search.ts  settings search matching/scoring over rows scanned from the panel DOM
+  wsl-*.ts            WSL distro listing, path translation, backend choice + fallback, ! command ops
+  i18n/patches/       per-feature locale patches merged by lib/i18n/locale-plugins.ts
 
 components/
   AppShell.tsx        layout + URL state + tab management

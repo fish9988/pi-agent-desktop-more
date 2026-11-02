@@ -102,7 +102,17 @@ test("session listing returns a gzip-compressed response when the client accepts
   assert.equal(response.headers.get("Content-Encoding"), "gzip");
   assert.match(response.headers.get("Vary") ?? "", /(?:^|,\s*)Accept-Encoding(?:\s*,|$)/i);
   const payload = JSON.parse(gunzipSync(Buffer.from(await response.arrayBuffer())).toString("utf8"));
-  assert.equal(payload.sessions[0].firstMessage, firstMessage);
+  // Since 1.17.0 the list payload is slimmed: `mapScannedSession()` in
+  // lib/session-reader.ts keeps the first 400 characters of a first message and
+  // appends an ellipsis, so the whole text cannot come back here. What this test
+  // owns is the compressed round trip, so it asserts the shape of the preview
+  // (a prefix of the message, capped, marked as shortened) instead of hard-coding
+  // the cap twice. The detail route's own gzip test below still expects it whole.
+  const listed = payload.sessions[0].firstMessage;
+  assert.ok(listed.endsWith("…"), `a shortened first message is marked as such: ${JSON.stringify(listed.slice(-8))}`);
+  const kept = listed.slice(0, -1);
+  assert.ok(kept.length > 0 && kept.length <= 400, `the kept part is capped at 400 characters (got ${kept.length})`);
+  assert.ok(firstMessage.startsWith(kept), "the kept part is the start of the message");
 });
 
 test("deleting an unpersisted session shuts down its runtime and invalidates caches", async (t) => {

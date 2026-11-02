@@ -1,8 +1,48 @@
 "use client";
 
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
-import type { BranchPreview, LeafChangeOptions, SessionEntry, SessionTreeNode } from "@/lib/types";
+import type { LeafChangeOptions, SessionEntry, SessionTreeNode } from "@/lib/types";
 import { useI18n } from "@/hooks/useI18n";
+import {
+  buildActivePath,
+  chainHasConversation,
+  compressChain,
+  hasNavigableBranches,
+  hasSessionBranches,
+  isMessageEntry,
+  selectTopLevelBranches,
+} from "@/lib/branch-decisions";
+
+// The tree helpers moved to lib/branch-decisions.ts so the per-answer footer
+// pager and this panel read the same shape. Their tests import them from here.
+export {
+  buildActivePath,
+  chainHasConversation,
+  compressChain,
+  hasNavigableBranches,
+  hasSessionBranches,
+  selectTopLevelBranches,
+};
+
+function getLabel(entry: SessionEntry): string {
+  if (entry.type === "message" && isMessageEntry(entry)) {
+    const msg = entry.message as { role: string; content: unknown };
+    const content = msg.content;
+    let text = "";
+    if (typeof content === "string") {
+      text = content;
+    } else if (Array.isArray(content)) {
+      text = content
+        .filter((b): b is { type: "text"; text: string } => b.type === "text")
+        .map((b) => b.text)
+        .join(" ");
+    }
+    if (text.length > 40) text = text.slice(0, 40) + "…";
+    if (text) return text;
+    if (msg.role === "assistant") return "[assistant]";
+  }
+  return entry.type;
+}
 
 interface Props {
   tree: SessionTreeNode[];
@@ -30,130 +70,6 @@ interface Props {
   hideInlineButton?: boolean;
   /** The session is running: the tree stays readable but branches cannot be switched */
   locked?: boolean;
-}
-
-// Find the visible entry IDs on the path from root to activeLeafId.
-// Iterative DFS: a linear session degrades into a chain whose depth equals the
-// entry count, so a recursive search overflows the call stack. Walk with an
-// explicit stack instead (paths accumulate depth, not the call stack).
-export function buildActivePath(nodes: SessionTreeNode[], targetId: string | null): Set<string> {
-  if (!targetId) return new Set();
-  const target = targetId;
-  const stack: { node: SessionTreeNode; path: string[] }[] = nodes.map((n) => ({ node: n, path: [n.entry.id] }));
-  while (stack.length > 0) {
-    const { node, path } = stack.pop()!;
-    if (node.entry.id === target || node.compressedEntryIds?.includes(target)) {
-      return new Set(path);
-    }
-    for (const child of node.children) {
-      stack.push({ node: child, path: [...path, child.entry.id] });
-    }
-  }
-  return new Set();
-}
-
-// Transcript system messages hold the prompt, not a turn, so they never label a branch.
-function isMessageEntry(entry: SessionEntry): boolean {
-  return entry.type === "message" && "message" in entry && entry.message.role !== "system";
-}
-
-// Only a user/assistant exchange is something a reader can tell apart. Tool
-// results fan out too (one assistant message, several tool calls), and treating
-// that as "branches" is what made the control show up in almost every session
-// with rows like `custom`.
-function isConversationEntry(entry: SessionEntry): boolean {
-  if (entry.type !== "message" || !("message" in entry)) return false;
-  const role = (entry.message as { role?: string }).role;
-  return role === "user" || role === "assistant";
-}
-
-/** Does this branch (down its single-child chain) hold a real message? */
-export function chainHasConversation(node: SessionTreeNode): boolean {
-  const stack: SessionTreeNode[] = [node];
-  while (stack.length > 0) {
-    const current = stack.pop()!;
-    if (isConversationEntry(current.entry)) return true;
-    if (current.children.length === 1) stack.push(current.children[0]);
-  }
-  return false;
-}
-
-// Compress a visible linear chain into the first branching/leaf node.
-// Server-side compressed IDs also count as skipped nodes.
-// branchPreview is the bounded preview of the first message on the source
-// chain. labelEntry keeps unprojected/test shapes working as a fallback.
-export function compressChain(node: SessionTreeNode): {
-  node: SessionTreeNode;
-  skipped: number;
-  branchPreview?: BranchPreview;
-  labelEntry: SessionEntry;
-} {
-  let current = node;
-  let branchPreview = current.branchPreview;
-  let labelEntry: SessionEntry | null = isMessageEntry(current.entry) ? current.entry : null;
-  let skipped = current.compressedEntryIds?.length ?? 0;
-  while (current.children.length === 1) {
-    current = current.children[0];
-    branchPreview ??= current.branchPreview;
-    if (!labelEntry && isMessageEntry(current.entry)) labelEntry = current.entry;
-    skipped += 1 + (current.compressedEntryIds?.length ?? 0);
-  }
-  return { node: current, skipped, branchPreview, labelEntry: labelEntry ?? current.entry };
-}
-
-// Top-level rows of the panel: with multiple roots (a branch was started from
-// the very first message) the roots themselves are the branches; otherwise the
-// children of the first branching node.
-export function selectTopLevelBranches(tree: SessionTreeNode[]): SessionTreeNode[] {
-  if (tree.length > 1) return tree;
-  if (tree.length === 0) return [];
-  const first = compressChain(tree[0]).node;
-  return first.children.length > 1 ? first.children : [];
-}
-
-function getLabel(entry: SessionEntry): string {
-  if (entry.type === "message" && isMessageEntry(entry)) {
-    const msg = entry.message as { role: string; content: unknown };
-    const content = msg.content;
-    let text = "";
-    if (typeof content === "string") {
-      text = content;
-    } else if (Array.isArray(content)) {
-      text = content
-        .filter((b): b is { type: "text"; text: string } => b.type === "text")
-        .map((b) => b.text)
-        .join(" ");
-    }
-    if (text.length > 40) text = text.slice(0, 40) + "…";
-    if (text) return text;
-    if (msg.role === "assistant") return "[assistant]";
-  }
-  return entry.type;
-}
-
-// Is there a branch the reader can actually switch to? `hasSessionBranches`
-// answers "does the tree split"; this also requires the panel to have rows to
-// show (a split the viewer cannot pick from is a dead control).
-export function hasNavigableBranches(tree: SessionTreeNode[]): boolean {
-  return hasSessionBranches(tree) && selectTopLevelBranches(tree).length > 0;
-}
-
-// Does the tree hold two branches a reader could tell apart? A split that only
-// separates tool calls or internal records is not a branch the reader asked for.
-export function hasSessionBranches(nodes: SessionTreeNode[]): boolean {
-  // Sessions branched from the very first message have multiple root nodes.
-  if (nodes.length > 1) return nodes.filter(chainHasConversation).length > 1;
-  const stack: SessionTreeNode[] = [...nodes];
-  while (stack.length > 0) {
-    const node = stack.pop()!;
-    if (node.children.length > 1) {
-      let conversations = 0;
-      for (const child of node.children) if (chainHasConversation(child)) conversations += 1;
-      if (conversations > 1) return true;
-    }
-    for (const child of node.children) stack.push(child);
-  }
-  return false;
 }
 
 interface TreeNodeProps {

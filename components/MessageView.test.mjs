@@ -150,6 +150,9 @@ test("renders completed write tool content as readable file text, including alia
   }
 });
 
+// Plus #1324: the generic view is now one row per parameter. Extra write
+// arguments, empty/non-text content and non-write tools all take that path; a
+// still-streaming call keeps showing the raw JSON fragment.
 test("keeps generic input for extra write arguments, empty or non-text content, streaming, and other tools", () => {
   const cases = [
     { input: { path: "notes.md", content: "text", mode: "append" } },
@@ -160,7 +163,6 @@ test("keeps generic input for extra write arguments, empty or non-text content, 
     { input: { path: 42, content: "text" } },
     { input: { content: "text" } },
     { input: { path: "empty.txt" } },
-    { input: { path: "a.ts", content: "partial" }, rawInput: '{"path":"a.ts","content":"one\\ntwo' },
     { toolName: "other_tool", input: { path: "notes.md", content: "text" } },
   ];
   for (const [index, fields] of cases.entries()) {
@@ -169,10 +171,32 @@ test("keeps generic input for extra write arguments, empty or non-text content, 
     setToolCallExpanded(block.toolCallId, true);
     try {
       const html = renderMessage({ role: "assistant", content: [block] });
-      assert.ok(textOf(html).includes(getToolCallInputText(block)), String(index));
+      assert.match(html, /class="plus-tool-args"/, String(index));
+      for (const key of Object.keys(block.input)) {
+        assert.match(html, new RegExp(`class="plus-tool-arg-key" title="${key}">${key}<`), `${index}:${key}`);
+      }
+      assert.doesNotMatch(textOf(html), /"content":/, String(index));
     } finally {
       clearExpandedToolCalls();
     }
+  }
+
+  // Streaming input is incomplete JSON, so it keeps the raw fragment view.
+  const streaming = {
+    type: "toolCall",
+    toolCallId: "call-write-fallback-streaming",
+    toolName: "write",
+    input: { path: "a.ts", content: "partial" },
+    rawInput: '{"path":"a.ts","content":"one\\ntwo',
+  };
+  clearExpandedToolCalls();
+  setToolCallExpanded(streaming.toolCallId, true);
+  try {
+    const html = renderMessage({ role: "assistant", content: [streaming] });
+    assert.ok(textOf(html).includes(getToolCallInputText(streaming)));
+    assert.doesNotMatch(html, /class="plus-tool-args"/);
+  } finally {
+    clearExpandedToolCalls();
   }
 });
 
@@ -622,7 +646,11 @@ test("keeps the generic view for a codemode call whose input is still streaming 
   const other = { type: "toolCall", toolCallId: "call-codemode-other", toolName: "codemode", input: { script: "x" } };
   setToolCallExpanded(other.toolCallId, true);
   t.after(() => setToolCallExpanded(other.toolCallId, false));
-  assert.match(textOf(renderCodemode(other)), /"script": "x"/);
+  // #1324: a non-script codemode input falls back to the per-parameter rows.
+  const otherHtml = renderCodemode(other);
+  assert.match(otherHtml, /class="plus-tool-arg-key" title="script">script</);
+  assert.match(otherHtml, /class="plus-tool-arg-value" title="x">x</);
+  assert.doesNotMatch(textOf(otherHtml), /"script": "x"/);
 });
 
 test("labels an MCP call server/tool and indents a JSON result", (t) => {
