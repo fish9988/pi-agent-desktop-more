@@ -276,7 +276,9 @@ function readSidebarSessionsSnapshot(): SessionInfo[] {
 function writeSidebarSessionsSnapshot(sessions: SessionInfo[]): void {
   if (typeof window === "undefined") return;
   try {
-    const slim = sessions.slice(0, 120).map((s) => ({
+    // Enough rows that an old session opened from a deep link is still here on
+    // the next launch; the first real listing overwrites the snapshot anyway.
+    const slim = sessions.slice(0, 400).map((s) => ({
       ...s,
       firstMessage: s.firstMessage ? s.firstMessage.slice(0, 160) : "",
     }));
@@ -317,6 +319,10 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const sessionLoadIdRef = useRef(0);
   const hasSessionsRef = useRef(allSessions.length > 0);
   hasSessionsRef.current = allSessions.length > 0;
+  // A snapshot paints the tree, but it is not proof that a session is gone: the
+  // first server listing is. Without this, a deep link to a session missing from
+  // the snapshot was reported missing before the real list arrived.
+  const loadedFromServerRef = useRef(false);
   const [loading, setLoading] = useState(() => allSessions.length === 0);
   const [error, setError] = useState<string | null>(null);
   const [selectedCwd, setSelectedCwd] = useState<string | null>(null);
@@ -524,8 +530,13 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       };
       if (loadId !== sessionLoadIdRef.current) return;
       sessionListVersionRef.current = data.sessionListVersion;
+      loadedFromServerRef.current = true;
       setAllSessions(data.sessions);
-      if (!summary) {
+      // Keep a snapshot of what the tree showed, even from the cheap summary
+      // pass: the next launch paints the sidebar from localStorage before any
+      // request returns. The full listing (which carries exact counts and first
+      // messages) overwrites it moments later.
+      if (data.sessions.length > 0) {
         writeSidebarSessionsSnapshot(data.sessions);
       }
       setChatWorkspaceCwd(data.chatWorkspaceCwd ?? null);
@@ -966,13 +977,17 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     if (selectedCwd === null) {
       // If restoring a session, set cwd to match that session
       if (initialSessionId && !restoredRef.current) {
-        restoredRef.current = true;
         const target = allSessions.find((s) => s.id === initialSessionId);
         if (target) {
+          restoredRef.current = true;
           setSelectedCwd(target.cwd);
           onSelectSession(target, true);
           return;
         }
+        // The local snapshot only holds recent rows; keep waiting for the first
+        // real listing instead of declaring the session missing.
+        if (!loadedFromServerRef.current) return;
+        restoredRef.current = true;
         // Session not found — notify parent so it can show the placeholder
         onInitialRestoreDone?.();
       }

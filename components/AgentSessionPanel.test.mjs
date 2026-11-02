@@ -22,9 +22,15 @@ test("sorts running subagents first and enables search only for larger families"
 });
 
 test("renders as a compact left-positioned dropdown without a centered inner width", () => {
-  assert.match(source, /borderLeft: "var\(--hairline\) solid var\(--border\)"/);
-  assert.match(source, /borderRadius: "0 0 6px 6px"/);
+  // Plus 1.17: the panel is a floating card inside the topbar's fixed dropdown
+  // slot (it used to hang borderless off the topbar edge); it stays a compact
+  // list at the panel's own width, never a centred dialog.
+  assert.match(source, /border: "var\(--hairline\) solid var\(--border\)"/);
+  assert.match(source, /borderRadius: "var\(--plus-r-overlay, 12px\)"/);
   assert.doesNotMatch(source, /maxWidth: 680/);
+  // The row is a click target, and the drag-region opt-out is what makes that
+  // click land at all on Windows (see components/desktop/useWindowDrag.ts).
+  assert.match(source, /data-no-drag/);
 });
 
 test("shows persisted completion states while live running state takes precedence", () => {

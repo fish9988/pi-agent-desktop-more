@@ -236,6 +236,8 @@ test("the /mcp case returns before anything a prompt does, and the list ref has 
 test("AppShell opens Settings on the section the chat asks for", () => {
   assert.match(chatWindowSource, /onOpenSettings\?: \(section: SettingsSection\) => void;/);
   assert.match(chatWindowSource, /onSessionStatsPanelOpen,\n\s+onOpenSettings,\n\s+deferInitialScroll/);
-  assert.match(appShellSource, /const openSettingsSection = useCallback\(\(section: SettingsSection\) => \{\n\s+setSettingsSection\(section\);/);
+  // Plus 1.17: a folded Settings window is unfolded first, so /mcp really lands
+  // on the MCP section instead of re-setting an already-open section.
+  assert.match(appShellSource, /const openSettingsSection = useCallback\(\(section: SettingsSection\) => \{\n\s+expandSettingsWindow\(\);\n\s+setSettingsSection\(section\);/);
   assert.match(appShellSource, /onOpenSettings=\{openSettingsSection\}/);
 });

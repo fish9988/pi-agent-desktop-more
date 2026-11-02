@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect, useLayoutEffect, useMemo } from "react";
+import { useState, useCallback, useRef, useEffect, useLayoutEffect, useMemo, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
@@ -34,6 +34,12 @@ import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useMenuNavigation } from "@/hooks/useMenuNavigation";
 import { APP_PREF_KEYS, getPrefBool, getPrefJson, setPref } from "@/lib/app-prefs";
+import {
+  expandSettingsWindow,
+  settingsWindowMinimizedServerSnapshot,
+  settingsWindowMinimizedSnapshot,
+  subscribeSettingsWindow,
+} from "@/lib/plus-settings-window";
 import { useViewportHeight } from "@/hooks/useViewportHeight";
 import { useResizablePanel } from "@/hooks/useResizablePanel";
 import { useDesktopConnection } from "@/lib/desktop-connection";
@@ -271,6 +277,11 @@ export function AppShell() {
   }, []);
   const [explorerRefreshKey, setExplorerRefreshKey] = useState(0);
   const [settingsSection, setSettingsSection] = useState<SettingsSection | null>(null);
+  const settingsWindowMinimized = useSyncExternalStore(
+    subscribeSettingsWindow,
+    settingsWindowMinimizedSnapshot,
+    settingsWindowMinimizedServerSnapshot,
+  );
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (new URLSearchParams(window.location.search).get("plusStandaloneSettings") === "1") {
@@ -576,6 +587,7 @@ export function AppShell() {
 
   // The composer opens Settings too: a bare /mcp opens Settings › MCP (useAgentSession).
   const openSettingsSection = useCallback((section: SettingsSection) => {
+    expandSettingsWindow();
     setSettingsSection(section);
   }, []);
 
@@ -1213,6 +1225,7 @@ export function AppShell() {
     if (payload === "settings-general" || payload === "settings-models") {
       setActiveTopPanel(null);
       setTopMoreOpen(false);
+      expandSettingsWindow();
       setSettingsSection(payload === "settings-general" ? "general" : "models");
     }
   }, [activeCwd, chatWorkspaceCwd, handleNewSession, isChatWorkspaceActive]);
@@ -1220,6 +1233,9 @@ export function AppShell() {
   const openSettingsAtLastSection = useCallback(() => {
     setActiveTopPanel(null);
     setTopMoreOpen(false);
+    // A folded Settings window is still open: unfold it before re-selecting the
+    // section, or this button (and Ctrl+,) looks like it does nothing.
+    expandSettingsWindow();
     // A project-only section without a project falls back to General (SettingsPanel re-checks).
     setSettingsSection(getLastSettingsSection(
       isChatWorkspaceActive ? null : selectedSession?.cwd ?? newSessionCwd ?? activeCwd,
@@ -1252,8 +1268,9 @@ export function AppShell() {
     activeCwd: isChatWorkspaceActive ? chatWorkspaceCwd : activeCwd,
     // Only while open: a closed panel must leave \ and focus alone.
     onCloseRightPanel: rightPanelOpen && !shortcutHelpOpen ? handleRightPanelClose : undefined,
-    // Already open: leave it where it is.
-    onOpenSettings: settingsSection ? undefined : openSettingsAtLastSection,
+    // Already open: leave it where it is 一 unless it is folded, which is exactly
+    // when the shortcut has to bring it back.
+    onOpenSettings: settingsSection && !settingsWindowMinimized ? undefined : openSettingsAtLastSection,
     onShortcutHelp: settingsSection ? undefined : toggleShortcutHelp,
     onToggleSidebar: settingsSection || shortcutHelpOpen ? undefined : handleSidebarToggle,
     onFocusComposer: settingsSection || shortcutHelpOpen ? undefined : () => chatInputRef.current?.focus(),
@@ -2897,7 +2914,7 @@ export function AppShell() {
                 : undefined}
               projectOptions={selectedSession || isChatWorkspaceActive ? [] : availableProjectRoots}
               onProjectChange={selectedSession || isChatWorkspaceActive ? undefined : handleProjectChangeFromComposer}
-              onOpenModelsConfig={() => setSettingsSection("models")}
+              onOpenModelsConfig={() => openSettingsSection("models")}
               onOpenFile={isChatWorkspaceActive ? undefined : handleOpenLinkedFile}
               onOpenSession={handleOpenSession}
               onAskInNewChat={handleAskInNewChat}
@@ -3357,7 +3374,7 @@ export function AppShell() {
         onStatus={setProjectTrust}
       />
     )}
-    <UpdateReminder onOpenSettings={() => setSettingsSection("general")} />
+    <UpdateReminder onOpenSettings={() => openSettingsSection("general")} />
     <DomContextMenuHost />
     <AppNoticeShelf />
     </div>

@@ -516,6 +516,9 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
   const messageContentRef = useRef<HTMLDivElement | null>(null);
   const prevScrollDistanceRef = useRef<number | null>(null);
   const loadingOlderRef = useRef(false);
+  // Set by a real user gesture on the transcript (wheel, drag, key, touch).
+  const userScrollIntentRef = useRef(false);
+  const stalledOlderLoadsRef = useRef(0);
   const restoreStartedRef = useRef(false);
   const pendingScrollRestoreRef = useRef(pendingScrollRestore);
   pendingScrollRestoreRef.current = pendingScrollRestore;
@@ -540,6 +543,8 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
     loadingOlderRef.current = false;
     prevScrollDistanceRef.current = null;
     setPendingSearchScroll(null);
+    userScrollIntentRef.current = false;
+    stalledOlderLoadsRef.current = 0;
   }
   const searchMessage = messages[entryIds.indexOf(pendingSearchScroll?.entryId ?? "")];
   const searchBlock = searchMessage?.role === "assistant"
@@ -605,8 +610,17 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
       loadingOlderRef.current = true;
       let before = initialHistory.historyCursor;
       let hasMore = initialHistory.hasEarlierMessages;
+      // Bounded walk. Restoring a position that sits deep in a 4000-entry branch
+      // used to page backwards until it found the anchor, downloading megabytes
+      // and rendering every page on the way — which looked like the session
+      // hanging. Two pages (~a screen or two of history) is enough to restore the
+      // common case; past that the chat opens at the latest window instead.
+      let pages = 0;
+      const MAX_RESTORE_PAGES = 2;
       try {
         while (hasMore && before && !controller.signal.aborted) {
+          if (pages >= MAX_RESTORE_PAGES) break;
+          pages += 1;
           const context = await loadContext(sessionId, activeLeafId, before, { signal: controller.signal });
           if (controller.signal.aborted) return;
           if (!context) {
@@ -703,6 +717,12 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
 
   // IntersectionObserver on the sentinel div at the top of the message list.
   // When it becomes visible, load the next page of older messages.
+  //
+  // Only after the reader has touched the transcript. The sentinel also sits in
+  // view at mount (short window, restored scroll, the first paint before the
+  // jump to the bottom), and loading on that signal chained page after page: a
+  // 4000-entry session opened with a dozen `/context` reads and megabytes of
+  // history nobody asked for. Reading older history is a user gesture.
   useEffect(() => {
     const sentinel = sentinelRef.current;
     const container = scrollContainerRef.current;
@@ -710,6 +730,7 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
     const observer = new IntersectionObserver(
       (entries) => {
         if (!entries[0]?.isIntersecting) return;
+        if (!userScrollIntentRef.current) return;
         // No older history loaded yet: fetch the previous page from the server
         // and prepend it (loadContext handles prepend + scroll anchoring).
         // Skip while a page is already loading or nothing older exists.
@@ -719,10 +740,17 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
         if (!oldestId) return;
         const sid = session?.id ?? sessionIdRef.current;
         if (!sid) return;
+        // A page that does not make the transcript taller would be requested
+        // again the moment it lands. One retry only.
+        if (stalledOlderLoadsRef.current >= 2) return;
+        const heightBefore = container.scrollHeight;
         loadingOlderRef.current = true;
         prevScrollDistanceRef.current = captureScrollDistance(container.scrollHeight, container.scrollTop);
         void loadContext(sid, activeLeafId, oldestId).finally(() => {
           loadingOlderRef.current = false;
+          stalledOlderLoadsRef.current = container.scrollHeight > heightBefore + 24
+            ? 0
+            : stalledOlderLoadsRef.current + 1;
         });
       },
       { root: container, threshold: 0 }
@@ -730,6 +758,20 @@ export function ChatWindow({ session, workspaceKind, searchTarget, onSearchTarge
     observer.observe(sentinel);
     return () => observer.disconnect();
   }, [historyCursor, hasEarlierMessages, session, activeLeafId, loadContext, sessionIdRef, scrollContainerRef]);
+
+  // A real gesture on the transcript, as opposed to the programmatic jump to the
+  // bottom (which fires scroll events of its own). Gates the older-history
+  // auto-load above.
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const mark = () => { userScrollIntentRef.current = true; };
+    const events: Array<keyof HTMLElementEventMap> = ["wheel", "touchstart", "pointerdown", "keydown"];
+    for (const event of events) container.addEventListener(event, mark, { passive: true });
+    return () => {
+      for (const event of events) container.removeEventListener(event, mark);
+    };
+  }, [scrollContainerRef, lazyLoadSessionKey]);
 
   // Keep the rendered window at least as large as what's loaded, so prepended
   // (older) pages stay visible instead of being sliced off the top.

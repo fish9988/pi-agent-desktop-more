@@ -14,6 +14,7 @@ import { diffGapLabel, parseUnifiedPatch, type SplitDiffCell, type SplitDiffFile
 import { applyPatchPreviewToFiles, applyPatchResultHasFailures, extractApplyPatchPaths, getApplyPatchInputText, parseApplyPatchInput } from "@/lib/apply-patch";
 import { isApplyPatchToolName, isEditToolName, isWriteToolName } from "@/lib/tool-names";
 import { isToolCallExpanded, setToolCallExpanded } from "@/lib/tool-call-expansion";
+import { getPrefBool, setPrefBool, APP_PREF_KEYS } from "@/lib/app-prefs";
 import { isThinkingExpandedByDefault, THINKING_EXPANDED_EVENT } from "@/lib/thinking-expansion-preference";
 import { TurnWrittenFiles } from "./TurnWrittenFiles";
 import { modelDotColor } from "@/lib/model-dot";
@@ -1918,10 +1919,25 @@ function CompactionMessageView({ message, kind = "compaction" }: { message: Cust
   const summary = getMessageText(message.content);
   const parsedSummary = useMemo(() => parseCompactionSummary(summary), [summary]);
   const time = formatTime(message.timestamp);
+  // Folded by default: a long summary should not push the live conversation
+  // off screen. The choice is remembered, so expanding one keeps the next open
+  // too; a fresh install starts collapsed.
+  const [expanded, setExpanded] = useState(() => getPrefBool(APP_PREF_KEYS.compactionExpanded, false));
+  const title = t(kind === "branch_summary" ? "i18n.branchSummaryTitle" : "i18n.conversationCompacted");
+  const description = t(kind === "branch_summary" ? "i18n.branchSummaryDescription" : "i18n.compactionDescription");
+  // One-line teaser for the folded card: markup stripped so it reads as prose.
+  const preview = parsedSummary.body
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/^\s*(?:#{1,6}|>|[-*+]|\d+\.)\s+/gm, "")
+    .replace(/[*`_~]+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 
   return (
     <div style={{ marginBottom: 16 }}>
       <div
+        className={`compaction-card${expanded ? " is-expanded" : " is-collapsed"}`}
         style={{
           border: "var(--hairline) solid var(--border)",
           borderRadius: 8,
@@ -1929,37 +1945,70 @@ function CompactionMessageView({ message, kind = "compaction" }: { message: Cust
           background: "var(--bg)",
         }}
       >
-        <div
+        <button
+          type="button"
+          className="compaction-card-header"
+          aria-expanded={expanded}
+          onClick={() => {
+            setExpanded((current) => {
+              const next = !current;
+              setPrefBool(APP_PREF_KEYS.compactionExpanded, next);
+              return next;
+            });
+          }}
+          title={expanded ? t("plus.compaction.collapse") : t("plus.compaction.expand")}
           style={{
             display: "flex",
             alignItems: "center",
             gap: 8,
+            width: "100%",
             padding: "7px 10px",
-            borderBottom: "var(--hairline) solid var(--border)",
+            border: 0,
+            borderBottom: expanded ? "var(--hairline) solid var(--border)" : "0",
             background: "var(--bg-panel)",
             color: "var(--text-muted)",
+            cursor: "pointer",
+            textAlign: "left",
+            font: "inherit",
           }}
         >
+          <svg
+            width="11"
+            height="11"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            className={`compaction-card-chevron${expanded ? " is-open" : ""}`}
+          >
+            <polyline points="9 6 15 12 9 18" />
+          </svg>
           <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 650 }}>
             {kind === "branch_summary" ? "branch summary" : "compaction"}
           </span>
-          {time && <span className="message-meta" style={{ marginLeft: "auto", color: "var(--text-dim)", fontSize: 10 }}>{time}</span>}
-        </div>
-
-        <div style={{ padding: "11px 13px 12px" }}>
-          <div style={{ color: "var(--text)", fontSize: "calc(15px + var(--chat-font-size-offset, 0px))", fontWeight: 700, lineHeight: 1.35 }}>
-             {t(kind === "branch_summary" ? "i18n.branchSummaryTitle" : "i18n.conversationCompacted")}
-          </div>
-          <div style={{ marginTop: 3, marginBottom: 10, color: "var(--text)", fontSize: "calc(14px + var(--chat-font-size-offset, 0px))", lineHeight: 1.5 }}>
-             {t(kind === "branch_summary" ? "i18n.branchSummaryDescription" : "i18n.compactionDescription")}
-          </div>
-          {parsedSummary.body ? (
-            <MarkdownBody className="markdown-compaction-message">{parsedSummary.body}</MarkdownBody>
-          ) : (
-             <span style={{ color: "var(--text-dim)", fontSize: 12 }}>{t("i18n.noSummary")}</span>
+          <span className="compaction-card-subject">{title}</span>
+          {!expanded && preview && (
+            <span className="compaction-card-preview" title={preview}>{preview}</span>
           )}
-          <CompactionFileMetadata readFiles={parsedSummary.readFiles} modifiedFiles={parsedSummary.modifiedFiles} />
-        </div>
+          {time && <span style={{ marginLeft: "auto", color: "var(--text-dim)", fontSize: 12, flexShrink: 0 }}>{time}</span>}
+        </button>
+
+        {expanded && (
+          <div style={{ padding: "11px 13px 12px" }}>
+            <div style={{ marginTop: 1, marginBottom: 10, color: "var(--text-muted)", fontSize: "calc(14px + var(--chat-font-size-offset, 0px))", lineHeight: 1.5 }}>
+              {description}
+            </div>
+            {parsedSummary.body ? (
+              <MarkdownBody className="markdown-compaction-message">{parsedSummary.body}</MarkdownBody>
+            ) : (
+              <span style={{ color: "var(--text-dim)", fontSize: 12 }}>{t("i18n.noSummary")}</span>
+            )}
+            <CompactionFileMetadata readFiles={parsedSummary.readFiles} modifiedFiles={parsedSummary.modifiedFiles} />
+          </div>
+        )}
       </div>
     </div>
   );

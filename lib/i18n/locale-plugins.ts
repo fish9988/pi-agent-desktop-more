@@ -16,6 +16,8 @@ const FORK_MESSAGE_PATCHES: Record<Locale, {
 }> = {
   "en": {
     "set": {
+      "plus.compaction.expand": "Expand this summary",
+      "plus.compaction.collapse": "Collapse this summary",
       "settings.completionSound": "Play a sound when a reply finishes",
       "settings.sectionPicker": "Settings section",
       "agentSwitcher.none": "No sub-agents in this session",
@@ -601,6 +603,8 @@ const FORK_MESSAGE_PATCHES: Record<Locale, {
   },
   "zh-CN": {
     "set": {
+      "plus.compaction.expand": "展开摘要",
+      "plus.compaction.collapse": "收起摘要",
       "settings.completionSound": "回复完成时播放提示音",
       "settings.sectionPicker": "设置分区",
       "agentSwitcher.none": "此会话没有子 Agent",
@@ -1189,6 +1193,8 @@ const FORK_MESSAGE_PATCHES: Record<Locale, {
   },
   "zh-TW": {
     "set": {
+      "plus.compaction.expand": "展開摘要",
+      "plus.compaction.collapse": "收合摘要",
       "settings.completionSound": "回覆完成時播放提示音",
       "settings.sectionPicker": "设定区块",
       "agentSwitcher.none": "此會話沒有子 Agent",

@@ -10,7 +10,7 @@ _最后更新：2026-10-27_
 - 上一版 v1.6.1：修复文件树下载按钮无反应、「在资源管理器中显示」打开错目录（正斜杠路径 + Rust 引号问题，改用 `raw_arg`）。v1.6.0 是上游周报 #1 的移植。
 - 用户的正式版 `D:\Pi Agent Plus` 是 **1.5.0**，用户会自己点「更新」升级到 1.6.0。
 - 测试版 `D:\Pi Agent Plus Test` 是 1.7.0-test.23（`plus-prefs.test.json` 里主题选了「Plus 分层」、深色），没在运行。
-- **最新发布：v1.17.0**（2026-11-01）：① 修复顶栏 `Agents` 子任务列表因 `.app-topbar` `useWindowDrag` 吞掉 `[role="option"]` 点击导致无法切换的 Bug，并升级悬停交互与快捷复制 `#ID`；② 为所有项目会话 `···` 菜单补齐「置顶会话 / 取消置顶」（置顶自动排到项目顶部）、「导出为 HTML」与「在资源管理器中定位」；③ 侧边栏新增 `localStorage` 0ms 首屏会话快照、修复 `prefetchSessionData` 未带 `tree=summary` 的双倍大文件阻塞并打通 `session-view-cache`、剔除消息 JSON 中的巨型 `thinkingSignature` 并将会话字节级瘦身门槛从 16MB 降至 2MB；④ 右侧文件预览新增 `.xls` / `.xlsx` / `.ods` / `.csv` / `.tsv` 多 Sheet 表格预览、`.doc` 老版 Word 预览、`.pptx` 幻灯片预览、SVG `Source/Preview` 切换与 `<symbol>` 图标集展开、图片 50MB 上限与缩放/底板切换，以及 HTML 默认沙箱脚本执行。上一版 v1.16.0（2026-10-28）：设置重构为非模态可拖拽/并排分屏/独立系统窗口。
+- **最新发布：v1.18.0**（2026-11-02）：① 会话压缩卡片默认折成一行动条（可展开，记住选择）；② 打开会话提速：去掉消息列表顶部哨兵的自动翻页风暴（实测重载 18 次 `/context`、约 5MB → 0）、滚动恢复最多翻 2 页、整回合补齐封顶 320 条、会话文件缓存 64MB→128MB，实测 69MB/4784 条会话首次打开 4.1s→1.5s、重载 6.1s→0.6s、切换 17ms、首屏 DOM 4618→666；③ 设置窗口收起后共享 store 记录状态，角落小窗 / 「展开」/ 侧栏设置 / `Ctrl+,` 均可恢复，且上移到输入框上方不挡发送按钮。上一版 v1.17.0（2026-11-01）：顶栏 Agents 点击被拖拽劫持、项目会话置顶/导出/定位、Office 与 SVG/PNG/HTML 预览。
 - 上游周报 #2（2026-10-27）已移植并标记为已看（`.github/upstream-reviewed.json` 指向 pi-web `e533d9b3`、abcwyc `56691c5a`）。
 
 ## 顶栏子代理下拉切换器与《纸枢 · Kami》视觉升级（1.10.0，2026-10-27）
@@ -132,6 +132,13 @@ _最后更新：2026-10-27_
 ## 交接注意
 
 - 本对话是在正式版 Plus 里运行的 Agent。新会话同样运行在 `D:\Pi Agent Plus` 里，规则不变：不碰它的进程、不覆盖安装、不改它的设置。
+
+### 性能/交互上的三个坑（1.18.0 踩过，别再踩）
+
+1. **消息列表顶部的哨兵必须等“用户真的动过对话”才翻页。** 它的 IntersectionObserver 在首屏、滚动恢复、短窗口时本来就直接可见，一旦无门槛加载就会链式抓完整个历史（实测一次重载 18 次 `/context`、约 5MB、首屏 4618 个 DOM 节点）。门闩是 `ChatWindow.tsx` 的 `userScrollIntentRef`（只由 wheel / touch / pointerdown / keydown 置位），外加「翻一页没变高就只重试一次」的 `stalledOlderLoadsRef`。
+2. **滚动位置恢复只能翻有限页。** `pendingScrollRestore` 的循环上限是 `MAX_RESTORE_PAGES = 2`，找不到锚点就停在最新一屏；`lib/session-reader.ts` 的 `MAX_TURN_EXTENSION_ENTRIES` 也不再允许一页拉到 1500 条。上游 `lib/session-reader.pagination.test.mjs` 要求“长回合仍能回退到它的 user 消息”，所以这个上限不能低于 240。
+3. **设置窗口的收起状态属于 AppShell，不属于窗口栏。** 状态在 `lib/plus-settings-window.ts`（`useSyncExternalStore`）。如果把 `minimized` 放回 `PlusSettingsWindowBar` 的 `useState`，侧栏设置 / `Ctrl+,` / 原生菜单都会变成“把同一个已打开的设置再设一遍”，收起后彻底无法恢复。新增任何进入设置的入口，都要先调 `expandSettingsWindow()`。
+
 - 用户的模型：
   - 默认 `magpie` / `workbuddy/deepseek-v4.1-flash`（modelId 本身带 `workbuddy/` 前缀）。
   - 还有 `cpa`（claude-opus-5-5）和 `cpa-codex`。

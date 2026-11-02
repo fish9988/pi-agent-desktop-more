@@ -523,7 +523,7 @@ export const SM_CACHE_LIMITS = {
   /** Summed on-disk size of cached sessions. */
   maxTotalBytes: 256 * 1024 * 1024,
   /** A session larger than this is never cached — it would evict everything else. */
-  maxFileBytes: 64 * 1024 * 1024,
+  maxFileBytes: 128 * 1024 * 1024,
 };
 
 function getSmCache(): Map<string, SmCacheEntry> {
@@ -881,13 +881,17 @@ export function sliceActiveBranch(
       }
       cursor = cursor.parentId ? byId.get(cursor.parentId) : undefined;
     }
-  }
-  chain.reverse();
+  }  chain.reverse();
   return chain;
 }
 
 /** Extra raw entries a page may take to reach the start of the turn it cut into. */
-const MAX_TURN_EXTENSION_ENTRIES = 1500;
+// A single agentic run can span hundreds of entries. Walking all the way back
+// to its own user message made one "50 message" page 274 entries / ~1 MB (the
+// client then parses and renders all of it) and a truly long run could pull
+// 1500. The ceiling stays above the raw page cap so ordinary turns still reach
+// their anchor, but a pathological run is cut instead of ballooning the page.
+const MAX_TURN_EXTENSION_ENTRIES = 320;
 
 /** Entries that `isMessageGroupAnchor()` treats as the start of a displayed turn. */
 function startsTurn(entry: SessionEntry): boolean {

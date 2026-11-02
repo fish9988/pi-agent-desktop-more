@@ -1689,14 +1689,30 @@ html:not([data-plus-style="clean"]) .app-topbar-running { display: none !importa
   html[data-plus-style="clean"][data-plus-settings-minimized="1"] .settings-dialog-backdrop.is-plus-page {
     align-items: flex-end;
     justify-content: flex-end;
-    padding: var(--plus-s4);
+    /* Clear of the composer, so a folded window never covers the send button:
+       folding is meant to keep working with the chat under it. */
+    padding: var(--plus-s4) var(--plus-s4) 132px;
   }
+  /* Folded: a recognisable little window in the corner, not an empty strip.
+     Its bar is the whole visible surface, so it reads as the restore control. */
   html[data-plus-style="clean"][data-plus-settings-minimized="1"] .is-plus-page .settings-dialog-surface {
-    width: 360px;
+    width: 392px;
     height: 42px;
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: 42px;
-    background: var(--bg-panel);
+    border-color: var(--plus-stroke-strong);
+    border-radius: 999px;
+    background: var(--surface-elevated, var(--bg-panel));
+    box-shadow: var(--shadow-popover);
+    overflow: hidden;
+  }
+  html[data-plus-style="clean"][data-plus-settings-minimized="1"] .is-plus-page .plus-settings-window-bar {
+    cursor: pointer;
+    padding-left: var(--plus-s4);
+  }
+  html[data-plus-style="clean"][data-plus-settings-minimized="1"] .is-plus-page .plus-settings-window-drag-hint {
+    color: var(--text);
+    font-weight: 500;
   }
   html[data-plus-style="clean"][data-plus-settings-minimized="1"] .is-plus-page :is(.plus-settings-search, .settings-section-tabs, .settings-dialog-close, .settings-dialog-main) {
     display: none;
