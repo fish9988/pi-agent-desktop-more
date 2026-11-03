@@ -36,6 +36,7 @@ import { useMenuNavigation } from "@/hooks/useMenuNavigation";
 import { useEnterSendMode } from "@/hooks/useEnterSendMode";
 import { useI18n } from "@/hooks/useI18n";
 import { usePlusStyle } from "@/hooks/usePlusStyle";
+import { useDshClaudeStyleEnabled } from "@/lib/dsh-plugin-client";
 import type { ReactNode } from "react";
 import type { ContextUsage, SessionStatsInfo } from "@/lib/pi-types";
 import { ContextUsageRing } from "./ContextUsageRing";
@@ -2269,6 +2270,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   // · Stop) at its end, under the text; narrow and compact layouts keep both
   // beside the text as before.
   const plusStyle = usePlusStyle();
+  const claudeStyleEnabled = useDshClaudeStyleEnabled();
   const toolsLayout = !compact && !isNarrow && plusStyle === "clean";
   const attachButton = (
     <button
@@ -3053,7 +3055,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             data-state={compact ? undefined : bashMode ? "bash" : undefined}
             style={!compact ? { position: "relative", overflow: "visible" } : undefined}
           >
-          {!compact && plusStyle === "clean" && (
+          {!compact && plusStyle === "clean" && claudeStyleEnabled && (
             <ComposerMascot
               isStreaming={isStreaming}
               isCompacting={isCompacting}
@@ -3119,7 +3121,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 ? t(chatOnly ? "chat.composerHintChatOnly" : "plus.composerPlaceholder")
                 : t("chat.messagePlaceholder")
             }
-            rows={compact ? 4 : plusStyle === "clean" ? 1 : 3}
+            rows={compact ? 4 : (plusStyle === "clean" && claudeStyleEnabled) ? 1 : 3}
             style={{
               flex: compact ? "none" : 1,
               minWidth: 0,
@@ -3132,7 +3134,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               fontSize: "var(--chat-content-font-size, 14px)",
               lineHeight: 1.6,
               fontFamily: "inherit",
-              minHeight: compact ? 96 : plusStyle === "clean" ? 24 : 68,
+              minHeight: compact ? 96 : (plusStyle === "clean" && claudeStyleEnabled) ? 24 : 68,
               maxHeight: 240,
               overflow: "auto",
             }}

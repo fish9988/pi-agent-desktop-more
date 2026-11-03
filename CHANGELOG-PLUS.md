@@ -3,6 +3,15 @@
 Pi Agent Plus 是 [abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop) 的个人二次开发版（仅 Windows），
 与官方版可同时安装、互不覆盖。版本规则见 [VERSIONING-PLUS.md](./VERSIONING-PLUS.md)。
 
+## [1.24.1] - 2026-11-03
+
+精简「设置 › 外观」页面，移除全部默认主题预设卡片与 CSS 预设按钮（仅保留字体设置与纯净自定义 CSS 编辑器），并实现 `dsh-claude-style` 插件启用时自动接管切换全局界面样式，无需手动选主题。
+
+- **移除默认主题预设与 CSS 预设（`components/PlusAppearanceSettings.tsx`）**：彻底移除「外观」页的内置/自定义主题卡片网格、主题市场画廊、强调色预设色块行以及自定义 CSS 工作台的一键预设按钮，仅保留独立的四项字体设置（界面字体、聊天字体、粗体与标题字体、代码字体）与自定义 CSS 编辑器。
+- **启用 `dsh-claude-style` 插件自动切换全局样式（`lib/dsh-plugin-client.tsx`、`lib/dsh-plugin-host.ts`、`lib/plus-theme.ts`、`app/plus-theme.css`）**：
+  - `dsh-claude-style` 插件默认启用；开启该插件时自动写入 `data-dsh-claude-style="1"` 并将全局配色与布局切换为 Claude Code Desktop 样式（`#ffffff` 画布、`#fafafa` 侧栏、`#d97757` 陶烬橙、`✳ Claude` 品牌头、Clawd 像素小螃蟹桌宠与单行输入框），无需再去「外观」页手动选择；
+  - 在「设置 › 插件」关闭 `dsh-claude-style` 时，自动卸载 `data-dsh-claude-style` 并恢复标准 Pi Agent Plus 样式；插件详情页内提供像素小螃蟹开关与字体设置快捷跳转。
+
 ## [1.24.0] - 2026-11-03
 
 打造**「Pi 原生 + DSH 全栈」双轨插件架构（Dual-Plugin Engine）**，彻底突破 `pi-web` 仅支持后端 TUI 扩展的局限，原生兼容 `@deepseek-ai/ds-harness`（DSH / Cordis）双入口全栈 GUI 插件，并修复输入框左侧弹出菜单裁切、侧栏搜索聚焦与非 Pi 原生假按钮问题。

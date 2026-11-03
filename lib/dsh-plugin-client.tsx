@@ -6,8 +6,241 @@ import * as React from "react";
 import * as ReactDOM from "react-dom";
 import * as ReactDOMClient from "react-dom/client";
 import * as jsxRuntime from "react/jsx-runtime";
+import { updatePlusTheme } from "@/hooks/usePlusTheme";
+import { DEFAULT_THEME_ID } from "./plus-theme-catalog";
+import {
+  applyPlusTheme,
+  DEFAULT_PLUS_THEME,
+  normalizePlusTheme,
+  parseStoredPlusTheme,
+  PLUS_THEME_STORAGE_KEY,
+  type PlusThemeSettings,
+} from "./plus-theme";
 
 export const DSH_PLUGINS_CHANGED_EVENT = "pi:dsh-plugins-changed";
+export const CLAUDE_MASCOT_STORAGE_KEY = "pi-plus-claude-mascot";
+
+function readPlusThemeSettings(): PlusThemeSettings {
+  if (typeof window === "undefined") return DEFAULT_PLUS_THEME;
+  try {
+    return parseStoredPlusTheme(window.localStorage.getItem(PLUS_THEME_STORAGE_KEY));
+  } catch {
+    return DEFAULT_PLUS_THEME;
+  }
+}
+
+function writePlusThemeSettings(settings: Partial<PlusThemeSettings>): PlusThemeSettings {
+  const next = normalizePlusTheme({ ...readPlusThemeSettings(), ...settings });
+  if (typeof window !== "undefined") {
+    try {
+      window.localStorage.setItem(PLUS_THEME_STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      // Best-effort persistence.
+    }
+    updatePlusTheme(next);
+  }
+  return next;
+}
+
+function readClaudeMascotEnabled(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    const raw = window.localStorage.getItem(CLAUDE_MASCOT_STORAGE_KEY);
+    return raw !== "0" && raw !== "false";
+  } catch {
+    return true;
+  }
+}
+
+function syncClaudeMascotDataset(enabled: boolean): void {
+  if (typeof document === "undefined") return;
+  document.documentElement.dataset.dshClaudeMascot = enabled ? "1" : "0";
+}
+
+let claudeStyleEnabled =
+  typeof document === "undefined"
+    ? true
+    : document.documentElement.dataset.plusStyle === "clean" ||
+      document.documentElement.dataset.plusStyle === undefined;
+const claudeStyleListeners = new Set<() => void>();
+
+function subscribeClaudeStyle(listener: () => void): () => void {
+  claudeStyleListeners.add(listener);
+  return () => {
+    claudeStyleListeners.delete(listener);
+  };
+}
+
+function getClaudeStyleSnapshot(): boolean {
+  return claudeStyleEnabled;
+}
+
+function getClaudeStyleServerSnapshot(): boolean {
+  return true;
+}
+
+export function useDshClaudeStyleEnabled(): boolean {
+  return React.useSyncExternalStore(
+    subscribeClaudeStyle,
+    getClaudeStyleSnapshot,
+    getClaudeStyleServerSnapshot,
+  );
+}
+
+export function syncClaudeStyleMode(enabled: boolean, prevEnabled: boolean | null): void {
+  claudeStyleEnabled = enabled;
+  for (const listener of Array.from(claudeStyleListeners)) {
+    try {
+      listener();
+    } catch (err) {
+      console.error("[dsh-plugin-client] claudeStyle listener error:", err);
+    }
+  }
+  if (typeof document === "undefined") return;
+  syncClaudeMascotDataset(readClaudeMascotEnabled());
+  if (enabled) {
+    document.documentElement.dataset.dshClaudeStyle = "1";
+    const current = readPlusThemeSettings();
+    if (current.theme !== "clean" || document.documentElement.dataset.plusTheme !== "clean") {
+      const next = writePlusThemeSettings({ ...current, theme: "clean", accent: "" });
+      applyPlusTheme(next);
+    }
+    document.documentElement.dataset.dshClaudeStyle = "1";
+  } else {
+    delete document.documentElement.dataset.dshClaudeStyle;
+    const current = readPlusThemeSettings();
+    if (
+      prevEnabled === true ||
+      current.theme === "clean" ||
+      document.documentElement.dataset.plusTheme === "clean"
+    ) {
+      const next = writePlusThemeSettings({ ...current, theme: DEFAULT_THEME_ID, accent: "" });
+      applyPlusTheme(next);
+    }
+    delete document.documentElement.dataset.dshClaudeStyle;
+  }
+}
+
+function DshClaudeStyleConfigPanel(): React.ReactElement {
+  const [mascotEnabled, setMascotEnabled] = React.useState<boolean>(() =>
+    readClaudeMascotEnabled(),
+  );
+
+  const handleToggleMascot = React.useCallback((next: boolean) => {
+    setMascotEnabled(next);
+    try {
+      window.localStorage.setItem(CLAUDE_MASCOT_STORAGE_KEY, next ? "1" : "0");
+    } catch {
+      // Ignore storage errors
+    }
+    syncClaudeMascotDataset(next);
+  }, []);
+
+  const handleOpenFontSettings = React.useCallback(() => {
+    if (typeof document === "undefined") return;
+    const appearanceTab = document.querySelector<HTMLButtonElement>(
+      '.settings-section-tab[data-section="appearance"]',
+    );
+    if (appearanceTab) {
+      appearanceTab.click();
+    }
+  }, []);
+
+  return (
+    <div
+      data-dsh-claude-style-config="1"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 14,
+        padding: 16,
+        borderRadius: 12,
+        border: "1px solid var(--border)",
+        background: "var(--surface)",
+        color: "var(--text)",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <strong style={{ fontSize: 14 }}>Claude Code Desktop 界面重构已激活</strong>
+            <span
+              style={{
+                fontSize: 11,
+                padding: "2px 8px",
+                borderRadius: 999,
+                background: "var(--accent-soft)",
+                color: "var(--accent)",
+                fontWeight: 600,
+              }}
+            >
+              Active
+            </span>
+          </div>
+          <span style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
+            当前已自动启用 Claude Code Desktop 原生色板（#ffffff 纯白画布 / #fafafa 浅灰侧栏 / #d97757 陶烬橙强调色）、侧栏 ✳ Claude 星芒品牌词标、顶栏单行状态头、切缝上下文饼图与单行自适应输入框。关闭此插件将自动恢复默认纸枢（Kami Paper）主题。
+          </span>
+        </div>
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          padding: "10px 12px",
+          borderRadius: 8,
+          border: "1px solid var(--border)",
+          background: "var(--workbench-bg)",
+        }}
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <span style={{ fontSize: 13, fontWeight: 500 }}>像素小螃蟹桌宠（Clawd Mascot）</span>
+          <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+            在底部输入框右上沿显示跟随会话状态与点击交互的 Clawd 像素小螃蟹精灵（localStorage: pi-plus-claude-mascot）
+          </span>
+        </div>
+        <label style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 12, whiteSpace: "nowrap", flexShrink: 0 }}>
+          <input
+            type="checkbox"
+            checked={mascotEnabled}
+            onChange={(e) => handleToggleMascot(e.target.checked)}
+          />
+          <span>{mascotEnabled ? "已开启" : "已隐藏"}</span>
+        </label>
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          padding: "10px 12px",
+          borderRadius: 8,
+          border: "1px solid var(--border)",
+          background: "var(--workbench-bg)",
+        }}
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <span style={{ fontSize: 13, fontWeight: 500 }}>字体与排版工作台</span>
+          <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+            独立配置 UI 界面字体、对话阅读字体、标题粗体与代码等宽字体
+          </span>
+        </div>
+        <button
+          type="button"
+          className="config-button config-button-small config-button-secondary"
+          style={{ whiteSpace: "nowrap", flexShrink: 0 }}
+          onClick={handleOpenFontSettings}
+        >
+          打开字体设置
+        </button>
+      </div>
+    </div>
+  );
+}
 
 const SKIPPED_CLIENT_PLUGINS = new Set<string>([
   // Pi Agent Plus already has a native port of dsh-claude-style in app/plus-theme.css and ComposerMascot.tsx
@@ -840,6 +1073,9 @@ const DSH_HOST_TOKENS_CSS = `
   --dsw-alias-state-error-secondary: rgba(220, 38, 38, 0.35);
   --dsw-alias-markdown-code-block: var(--tool-bg, #f9fafb);
 }
+html[data-dsh-claude-mascot="0"] .plus-composer-crab {
+  display: none !important;
+}
 `;
 
 function ensureDshHostThemeTokens(): void {
@@ -1228,9 +1464,11 @@ export function useDshPluginClientRuntime(): {
   const [loadedPluginIds, setLoadedPluginIds] = React.useState<string[]>(() =>
     Array.from(activePluginScopes.keys()),
   );
+  const prevClaudeEnabledRef = React.useRef<boolean | null>(null);
 
   const syncPlugins = React.useCallback(async () => {
     if (typeof window === "undefined") return;
+    ensureDshHostThemeTokens();
     try {
       const response = await window.fetch("/api/dsh-plugins", { cache: "no-store" });
       if (!response.ok) return;
@@ -1240,6 +1478,28 @@ export function useDshPluginClientRuntime(): {
         : Array.isArray(data?.plugins)
           ? data.plugins
           : [];
+      const list: DshPluginInfo[] = rawList.filter(
+        (item): item is DshPluginInfo => Boolean(item && typeof item === "object"),
+      );
+
+      const claudePlugin = list.find((p) => p.id === "dsh-claude-style");
+      const isClaudeEnabled = Boolean(claudePlugin?.enabled);
+      syncClaudeStyleMode(isClaudeEnabled, prevClaudeEnabledRef.current);
+      prevClaudeEnabledRef.current = isClaudeEnabled;
+
+      removeSlotsForPlugin("dsh-claude-style");
+      if (isClaudeEnabled) {
+        registerPluginSlot(
+          "dsh-claude-style",
+          {
+            name: "plugins.item",
+            id: "dsh-claude-style:settings",
+            order: 10,
+            label: "Claude Code Desktop",
+          },
+          DshClaudeStyleConfigPanel,
+        );
+      }
 
       const desiredClientPlugins = new Map<string, DshClientPluginInfo>();
 

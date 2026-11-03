@@ -167,9 +167,18 @@ function writePersistedState(state: DshPluginsPersistedState): void {
   fs.renameSync(tmp, file);
 }
 
-export function isDshPluginEnabled(id: string): boolean {
-  const state = readPersistedState();
-  return state.enabled[id] === true;
+export function isDshPluginEnabled(id: string): boolean;
+export function isDshPluginEnabled(state: DshPluginsPersistedState, id: string): boolean;
+export function isDshPluginEnabled(
+  stateOrId: DshPluginsPersistedState | string,
+  maybeId?: string,
+): boolean {
+  const state = typeof stateOrId === "string" ? readPersistedState() : stateOrId;
+  const id = typeof stateOrId === "string" ? stateOrId : (maybeId ?? "");
+  if (Object.prototype.hasOwnProperty.call(state.enabled, id)) {
+    return Boolean(state.enabled[id]);
+  }
+  return id === "dsh-claude-style";
 }
 
 export function setDshPluginEnabled(id: string, enabled: boolean): boolean {
@@ -444,6 +453,25 @@ function discoverDshPluginCandidates(): DiscoveredPluginCandidate[] {
     ...scanNodeModulesRoot(piDshModules, "pi-dsh", seen),
     ...scanNodeModulesRoot(localDshModules, "local-dsh", seen),
   ];
+
+  if (!seen.has("dsh-claude-style")) {
+    seen.add("dsh-claude-style");
+    combined.push({
+      id: "dsh-claude-style",
+      name: "Claude Code Style",
+      version: "0.19.6",
+      description:
+        "Claude Code Desktop theme for DeepSeek Harness (dsh) web GUI — visual & interaction overhaul",
+      homepage: "https://github.com/Nwflower/dsh-claude-style#readme",
+      installedPath: "builtin:dsh-claude-style",
+      sourceKind: "pi-dsh",
+      hasHostEntry: false,
+      hasClientEntry: true,
+      hostEntryPath: null,
+      clientEntryPath: null,
+      isSkin: true,
+    });
+  }
 
   combined.sort((a, b) => {
     const rankA = PRIORITY_DSH_PLUGIN_ORDER[a.id] ?? 100;
@@ -1204,7 +1232,7 @@ async function loadEnabledPluginsInternal(forceReload: boolean): Promise<void> {
   } else {
     // Unload any plugins that were disabled or removed
     const enabledIds = new Set(
-      candidates.filter((c) => state.enabled[c.id] === true && c.hasHostEntry).map((c) => c.id),
+      candidates.filter((c) => isDshPluginEnabled(state, c.id) && c.hasHostEntry).map((c) => c.id),
     );
     for (const existingId of [...host.runtimes.keys()]) {
       if (!enabledIds.has(existingId)) {
@@ -1214,7 +1242,7 @@ async function loadEnabledPluginsInternal(forceReload: boolean): Promise<void> {
   }
 
   for (const candidate of candidates) {
-    const isEnabled = state.enabled[candidate.id] === true;
+    const isEnabled = isDshPluginEnabled(state, candidate.id);
     if (!isEnabled || !candidate.hasHostEntry || !candidate.hostEntryPath) {
       continue;
     }
@@ -1304,7 +1332,7 @@ export async function listDshPlugins(): Promise<DshPluginInfo[]> {
   const candidates = discoverDshPluginCandidates();
 
   return candidates.map((candidate) => {
-    const enabled = state.enabled[candidate.id] === true;
+    const enabled = isDshPluginEnabled(state, candidate.id);
     const runtime = host.runtimes.get(candidate.id);
     const error = host.diagnostics.get(candidate.id);
     return {

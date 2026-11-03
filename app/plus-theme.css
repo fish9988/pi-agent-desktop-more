@@ -2400,14 +2400,14 @@ html[data-plus-style="clean"] .plus-svg-symbol-card > span {
 @media (min-width: 769px) {
   /* 1. Seamless full-bleed canvas: sidebar hairline runs top-to-bottom,
         main column and topbar sit on one continuous --workbench-bg sheet. */
-  html[data-plus-style="clean"] .app-sidebar {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .app-sidebar {
     background: color-mix(in srgb, var(--bg-panel) 45%, var(--workbench-bg)) !important;
     border-right: 1px solid var(--plus-stroke) !important;
   }
-  html[data-plus-style="clean"] .app-main-column {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .app-main-column {
     background: var(--workbench-bg) !important;
   }
-  html[data-plus-style="clean"] .app-topbar {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .app-topbar {
     justify-content: space-between;
     gap: var(--plus-s4);
     height: 48px !important;
@@ -2415,7 +2415,7 @@ html[data-plus-style="clean"] .plus-svg-symbol-card > span {
     background: var(--workbench-bg) !important;
     border-bottom: 0 !important;
   }
-  html[data-plus-style="clean"] .app-content-layer {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .app-content-layer {
     margin: 0 !important;
     border-radius: 0 !important;
     background: var(--workbench-bg) !important;
@@ -2423,7 +2423,7 @@ html[data-plus-style="clean"] .plus-svg-symbol-card > span {
   }
 
   /* 2. Topbar: clean single-row session header with real Pi chips (project, branch, subagents, running). */
-  html[data-plus-style="clean"] .app-topbar-title {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .app-topbar-title {
     display: flex !important;
     flex: 1 1 0% !important;
     flex-direction: row !important;
@@ -2432,7 +2432,7 @@ html[data-plus-style="clean"] .plus-svg-symbol-card > span {
     min-width: 0 !important;
     overflow: hidden !important;
   }
-  html[data-plus-style="clean"] .app-topbar-title > span:first-child {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .app-topbar-title > span:first-child {
     display: block;
     flex: 0 1 auto;
     min-width: 0;
@@ -2448,11 +2448,11 @@ html[data-plus-style="clean"] .plus-svg-symbol-card > span {
 }
 
 /* 3. Left Sidebar: Claude brand lockup (hover/focus -> search), 5 nav rows, workspace list. */
-html[data-plus-style="clean"] .session-sidebar-header {
+html[data-dsh-claude-style="1"][data-plus-style="clean"] .session-sidebar-header {
   padding: 8px 10px 6px !important;
   border-bottom: 0 !important;
 }
-html[data-plus-style="clean"] .sidebar-controls-row {
+html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-controls-row {
   justify-content: flex-start !important;
   gap: 6px;
   height: 30px !important;
@@ -2460,19 +2460,19 @@ html[data-plus-style="clean"] .sidebar-controls-row {
 }
 
 /* Brand lockup & search box share one grid cell and cross-fade */
-html[data-plus-style="clean"] .sidebar-brand-search-slot {
+html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-brand-search-slot {
   display: grid;
   align-items: center;
   min-height: 34px;
   margin: 2px 0 8px;
 }
-html[data-plus-style="clean"] .sidebar-brand-search-slot > :is(.sidebar-brand-lockup, .sidebar-search-wrap) {
+html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-brand-search-slot > :is(.sidebar-brand-lockup, .sidebar-search-wrap) {
   grid-area: 1 / 1;
   margin: 0 !important;
   padding: 0 !important;
   transition: opacity var(--plus-dur-1) ease;
 }
-html[data-plus-style="clean"] .sidebar-brand-lockup {
+html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-brand-lockup {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -2480,17 +2480,17 @@ html[data-plus-style="clean"] .sidebar-brand-lockup {
   color: var(--text);
   pointer-events: none;
 }
-html[data-plus-style="clean"] .sidebar-brand-search-slot:not(:hover):not(:focus-within):not([data-has-query="true"]) > .sidebar-search-wrap {
+html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-brand-search-slot:not(:hover):not(:focus-within):not([data-has-query="true"]) > .sidebar-search-wrap {
   opacity: 0;
   pointer-events: none;
 }
-html[data-plus-style="clean"] .sidebar-brand-search-slot:is(:hover, :focus-within, [data-has-query="true"]) > .sidebar-brand-lockup {
+html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-brand-search-slot:is(:hover, :focus-within, [data-has-query="true"]) > .sidebar-brand-lockup {
   opacity: 0;
   pointer-events: none;
 }
 
 /* Sidebar nav rows (+ 新会话 / 插件 / Skill·MCP / 自动化任务 / 更多) */
-html[data-plus-style="clean"] :is(.sidebar-new-row, .sidebar-nav-row, .sidebar-scheduled-row) {
+html[data-dsh-claude-style="1"][data-plus-style="clean"] :is(.sidebar-new-row, .sidebar-nav-row, .sidebar-scheduled-row) {
   display: flex !important;
   align-items: center !important;
   justify-content: flex-start !important;
@@ -2511,10 +2511,10 @@ html[data-plus-style="clean"] :is(.sidebar-new-row, .sidebar-nav-row, .sidebar-s
   cursor: pointer;
   transition: background var(--plus-dur-1) ease;
 }
-html[data-plus-style="clean"] :is(.sidebar-new-row, .sidebar-nav-row, .sidebar-scheduled-row):hover:not(:disabled) {
+html[data-dsh-claude-style="1"][data-plus-style="clean"] :is(.sidebar-new-row, .sidebar-nav-row, .sidebar-scheduled-row):hover:not(:disabled) {
   background: var(--bg-hover) !important;
 }
-html[data-plus-style="clean"] .sidebar-new-plus {
+html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-new-plus {
   display: inline-flex !important;
   align-items: center;
   justify-content: center;
@@ -2524,10 +2524,10 @@ html[data-plus-style="clean"] .sidebar-new-plus {
   background: color-mix(in srgb, var(--text) 10%, transparent) !important;
   color: var(--text) !important;
 }
-html[data-plus-style="clean"] .sidebar-new-row:not(:hover) .sidebar-new-kbd {
+html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-new-row:not(:hover) .sidebar-new-kbd {
   display: none !important;
 }
-html[data-plus-style="clean"] .sidebar-nav-more-item {
+html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-nav-more-item {
   display: flex;
   align-items: center;
   width: 100%;
@@ -2542,29 +2542,29 @@ html[data-plus-style="clean"] .sidebar-nav-more-item {
   text-align: left;
   cursor: pointer;
 }
-html[data-plus-style="clean"] .sidebar-nav-more-item:hover {
+html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-nav-more-item:hover {
   background: var(--bg-hover);
 }
 
 /* Workspace section & project tree */
-html[data-plus-style="clean"] .sidebar-chats-header[data-empty="true"],
-html[data-plus-style="clean"] .sidebar-chats-empty {
+html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-chats-header[data-empty="true"],
+html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-chats-empty {
   display: none !important;
 }
-html[data-plus-style="clean"] .sidebar-project-tree-header:not(.sidebar-chats-header) {
+html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-project-tree-header:not(.sidebar-chats-header) {
   margin-top: 4px !important;
   padding: 8px 8px 6px !important;
   border-top: 0 !important;
 }
-html[data-plus-style="clean"] .sidebar-project-tree-tools {
+html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-project-tree-tools {
   opacity: 0.78 !important;
   pointer-events: auto !important;
   gap: 2px;
 }
-html[data-plus-style="clean"] .sidebar-project-tree-header:hover .sidebar-project-tree-tools {
+html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-project-tree-header:hover .sidebar-project-tree-tools {
   opacity: 1 !important;
 }
-html[data-plus-style="clean"] .sidebar-project-tree-search {
+html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-project-tree-search {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2577,38 +2577,38 @@ html[data-plus-style="clean"] .sidebar-project-tree-search {
   color: var(--text-dim);
   cursor: pointer;
 }
-html[data-plus-style="clean"] .sidebar-project-tree-search:hover {
+html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-project-tree-search:hover {
   background: var(--bg-hover);
   color: var(--text);
 }
 /* Clean editorial project headers (no bulky folder badge; count chip only when collapsed) */
-html[data-plus-style="clean"] .sidebar-project-tree-folder,
-html[data-plus-style="clean"] .sidebar-project-tree-group.is-expanded .sidebar-project-tree-count {
+html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-project-tree-folder,
+html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-project-tree-group.is-expanded .sidebar-project-tree-count {
   display: none !important;
 }
-html[data-plus-style="clean"] .sidebar-project-tree-group + .sidebar-project-tree-group {
+html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-project-tree-group + .sidebar-project-tree-group {
   margin-top: 2px !important;
 }
-html[data-plus-style="clean"] .sidebar-project-tree-row-main {
+html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-project-tree-row-main {
   min-height: 28px !important;
   padding: 0 8px !important;
   background: transparent !important;
   box-shadow: none !important;
 }
-html[data-plus-style="clean"] .sidebar-project-tree-group.is-active > .sidebar-project-tree-row .sidebar-project-tree-row-main {
+html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-project-tree-group.is-active > .sidebar-project-tree-row .sidebar-project-tree-row-main {
   background: transparent !important;
   box-shadow: none !important;
 }
-html[data-plus-style="clean"] .sidebar-project-tree-name {
+html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-project-tree-name {
   color: var(--text-muted) !important;
   font-size: var(--plus-fs-2) !important;
   font-weight: 400 !important;
 }
-html[data-plus-style="clean"] .sidebar-project-tree-group.is-active .sidebar-project-tree-name {
+html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-project-tree-group.is-active .sidebar-project-tree-name {
   color: var(--text) !important;
   font-weight: 500 !important;
 }
-html[data-plus-style="clean"] .sidebar-project-tree-group > .sidebar-project-tree-children {
+html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-project-tree-group > .sidebar-project-tree-children {
   margin: 2px 0 6px 0 !important;
   padding-left: 0 !important;
   border-left: 0 !important;
@@ -2616,19 +2616,19 @@ html[data-plus-style="clean"] .sidebar-project-tree-group > .sidebar-project-tre
 
 /* Session rows: hollow ○ circle glyph on the left, relative time always visible on the right,
    selected row is a soft rounded pill with no vertical accent bar. */
-html[data-plus-style="clean"] .session-item {
+html[data-dsh-claude-style="1"][data-plus-style="clean"] .session-item {
   height: 30px !important;
   min-height: 30px !important;
   padding: 0 8px !important;
   border-left: 0 !important;
   border-radius: calc(var(--plus-r-ctl) + 2px) !important;
 }
-html[data-plus-style="clean"] .session-item.is-selected::before,
-html[data-plus-style="clean"] .session-sidebar .session-tree-item[data-current] .session-item.is-selected::before {
+html[data-dsh-claude-style="1"][data-plus-style="clean"] .session-item.is-selected::before,
+html[data-dsh-claude-style="1"][data-plus-style="clean"] .session-sidebar .session-tree-item[data-current] .session-item.is-selected::before {
   content: none !important;
   display: none !important;
 }
-html[data-plus-style="clean"] .session-item .session-item-glyph {
+html[data-dsh-claude-style="1"][data-plus-style="clean"] .session-item .session-item-glyph {
   visibility: visible !important;
   width: 6px !important;
   height: 6px !important;
@@ -2638,124 +2638,124 @@ html[data-plus-style="clean"] .session-item .session-item-glyph {
   opacity: 0.55;
   order: 0 !important;
 }
-html[data-plus-style="clean"] .session-item .session-item-glyph > * {
+html[data-dsh-claude-style="1"][data-plus-style="clean"] .session-item .session-item-glyph > * {
   display: none !important;
 }
-html[data-plus-style="clean"] .session-item:not(:hover):not(:focus-within) .session-item-trailing {
+html[data-dsh-claude-style="1"][data-plus-style="clean"] .session-item:not(:hover):not(:focus-within) .session-item-trailing {
   display: flex !important;
 }
-html[data-plus-style="clean"] .session-item-time {
+html[data-dsh-claude-style="1"][data-plus-style="clean"] .session-item-time {
   color: var(--text-dim) !important;
   font-size: var(--plus-fs-1) !important;
 }
 
 /* Sidebar bottom account footer (海里的鱼 ⌄ + settings & theme icons) */
-html[data-plus-style="clean"] .sidebar-footer {
+html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-footer {
   display: flex;
   align-items: center;
   gap: 4px;
   padding: 8px 10px !important;
   border-top: 1px solid var(--plus-stroke) !important;
 }
-html[data-plus-style="clean"] .sidebar-footer .sidebar-user-profile {
+html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-footer .sidebar-user-profile {
   flex: 1 1 auto;
   max-width: none;
   padding: 4px 6px;
 }
-html[data-plus-style="clean"] .sidebar-user-chevron {
+html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-user-chevron {
   margin-left: auto;
   color: var(--text-dim);
   flex: none;
 }
-html[data-plus-style="clean"] .sidebar-footer-settings {
+html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-footer-settings {
   flex: 0 0 28px !important;
   width: 28px !important;
   height: 28px !important;
   padding: 0 !important;
   justify-content: center !important;
 }
-html[data-plus-style="clean"] .sidebar-footer-settings > span {
+html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-footer-settings > span {
   display: none !important;
 }
 
 @media (min-width: 769px) {
   /* 4. Messages, Thinking Fold, Markdown Table & Footer */
-  html[data-plus-style="clean"] .message-user-bubble:not(.is-editing) {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .message-user-bubble:not(.is-editing) {
     border-left: 0 !important;
     border-radius: calc(var(--plus-r-overlay) + var(--plus-s1)) !important;
     background: var(--user-bg) !important;
     box-shadow: none !important;
   }
-  html[data-plus-style="clean"] .work-group-trigger {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .work-group-trigger {
     border: 0 !important;
     background: transparent !important;
     box-shadow: none !important;
     padding: 2px 0 !important;
     color: var(--text-muted) !important;
   }
-  html[data-plus-style="clean"] .work-group-trigger:hover,
-  html[data-plus-style="clean"] .work-group.is-open .work-group-trigger {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .work-group-trigger:hover,
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .work-group.is-open .work-group-trigger {
     background: transparent !important;
     color: var(--text) !important;
   }
-  html[data-plus-style="clean"] .work-group-body {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .work-group-body {
     margin-left: 2px !important;
     padding-left: 10px !important;
     border-left: 1px solid var(--plus-stroke) !important;
   }
-  html[data-plus-style="clean"] .plus-thinking {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .plus-thinking {
     border: 0 !important;
     background: transparent !important;
     padding: 2px 0 !important;
     box-shadow: none !important;
   }
-  html[data-plus-style="clean"] .markdown-table-wrap {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .markdown-table-wrap {
     border: 1px solid var(--plus-stroke) !important;
     border-radius: var(--plus-r-overlay) !important;
     background: var(--workbench-bg) !important;
     overflow: hidden;
   }
-  html[data-plus-style="clean"] .markdown-body th {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .markdown-body th {
     padding: 10px 16px !important;
     background: var(--plus-code-header) !important;
     border-bottom: 1px solid var(--plus-stroke) !important;
     font-weight: 600 !important;
   }
-  html[data-plus-style="clean"] .markdown-body td {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .markdown-body td {
     padding: 10px 16px !important;
     background: transparent !important;
     border-top: 1px solid var(--plus-stroke) !important;
   }
-  html[data-plus-style="clean"] .message-assistant-footer {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .message-assistant-footer {
     justify-content: flex-start !important;
     gap: 6px !important;
   }
-  html[data-plus-style="clean"] .message-assistant-footer .message-copy-action {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .message-assistant-footer .message-copy-action {
     order: 0 !important;
     margin-left: 0 !important;
     width: 24px !important;
     height: 24px !important;
   }
-  html[data-plus-style="clean"] .message-assistant-footer > .message-meta + .message-meta::before {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .message-assistant-footer > .message-meta + .message-meta::before {
     content: none !important;
   }
-  html[data-plus-style="clean"] .message-assistant-footer .message-footer-model {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .message-assistant-footer .message-footer-model {
     opacity: 0;
     transition: opacity var(--plus-dur-1) ease;
   }
-  html[data-plus-style="clean"] .message-assistant:hover .message-assistant-footer .message-footer-model {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .message-assistant:hover .message-assistant-footer .message-footer-model {
     opacity: 0.75;
   }
 
   /* 5. Right-Edge Turn Navigator (Claude Code horizontal tick dashes) */
-  html[data-plus-style="clean"] .conversation-navigator {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .conversation-navigator {
     right: 8px !important;
     width: 24px !important;
   }
-  html[data-plus-style="clean"] .conversation-navigator:not(:hover) .conversation-navigator-list-button {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .conversation-navigator:not(:hover) .conversation-navigator-list-button {
     opacity: 0 !important;
   }
-  html[data-plus-style="clean"] .conversation-navigator-tick {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .conversation-navigator-tick {
     right: 2px !important;
     width: 18px !important;
     height: 2px !important;
@@ -2765,23 +2765,23 @@ html[data-plus-style="clean"] .sidebar-footer-settings > span {
     transform-origin: 100% 50%;
     transition: transform var(--plus-dur-1) ease, background var(--plus-dur-1) ease;
   }
-  html[data-plus-style="clean"] .conversation-navigator-tick.is-active {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .conversation-navigator-tick.is-active {
     background: var(--text) !important;
     transform: scaleX(1);
   }
 
   /* 6. Composer Card, Pixel Crab Mascot & Bottom Control Row */
-  html[data-plus-style="clean"] .chat-composer-frame:has(> .chat-composer-controls) {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .chat-composer-frame:has(> .chat-composer-controls) {
     background: transparent !important;
     border: 0 !important;
     border-radius: 0 !important;
     box-shadow: none !important;
   }
-  html[data-plus-style="clean"] .chat-composer-frame:has(> .chat-composer-controls):focus-within {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .chat-composer-frame:has(> .chat-composer-controls):focus-within {
     border: 0 !important;
     box-shadow: none !important;
   }
-  html[data-plus-style="clean"] .chat-composer-frame:has(> .chat-composer-controls) > .chat-composer {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .chat-composer-frame:has(> .chat-composer-controls) > .chat-composer {
     background: var(--workbench-bg) !important;
     border: 1px solid var(--plus-stroke-strong) !important;
     border-radius: calc(var(--plus-r-overlay) + 2px) !important;
@@ -2789,24 +2789,24 @@ html[data-plus-style="clean"] .sidebar-footer-settings > span {
     padding: 0 !important;
     transition: border-color var(--plus-dur-1) ease, box-shadow var(--plus-dur-1) ease;
   }
-  html[data-plus-style="clean"] .chat-composer-frame:has(> .chat-composer-controls) > .chat-composer:focus-within {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .chat-composer-frame:has(> .chat-composer-controls) > .chat-composer:focus-within {
     border-color: color-mix(in srgb, var(--text) 24%, transparent) !important;
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 7%, transparent), var(--shadow-composer) !important;
   }
-  html[data-plus-style="clean"] .chat-composer-editor {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .chat-composer-editor {
     background: transparent !important;
     box-shadow: none !important;
     min-height: 42px;
     padding: 8px 68px 8px 14px !important;
   }
-  html[data-plus-style="clean"] .chat-composer-editor .prompt-optimize-button {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .chat-composer-editor .prompt-optimize-button {
     margin-right: 4px;
   }
-  html[data-plus-style="clean"] .chat-composer-frame .chat-input-textarea {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .chat-composer-frame .chat-input-textarea {
     min-height: 24px !important;
     line-height: 24px !important;
   }
-  html[data-plus-style="clean"] .chat-composer-frame > .chat-composer-controls {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .chat-composer-frame > .chat-composer-controls {
     margin-top: 6px !important;
     padding: 0 4px !important;
     border-top: 0 !important;
@@ -2815,18 +2815,18 @@ html[data-plus-style="clean"] .sidebar-footer-settings > span {
   }
 
   /* Send / Return button inside the right edge of the input card */
-  html[data-plus-style="clean"] .composer-expand-corner-btn {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .composer-expand-corner-btn {
     top: 8px !important;
     right: 40px !important;
   }
-  html[data-plus-style="clean"] .chat-composer-frame > .chat-composer-controls > .composer-send-group:not(:has(.is-labeled)) {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .chat-composer-frame > .chat-composer-controls > .composer-send-group:not(:has(.is-labeled)) {
     position: absolute;
     right: 8px;
     bottom: 42px;
     z-index: 10;
     margin: 0 !important;
   }
-  html[data-plus-style="clean"] .composer-send-group .composer-send-button:not(.is-labeled) {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .composer-send-group .composer-send-button:not(.is-labeled) {
     width: 26px !important;
     height: 26px !important;
     min-width: 26px !important;
@@ -2836,24 +2836,24 @@ html[data-plus-style="clean"] .sidebar-footer-settings > span {
     color: var(--text-dim) !important;
     box-shadow: none !important;
   }
-  html[data-plus-style="clean"] .composer-send-group .composer-send-button[data-action="send"]:not(.is-labeled):not(:disabled) {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .composer-send-group .composer-send-button[data-action="send"]:not(.is-labeled):not(:disabled) {
     background: var(--accent) !important;
     color: var(--accent-contrast) !important;
   }
-  html[data-plus-style="clean"] .composer-send-group .composer-send-button[data-action="send"]:not(.is-labeled):not(:disabled):hover {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .composer-send-group .composer-send-button[data-action="send"]:not(.is-labeled):not(:disabled):hover {
     background: var(--plus-fill-hover) !important;
   }
-  html[data-plus-style="clean"] .composer-send-group .composer-send-button[data-action="stop"] {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .composer-send-group .composer-send-button[data-action="stop"] {
     background: color-mix(in srgb, var(--text) 8%, transparent) !important;
     color: var(--text) !important;
   }
-  html[data-plus-style="clean"] .composer-send-group .composer-send-button[data-action="stop"]:hover {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .composer-send-group .composer-send-button[data-action="stop"]:hover {
     background: var(--bg-hover) !important;
   }
-  html[data-plus-style="clean"] .composer-send-group .composer-send-button[data-action="send"]:not(.is-labeled) > svg {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .composer-send-group .composer-send-button[data-action="send"]:not(.is-labeled) > svg {
     display: none;
   }
-  html[data-plus-style="clean"] .composer-send-group .composer-send-button[data-action="send"]:not(.is-labeled)::after {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .composer-send-group .composer-send-button[data-action="send"]:not(.is-labeled)::after {
     content: "";
     width: 15px;
     height: 15px;
@@ -2866,44 +2866,44 @@ html[data-plus-style="clean"] .sidebar-footer-settings > span {
      LEFT:  完全权限 (1) · + attach (2) · quick phrases / extensions / automation (3)
      SPACE: spacer (4)
      RIGHT: Model · Provider (5) · High (6) · 13% pie (7) · streaming controls (8) */
-  html[data-plus-style="clean"] .chat-composer-controls .composer-tool-preset { order: 1 !important; }
-  html[data-plus-style="clean"] .chat-composer-controls .composer-attach-button { order: 2 !important; }
-  html[data-plus-style="clean"] .chat-composer-controls :is(.composer-quick-phrases, .composer-extensions-chip, .composer-automation) { order: 3 !important; }
-  html[data-plus-style="clean"] .chat-composer-controls .composer-controls-spacer { order: 4 !important; flex: 1 1 auto !important; }
-  html[data-plus-style="clean"] .chat-composer-controls .model-selector { order: 5 !important; }
-  html[data-plus-style="clean"] .chat-composer-controls .composer-thinking { order: 6 !important; }
-  html[data-plus-style="clean"] .chat-composer-controls .context-usage-ring { order: 7 !important; }
-  html[data-plus-style="clean"] .chat-composer-controls > .composer-send-group { order: 8 !important; }
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .chat-composer-controls .composer-tool-preset { order: 1 !important; }
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .chat-composer-controls .composer-attach-button { order: 2 !important; }
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .chat-composer-controls :is(.composer-quick-phrases, .composer-extensions-chip, .composer-automation) { order: 3 !important; }
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .chat-composer-controls .composer-controls-spacer { order: 4 !important; flex: 1 1 auto !important; }
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .chat-composer-controls .model-selector { order: 5 !important; }
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .chat-composer-controls .composer-thinking { order: 6 !important; }
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .chat-composer-controls .context-usage-ring { order: 7 !important; }
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .chat-composer-controls > .composer-send-group { order: 8 !important; }
 
-  html[data-plus-style="clean"] .composer-tool-preset > button {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .composer-tool-preset > button {
     width: auto !important;
     height: 28px !important;
     padding: 0 8px !important;
     color: var(--text-muted) !important;
     font-size: var(--plus-fs-2) !important;
   }
-  html[data-plus-style="clean"] .composer-tool-preset > button > svg {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .composer-tool-preset > button > svg {
     display: none !important;
   }
-  html[data-plus-style="clean"] .composer-tool-preset-label {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .composer-tool-preset-label {
     display: inline !important;
   }
-  html[data-plus-style="clean"] :is(.composer-tool-menu, .composer-quick-phrases-menu, .composer-automation .native-popover) {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] :is(.composer-tool-menu, .composer-quick-phrases-menu, .composer-automation .native-popover) {
     left: 0 !important;
     right: auto !important;
   }
-  html[data-plus-style="clean"] .composer-thinking .composer-run-menu {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .composer-thinking .composer-run-menu {
     right: 0 !important;
     left: auto !important;
   }
-  html[data-plus-style="clean"] .composer-attach-clip { display: none !important; }
-  html[data-plus-style="clean"] .composer-attach-plus { display: block !important; }
-  html[data-plus-style="clean"] .chat-composer-controls .composer-attach-button {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .composer-attach-clip { display: none !important; }
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .composer-attach-plus { display: block !important; }
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .chat-composer-controls .composer-attach-button {
     width: 28px !important;
     height: 28px !important;
   }
 
-  html[data-plus-style="clean"] .model-selector.is-toolbar > button {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .model-selector.is-toolbar > button {
     max-width: 320px !important;
     height: 28px !important;
     padding: 0 6px !important;
@@ -2911,34 +2911,31 @@ html[data-plus-style="clean"] .sidebar-footer-settings > span {
     font-size: var(--plus-fs-2) !important;
     font-weight: 500 !important;
   }
-  html[data-plus-style="clean"] .model-selector.is-toolbar .model-selector-dot,
-  html[data-plus-style="clean"] .model-selector.is-toolbar .model-selector-icon {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .model-selector.is-toolbar .model-selector-dot,
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .model-selector.is-toolbar .model-selector-icon {
     display: none !important;
   }
-  html[data-plus-style="clean"] .composer-thinking > button {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .composer-thinking > button {
     height: 28px !important;
     padding: 0 6px !important;
     font-size: var(--plus-fs-2) !important;
     font-weight: 500 !important;
   }
-  html[data-plus-style="clean"] .composer-thinking > button > svg {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .composer-thinking > button > svg {
     display: none !important;
   }
-  html[data-plus-style="clean"] .composer-thinking[data-thinking-level="low"] > button {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .composer-thinking[data-thinking-level="low"] > button {
     color: color-mix(in srgb, var(--accent) 45%, var(--text-muted)) !important;
   }
-  html[data-plus-style="clean"] .composer-thinking[data-thinking-level="medium"] > button {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .composer-thinking[data-thinking-level="medium"] > button {
     color: color-mix(in srgb, var(--accent) 72%, var(--text-muted)) !important;
   }
-  html[data-plus-style="clean"] .composer-thinking:is([data-thinking-level="high"], [data-thinking-level="xhigh"], [data-thinking-level="max"]) > button {
+  html[data-dsh-claude-style="1"][data-plus-style="clean"] .composer-thinking:is([data-thinking-level="high"], [data-thinking-level="xhigh"], [data-thinking-level="max"]) > button {
     color: var(--accent) !important;
   }
 }
 
-html:not([data-plus-style="clean"]) .composer-attach-plus,
-html:not([data-plus-style="clean"]) .sidebar-brand-lockup,
-html:not([data-plus-style="clean"]) .sidebar-nav-row,
-html:not([data-plus-style="clean"]) .sidebar-project-tree-search,
+html:not([data-dsh-claude-style="1"]) :is(.composer-attach-plus, .sidebar-brand-lockup, .sidebar-nav-row, .sidebar-project-tree-search),
 html:not([data-plus-style="clean"]) .sidebar-user-profile {
   display: none !important;
 }
