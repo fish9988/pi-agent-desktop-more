@@ -566,7 +566,7 @@ export const zhCNLocale: LocalePlugin = {
     "plus.toggleThemeMode": "切换浅色 / 深色",
     "plus.reasoningShort": "思考",
     "plus.extensionsShort": "扩展",
-    "plus.composerPlaceholder": "给 Pi 发消息，@ 引用文件，/ 使用命令",
+    "plus.composerPlaceholder": "输入 / 以使用命令",
     "plus.reasoningLevel.auto": "自动",
     "plus.reasoningLevel.off": "关",
     "plus.reasoningLevel.minimal": "极低",

@@ -566,7 +566,7 @@ export const zhTWLocale: LocalePlugin = {
     "plus.toggleThemeMode": "切換淺色 / 深色",
     "plus.reasoningShort": "思考",
     "plus.extensionsShort": "擴充",
-    "plus.composerPlaceholder": "傳訊息給 Pi，@ 引用檔案，/ 使用命令",
+    "plus.composerPlaceholder": "輸入 / 以使用命令",
     "plus.reasoningLevel.auto": "自動",
     "plus.reasoningLevel.off": "關",
     "plus.reasoningLevel.minimal": "極低",

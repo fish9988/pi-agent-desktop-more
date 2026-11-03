@@ -52,7 +52,7 @@ const AVATAR_PRESETS: readonly AvatarPreset[] = [
 ];
 
 const DEFAULT_PROFILE: UserProfileData = {
-  name: "Lai",
+  name: "海里的鱼",
   subtitle: "",
   avatar: AVATAR_PRESETS[0].id,
 };
@@ -161,7 +161,9 @@ export function UserProfileControl() {
         aria-expanded={open}
         onClick={(event) => {
           const rect = event.currentTarget.getBoundingClientRect();
-          setAnchor({ top: rect.bottom + 6, left: Math.max(8, rect.left) });
+          const vh = typeof window !== "undefined" ? window.innerHeight : 800;
+          const top = rect.bottom + 310 > vh ? Math.max(8, rect.top - 306) : rect.bottom + 6;
+          setAnchor({ top, left: Math.max(8, rect.left) });
           setOpen((v) => !v);
         }}
       >
@@ -170,9 +172,12 @@ export function UserProfileControl() {
           <img src={avatarSrc} alt={profile.name} className="sidebar-user-avatar" />
         </span>
         <span className="sidebar-user-meta">
-          <span className="sidebar-user-name">{profile.name || "Lai"}</span>
+          <span className="sidebar-user-name">{profile.name || "海里的鱼"}</span>
           {profile.subtitle && <span className="sidebar-user-subtitle">{profile.subtitle}</span>}
         </span>
+        <svg className="sidebar-user-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
       </button>
 
       {open && anchor && typeof document !== "undefined" && createPortal(

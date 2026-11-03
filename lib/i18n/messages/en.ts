@@ -566,7 +566,7 @@ export const enLocale: LocalePlugin = {
     "plus.toggleThemeMode": "Switch light / dark",
     "plus.reasoningShort": "Thinking",
     "plus.extensionsShort": "Extensions",
-    "plus.composerPlaceholder": "Message Pi, @ to cite a file, / for commands",
+    "plus.composerPlaceholder": "Type / for commands",
     "plus.reasoningLevel.auto": "auto",
     "plus.reasoningLevel.off": "off",
     "plus.reasoningLevel.minimal": "minimal",

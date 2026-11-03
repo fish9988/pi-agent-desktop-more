@@ -83,6 +83,7 @@ interface Props {
   /** Opens the Scheduled page; the row under New Session is absent without it. */
   onOpenScheduled?: () => void;
   scheduledOpen?: boolean;
+  onOpenSettingsSection?: (section: "general" | "appearance" | "models" | "agents" | "plugins" | "skills" | "mcp") => void;
 }
 
 interface WorktreeState {
@@ -295,8 +296,10 @@ function readIdSetPref(key: Parameters<typeof getPrefJson>[0]): Set<string> {
     : new Set();
 }
 
-export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, skipInitialProjectSelection, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onChatWorkspaceCwdChange, onProjectsChange, onBackgroundTaskDone, onRunningSessionIdsChange, onSessionsChange, headerControls, footer, onOpenTerminal, onOpenScheduled, scheduledOpen = false }: Props) {
-  const { t } = useI18n();
+export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, skipInitialProjectSelection, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onChatWorkspaceCwdChange, onProjectsChange, onBackgroundTaskDone, onRunningSessionIdsChange, onSessionsChange, headerControls, footer, onOpenTerminal, onOpenScheduled, scheduledOpen = false, onOpenSettingsSection }: Props) {
+  const { locale, t } = useI18n();
+  const [navMoreOpen, setNavMoreOpen] = useState(false);
+  const navMoreRef = useRef<HTMLDivElement | null>(null);
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
   const [chatWorkspaceCwd, setChatWorkspaceCwd] = useState<string | null>(null);
   // Same fold model as a project: folding drops the extra pages, so the next
@@ -778,6 +781,23 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       window.removeEventListener("resize", close);
     };
   }, [chatsMenuOpen, chatsMenuPos]);
+
+  useEffect(() => {
+    if (!navMoreOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (navMoreRef.current?.contains(event.target as Node)) return;
+      setNavMoreOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setNavMoreOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [navMoreOpen]);
 
   useEffect(() => {
     onRunningSessionIdsChange?.(runningSessionIds);
@@ -1818,6 +1838,77 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
           </div>
         )}
 
+        {/* Claude Code Desktop brand row + hover/focus search box in one slot */}
+        <div
+          className="sidebar-brand-search-slot"
+          data-has-query={sessionQuery ? "true" : undefined}
+          data-no-drag
+        >
+          <div className="sidebar-brand-lockup" aria-hidden="true">
+            <svg className="sidebar-brand-starburst" width="18" height="18" viewBox="0 0 148.09 148.18" xmlns="http://www.w3.org/2000/svg">
+              <g transform="translate(-75.96,-223.53)">
+                <path fill="var(--accent)" d="m 105.01,322.07 29.14,-16.35 0.49,-1.42 -0.49,-0.79 h -1.42 l -4.87,-0.3 -16.65,-0.45 -14.44,-0.6 -13.99,-0.75 -3.52,-0.75 -3.3,-4.35 0.34,-2.17 2.96,-1.99 4.24,0.37 9.37,0.64 14.06,0.97 10.2,0.6 15.11,1.57 h 2.4 l 0.34,-0.97 -0.82,-0.6 -0.64,-0.6 -14.55,-9.86 -15.75,-10.42 -8.25,-6 -4.46,-3.04 -2.25,-2.85 -0.97,-6.22 4.05,-4.46 5.44,0.37 1.39,0.37 5.51,4.24 11.77,9.11 15.37,11.32 2.25,1.87 0.9,-0.64 0.11,-0.45 -1.01,-1.69 -8.36,-15.11 -8.92,-15.37 -3.97,-6.37 -1.05,-3.82 c -0.37,-1.57 -0.64,-2.89 -0.64,-4.5 l 4.61,-6.26 2.55,-0.82 6.15,0.82 2.59,2.25 3.82,8.74 6.19,13.76 9.6,18.71 2.81,5.55 1.5,5.14 0.56,1.57 h 0.97 v -0.9 l 0.79,-10.54 1.46,-12.94 1.42,-16.65 0.49,-4.69 2.32,-5.62 4.61,-3.04 3.6,1.72 2.96,4.24 -0.41,2.74 -1.76,11.44 -3.45,17.92 -2.25,12 h 1.31 l 1.5,-1.5 6.07,-8.06 10.2,-12.75 4.5,-5.06 5.25,-5.59 3.37,-2.66 h 6.37 l 4.69,6.97 -2.1,7.2 -6.56,8.32 -5.44,7.05 -7.8,10.5 -4.87,8.4 0.45,0.67 1.16,-0.11 17.62,-3.75 9.52,-1.72 11.36,-1.95 5.14,2.4 0.56,2.44 -2.02,4.99 -12.15,3 -14.25,2.85 -21.22,5.02 -0.26,0.19 0.3,0.37 9.56,0.9 4.09,0.22 h 10.01 l 18.64,1.39 4.87,3.22 2.92,3.94 -0.49,3 -7.5,3.82 -10.12,-2.4 -23.62,-5.62 -8.1,-2.02 h -1.12 v 0.67 l 6.75,6.6 12.37,11.17 15.49,14.4 0.79,3.56 -1.99,2.81 -2.1,-0.3 -13.61,-10.24 -5.25,-4.61 -11.89,-10.01 h -0.79 v 1.05 l 2.74,4.01 14.47,21.75 0.75,6.67 -1.05,2.17 -3.75,1.31 -4.12,-0.75 -8.47,-11.89 -8.74,-13.39 -7.05,-12 -0.86,0.49 -4.16,44.81 -1.95,2.29 -4.5,1.72 -3.75,-2.85 -1.99,-4.61 1.99,-9.11 2.4,-11.89 1.95,-9.45 1.76,-11.74 1.05,-3.9 -0.07,-0.26 -0.86,0.11 -8.85,12.15 -13.46,18.19 -10.65,11.4 -2.55,1.01 -4.42,-2.29 0.41,-4.09 2.47,-3.64 14.74,-18.75 8.89,-11.62 5.74,-6.71 -0.04,-0.97 h -0.34 l -39.15,25.42 -6.97,0.9 -3,-2.81 0.37,-4.61 1.42,-1.5 11.77,-8.1 -0.04,0.04 z" />
+              </g>
+            </svg>
+            <svg className="sidebar-brand-wordmark" height="18" viewBox="177.76 14.09 512.22 121.54" xmlns="http://www.w3.org/2000/svg">
+              <g transform="translate(-75.96,-223.53)">
+                <path fill="currentColor" d="m 317.73,349.33 c -18.82,0 -31.69,-10.5 -37.76,-26.66 -3.17,-8.42 -4.74,-17.36 -4.61,-26.36 0,-27.11 12.15,-45.94 39,-45.94 18.04,0 29.17,7.87 35.51,26.66 h 7.72 l -1.05,-25.91 c -10.8,-6.97 -24.3,-10.5 -40.72,-10.5 -23.14,0 -42.82,10.35 -53.77,29.02 -5.66,9.86 -8.53,21.07 -8.32,32.44 0,20.74 9.79,39.11 28.16,49.31 10.06,5.37 21.34,8.04 32.74,7.72 17.92,0 32.14,-3.41 44.74,-9.37 l 3.26,-28.57 h -7.87 c -4.72,13.05 -10.35,20.89 -19.69,25.05 -4.57,2.06 -10.35,3.11 -17.32,3.11 z m 81.18,-98.96 0.75,-12.75 h -5.32 l -23.7,7.12 v 3.86 l 10.5,4.87 v 89.17 c 0,6.07 -3.11,7.42 -11.25,8.44 v 6.52 h 40.31 v -6.52 c -8.17,-1.01 -11.25,-2.36 -11.25,-8.44 V 250.4 l -0.04,-0.04 z m 160.31,108.75 h 3.11 l 27.26,-5.17 v -6.67 l -3.82,-0.3 c -6.37,-0.6 -8.02,-1.91 -8.02,-7.12 v -47.55 l 0.75,-15.26 h -4.31 l -25.76,3.71 v 6.52 l 2.51,0.45 c 6.97,1.01 9.04,2.96 9.04,7.84 v 42.37 c -6.67,5.17 -13.05,8.44 -20.62,8.44 -8.4,0 -13.61,-4.27 -13.61,-14.25 v -39.79 l 0.75,-15.26 h -4.42 l -25.8,3.71 v 6.52 l 2.66,0.45 c 6.97,1.01 9.04,2.96 9.04,7.84 v 39.11 c 0,16.57 9.37,24.45 24.3,24.45 11.4,0 20.74,-6.07 27.75,-14.51 l -0.75,14.51 -0.04,-0.04 z M 484.3,306.36 c 0,-21.19 -11.25,-29.32 -31.57,-29.32 -17.92,0 -30.94,7.42 -30.94,19.72 0,3.67 1.31,6.49 3.97,8.44 l 13.65,-1.8 c -0.6,-4.12 -0.9,-6.64 -0.9,-7.69 0,-6.97 3.71,-10.5 11.25,-10.5 11.14,0 16.76,7.84 16.76,20.44 v 4.12 l -28.12,8.44 c -9.37,2.55 -14.7,4.76 -18.26,9.94 -1.89,3.17 -2.8,6.82 -2.62,10.5 0,12 8.25,20.47 22.35,20.47 10.2,0 19.24,-4.61 27.11,-13.35 2.81,8.74 7.12,13.35 14.81,13.35 6.22,0 11.85,-2.51 16.87,-7.42 l -1.5,-5.17 c -2.17,0.6 -4.27,0.9 -6.49,0.9 -4.31,0 -6.37,-3.41 -6.37,-10.09 v -30.97 z m -36,40.76 c -7.69,0 -12.45,-4.46 -12.45,-12.3 0,-5.32 2.51,-8.44 7.87,-10.24 l 22.8,-7.24 v 21.9 c -7.27,5.51 -11.55,7.87 -18.22,7.87 z m 237.36,6.82 v -6.67 l -3.86,-0.3 c -6.37,-0.6 -7.99,-1.91 -7.99,-7.12 v -89.47 l 0.75,-12.75 h -5.36 l -23.7,7.12 v 3.86 l 10.5,4.87 v 29.32 c -5.91,-4.05 -12.98,-6.08 -20.14,-5.77 -23.55,0 -41.92,17.92 -41.92,44.74 0,22.09 13.2,37.35 34.95,37.35 11.25,0 21.04,-5.47 27.11,-13.95 l -0.75,13.95 h 3.15 l 27.26,-5.17 v 0 z m -49.35,-68.02 c 11.25,0 19.69,6.52 19.69,18.52 v 33.75 c -5.18,5.16 -12.23,8 -19.54,7.87 -16.12,0 -24.3,-12.75 -24.3,-29.77 0,-19.12 9.34,-30.37 24.15,-30.37 z M 743.3,302.8 c -2.1,-9.9 -8.17,-15.52 -16.61,-15.52 -12.6,0 -21.34,9.49 -21.34,23.1 0,20.14 10.65,33.19 27.86,33.19 11.48,-0.12 22.04,-6.33 27.71,-16.31 l 5.02,1.35 c -2.25,17.47 -18.07,30.52 -37.5,30.52 -22.8,0 -38.51,-16.87 -38.51,-40.87 0,-24 17.06,-41.21 39.86,-41.21 17.02,0 29.02,10.24 32.89,28.01 l -59.4,18.22 v -8.02 l 40.01,-12.41 v -0.04 z" />
+              </g>
+            </svg>
+          </div>
+          {/* Session search — keeps the original sidebar search styling and
+              narrows the project tree to matching titles / first messages. */}
+          <div className="sidebar-search-wrap" data-no-drag>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="sidebar-search-icon">
+              <circle cx="11" cy="11" r="7" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input
+              type="search"
+              className="sidebar-search-input"
+              value={sessionQuery}
+              onChange={(e) => setSessionQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  // Committing an IME candidate must not fire the search.
+                  if (isImeComposing(e) || !sessionQuery.trim()) return;
+                  e.preventDefault();
+                  setContentSearch(true);
+                  return;
+                }
+                if (e.key === "Escape" && !isImeComposing(e)) {
+                  e.stopPropagation();
+                  // Content results first, then the query, then the field itself.
+                  if (contentSearch) setContentSearch(false);
+                  else if (sessionQuery) setSessionQuery("");
+                  else e.currentTarget.blur();
+                }
+              }}
+              title={t("sidebar.searchAllHint")}
+              placeholder={t("sidebar.searchSessionsShort")}
+              aria-label={t("sidebar.searchSessions")}
+            />
+            {!sessionQuery && <kbd className="sidebar-search-kbd" aria-hidden="true">Ctrl K</kbd>}
+            {sessionQuery && (
+              <button
+                type="button"
+                className="sidebar-search-clear"
+                onClick={() => {
+                  setSessionQuery("");
+                  setContentSearch(false);
+                }}
+                title={t("sidebar.clearSearch")}
+                aria-label={t("sidebar.clearSearch")}
+              >
+                <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true">
+                  <line x1="2" y1="2" x2="8" y2="8" />
+                  <line x1="8" y1="2" x2="2" y2="8" />
+                </svg>
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* Row 1: New Session — full-width flat row, Claude Desktop style */}
         <button
           className="sidebar-header-row sidebar-new-row"
@@ -1844,61 +1935,87 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
           <kbd className="sidebar-new-kbd" aria-hidden="true">Ctrl N</kbd>
         </button>
 
+        <button
+          type="button"
+          className="sidebar-header-row sidebar-nav-row"
+          onClick={() => onOpenSettingsSection?.("plugins")}
+          title={locale.startsWith("zh") ? "插件" : "Plugins"}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M19.439 7.85c-.049.322.059.648.289.878l1.568 1.568c.47.47.706 1.087.706 1.704s-.235 1.233-.706 1.704l-1.611 1.611a.98.98 0 0 1-.837.276c-.47-.07-.802-.48-.968-.925a2.501 2.501 0 1 0-3.214 3.214c.446.166.855.497.925.968a.979.979 0 0 1-.276.837l-1.61 1.61a2.404 2.404 0 0 1-1.705.707 2.402 2.402 0 0 1-1.704-.706l-1.568-1.568a1.026 1.026 0 0 0-.877-.29c-.493.074-.84.504-1.02.968a2.5 2.5 0 1 1-3.237-3.237c.464-.18.894-.527.967-1.02a1.026 1.026 0 0 0-.289-.877l-1.568-1.568A2.402 2.402 0 0 1 1.998 12c0-.617.236-1.234.706-1.704L4.315 8.685a.98.98 0 0 1 .837-.276c.47.07.802.48.968.925a2.501 2.501 0 1 0 3.214-3.214c-.446-.166-.855-.497-.925-.968a.979.979 0 0 1 .276-.837l1.61-1.61a2.404 2.404 0 0 1 1.705-.707c.617 0 1.234.236 1.704.706l1.568 1.568c.23.23.556.338.877.29.493-.074.84-.504 1.02-.968a2.5 2.5 0 1 1 3.237 3.237c-.464.18-.894.527-.967 1.02Z" />
+          </svg>
+          <span>{locale.startsWith("zh") ? "插件" : "Plugins"}</span>
+        </button>
+
+        <button
+          type="button"
+          className="sidebar-header-row sidebar-nav-row"
+          onClick={() => onOpenSettingsSection?.("skills")}
+          title="Skill / MCP"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <path d="m10 13-2 2 2 2" />
+            <path d="m14 17 2-2-2-2" />
+          </svg>
+          <span>Skill / MCP</span>
+        </button>
+
         {onOpenScheduled && <ScheduledSidebarRow active={scheduledOpen} onOpen={onOpenScheduled} />}
-      </div>
-{/* Session search — keeps the original sidebar search styling and
-          narrows the project tree to matching titles / first messages. Enter is
-          the confirmation for the server-side content search across every
-          session; there is no mode button, so Escape (or the clear button) is
-          the way back to the title filter. */}
-      <div className="sidebar-search-wrap" data-no-drag>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="sidebar-search-icon">
-          <circle cx="11" cy="11" r="7" />
-          <line x1="21" y1="21" x2="16.65" y2="16.65" />
-        </svg>
-        <input
-          type="search"
-          className="sidebar-search-input"
-          value={sessionQuery}
-          onChange={(e) => setSessionQuery(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              // Committing an IME candidate must not fire the search.
-              if (isImeComposing(e) || !sessionQuery.trim()) return;
-              e.preventDefault();
-              setContentSearch(true);
-              return;
-            }
-            if (e.key === "Escape" && !isImeComposing(e)) {
-              e.stopPropagation();
-              // Content results first, then the query, then the field itself.
-              if (contentSearch) setContentSearch(false);
-              else if (sessionQuery) setSessionQuery("");
-              else e.currentTarget.blur();
-            }
-          }}
-          title={t("sidebar.searchAllHint")}
-          placeholder={t("sidebar.searchSessionsShort")}
-          aria-label={t("sidebar.searchSessions")}
-        />
-        {!sessionQuery && <kbd className="sidebar-search-kbd" aria-hidden="true">Ctrl K</kbd>}
-        {sessionQuery && (
+
+        <div ref={navMoreRef} style={{ position: "relative" }}>
           <button
             type="button"
-            className="sidebar-search-clear"
-            onClick={() => {
-              setSessionQuery("");
-              setContentSearch(false);
-            }}
-            title={t("sidebar.clearSearch")}
-            aria-label={t("sidebar.clearSearch")}
+            className="sidebar-header-row sidebar-nav-row"
+            aria-haspopup="menu"
+            aria-expanded={navMoreOpen}
+            onClick={() => setNavMoreOpen((v) => !v)}
+            title={locale.startsWith("zh") ? "更多" : "More"}
           >
-            <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true">
-              <line x1="2" y1="2" x2="8" y2="8" />
-              <line x1="8" y1="2" x2="2" y2="8" />
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <circle cx="5" cy="12" r="1.7" />
+              <circle cx="12" cy="12" r="1.7" />
+              <circle cx="19" cy="12" r="1.7" />
             </svg>
+            <span>{locale.startsWith("zh") ? "更多" : "More"}</span>
           </button>
-        )}
+          {navMoreOpen && (
+            <div
+              className="native-popover app-menu sidebar-nav-more-menu"
+              role="menu"
+              style={{
+                position: "absolute",
+                top: "calc(100% + 4px)",
+                left: 0,
+                right: 0,
+                zIndex: 2400,
+                padding: 4,
+              }}
+            >
+              {([
+                ["mcp", locale.startsWith("zh") ? "MCP 服务器" : "MCP Servers"],
+                ["models", locale.startsWith("zh") ? "模型与服务商" : "Models & Providers"],
+                ["agents", locale.startsWith("zh") ? "智能体团队" : "Subagent Profiles"],
+                ["appearance", locale.startsWith("zh") ? "外观与主题" : "Appearance & Themes"],
+                ["general", locale.startsWith("zh") ? "常规设置" : "General Settings"],
+              ] as const).map(([sec, label]) => (
+                <button
+                  key={sec}
+                  type="button"
+                  role="menuitem"
+                  className="sidebar-nav-more-item"
+                  onClick={() => {
+                    setNavMoreOpen(false);
+                    onOpenSettingsSection?.(sec);
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
       {/* Chats sit beside Projects: the same session model and event stream,
           but a model-only workspace that never enters project grouping. */}
@@ -2024,6 +2141,22 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
           <span className="sidebar-project-tree-title">{t("sidebar.projects")}</span>
           <div className="sidebar-project-tree-tools">
             <button
+              type="button"
+              className="sidebar-project-tree-search"
+              onClick={() => {
+                const input = document.querySelector<HTMLInputElement>(".sidebar-search-input");
+                input?.focus();
+                input?.select();
+              }}
+              title={t("sidebar.searchSessions")}
+              aria-label={t("sidebar.searchSessions")}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="7" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+            </button>
+            <button
               ref={projectViewMenuButtonRef}
               type="button"
               className={`sidebar-project-tree-menu${projectViewMenuOpen ? " is-open" : ""}`}
@@ -2033,10 +2166,11 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               aria-expanded={projectViewMenuOpen}
               onClick={toggleProjectViewMenu}
             >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <circle cx="5" cy="12" r="1.6" />
-                <circle cx="12" cy="12" r="1.6" />
-                <circle cx="19" cy="12" r="1.6" />
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <line x1="4" y1="8" x2="20" y2="8" />
+                <line x1="4" y1="16" x2="20" y2="16" />
+                <circle cx="9" cy="8" r="2" fill="var(--bg-panel)" />
+                <circle cx="15" cy="16" r="2" fill="var(--bg-panel)" />
               </svg>
             </button>
             <button
@@ -2047,8 +2181,8 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               aria-label={t("sidebar.addProject")}
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <line x1="12" y1="5" x2="12" y2="19" />
-                <line x1="5" y1="12" x2="19" y2="12" />
+                <path d="M12 10v6M9 13h6" />
+                <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
               </svg>
             </button>
           </div>

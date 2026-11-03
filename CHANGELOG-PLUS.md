@@ -3,6 +3,32 @@
 Pi Agent Plus 是 [abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop) 的个人二次开发版（仅 Windows），
 与官方版可同时安装、互不覆盖。版本规则见 [VERSIONING-PLUS.md](./VERSIONING-PLUS.md)。
 
+## [1.23.0] - 2026-11-03
+
+完整移植 `Nwflower/dsh-claude-style`（Claude Code Desktop 深度定制主题与交互），在保留 Pi Agent Plus 原有全部功能与扩展入口的基础上，1:1 复刻 Claude Code Desktop 的界面骨架、色板材质、像素小螃蟹桌宠与切缝饼图。
+
+### 一、 外壳、左侧栏与无界通顶顶栏
+
+- **无界通顶画布与精确色板（`lib/plus-theme-catalog.ts`、`app/plus-theme.css`）**：`clean`（Claude Code · 桌面）主题升级为 `#ffffff` 纯白画布 + `#fafafa` 浅灰侧栏（深色 `#191919` / `#1f1f1f`）、`#d97757` 陶烬橙强调色、`#943333` 暖红行内代码胶囊与 `#f4f4f4` 表头圆角表格；左侧栏 1px 细分割线通顶到底，主对话区与顶栏融为同一张无框画布。
+- **左侧栏 Claude 品牌行与五合一导航区（`components/SessionSidebar.tsx`、`components/AppShell.tsx`）**：
+  - 顶栏左侧提供折叠按钮与 `应用 / 编辑` 快捷入口；
+  - 下方 `✳ Claude` 官方星芒 + 衬线词标与搜索框共享同一网格槽位，鼠标悬停、按 `Ctrl+K` 或输入关键词时丝滑切换为搜索框；
+  - 内置 `+ 新会话`（圆形 `+` 徽章）、`🧩 插件`、`📄 Skill / MCP`、`🕓 自动化任务`、`⋯ 更多`（直达 MCP 服务器、模型与服务商、智能体团队、外观与常规设置）五项导航行；
+  - `工作区` 分组配备搜索、双滑块视图过滤与新建项目文件夹按钮，项目子会话行采用空心圆点 `○` + 右侧常驻相对时间（悬停切换为 `⋯` 操作菜单），选中态为柔和圆角胶囊；
+  - 侧边栏底部固定个人画像（`海里的鱼 ⌄`，自动向上弹出防越界）与设置、深浅色切换按钮。
+- **双行会话顶栏与右侧项目文件夹下拉（`components/AppShell.tsx`）**：顶栏左侧第一行显示会话标题（自动省略防碰撞），第二行常驻 `👥 智能体团队` 与 `☁ 创造模式` 快捷入口；右侧配备彩色文件夹切换按钮、历史、更多菜单与右侧面板开关。
+
+### 二、 输入卡片、像素小螃蟹 Clawd 与双扇区切缝饼图
+
+- **像素小螃蟹桌宠 Clawd（`components/ComposerMascot.tsx`、`lib/crab-sheets.ts`）**：完整移植 `dsh-claude-style` 的 19 套预留边距精灵表与双层墨色遮罩，站在输入框右上沿；实时跟随会话状态（空闲呼吸、东张西望、招手、掏笔记本敲键盘、思考泡泡、打字、指挥子代理、上下文压缩、报错摇晃、完成欢呼、60 秒静置入睡与唤醒），支持左戳、右戳、双击敲电脑、四连击挠痒与拖拽提溜交互。
+- **单行自适应输入卡与底栏重排（`components/ChatInput.tsx`、`components/ModelSelector.tsx`）**：输入框默认收紧为单行卡片，右侧内置 `↵` 回车发送键（运行中切换为停止键），工具控制栏独立排布于卡片正下方：左侧为 `完全权限`（工具预设）+ `+` 附件 + 扩展与快捷短语，右侧为 `模型名 · 服务商` + 随档位着色的推理强度（`High` 陶烬橙）+ 上下文用量饼图。
+- **双扇区切缝上下文饼图（`components/ContextUsageRing.tsx`）**：移植 `context-meter-pie.ts` 的双 SVG 遮罩切缝算法，小占比扇区自动外推突出，配合绿/黄/红三段语义色与百分比读数常驻显示。
+
+### 三、 极简思考折叠、消息底栏与右缘刻度导航
+
+- **无框思考折叠与圆角表格材质（`components/MessageView.tsx`、`app/plus-theme.css`）**：思考与工作过程触发行去除厚重外框，改为清爽行内折叠；Markdown 表格去除斑马纹，采用 `#f4f4f4` 表头与 1px 细分割线。
+- **Claude 风格消息底栏与右缘横线刻度（`components/MessageView.tsx`、`components/ConversationNavigator.tsx`）**：助手回复底部依次排列复制、点赞/点踩、分享、圆柱图标 + `用量 XXK tok`（悬停展开完整输入/输出/缓存/速率明细）与时间戳；右侧对话导航改为极简水平短横线刻度（当前回合加长加深，悬停才浮现列表按钮）。
+
 ## [1.22.0] - 2026-11-03
 
 全量移植上游三仓（`@earendil-works/pi` 1.5.0、`agegr/pi-web` v0.13~0.14.1、`abcwyc/pi-agent-desktop` v0.7.8~0.8.1）的核心更新，落地 GitHub 社区高赞工程功能（快捷短语、精选插件汉化、自包含主题 HTML 导出、公式 LaTeX 还原），并一口气清掉人类视角全流程实测抓出的全部界面崩坏、交互卡点与未汉化死角。

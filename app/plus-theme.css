@@ -128,7 +128,16 @@ html[data-plus-code-font] .cm-editor .cm-content {
   --plus-glass-saturation: 100%;
   --plus-glass-filter: none;
   --plus-surface-alpha: 0%;
-  --plus-composer-min-height: 68px;
+  --plus-composer-min-height: 44px;
+  --plus-pie-rest: color-mix(in srgb, var(--text) 16%, transparent);
+  --plus-crab-sheet: none;
+  --plus-crab-ink: none;
+  --plus-crab-x: 0;
+  --plus-crab-y: 0;
+  --plus-crab-w: 0;
+  --plus-crab-h: 0;
+  --plus-crab-cell-w: 0;
+  --plus-crab-strip-h: 0;
 }
 
 /* ---- global ------------------------------------------------------------- */
@@ -2382,4 +2391,664 @@ html[data-plus-style="clean"] .plus-svg-symbol-card > span {
   white-space: nowrap;
   color: var(--text-dim);
   font-size: var(--plus-fs-1);
+}
+
+/* ==========================================================================
+   Plus 1.23: Claude Code Desktop Overhaul (ported from dsh-claude-style)
+   ========================================================================== */
+
+@media (min-width: 769px) {
+  /* 1. Seamless full-bleed canvas: sidebar hairline runs top-to-bottom,
+        main column and topbar sit on one continuous --workbench-bg sheet. */
+  html[data-plus-style="clean"] .app-sidebar {
+    background: color-mix(in srgb, var(--bg-panel) 45%, var(--workbench-bg)) !important;
+    border-right: 1px solid var(--plus-stroke) !important;
+  }
+  html[data-plus-style="clean"] .app-main-column {
+    background: var(--workbench-bg) !important;
+  }
+  html[data-plus-style="clean"] .app-topbar {
+    justify-content: space-between;
+    gap: var(--plus-s4);
+    height: 62px !important;
+    padding: 8px 16px 4px 24px !important;
+    background: var(--workbench-bg) !important;
+    border-bottom: 0 !important;
+  }
+  html[data-plus-style="clean"] .app-content-layer {
+    margin: 0 !important;
+    border-radius: 0 !important;
+    background: var(--workbench-bg) !important;
+    box-shadow: none !important;
+  }
+
+  /* 2. Topbar: two-line session header on the left, folder chip + actions on the right. */
+  html[data-plus-style="clean"] .app-topbar-title {
+    display: flex !important;
+    flex: 1 1 0% !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    justify-content: center !important;
+    gap: 3px !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+  }
+  html[data-plus-style="clean"] .app-topbar-title > span:first-child {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: var(--plus-fs-3);
+    font-weight: 600;
+    line-height: 1.3;
+  }
+  html[data-plus-style="clean"] .app-topbar-title > .app-topbar-chip:not(.app-topbar-subagents):not(.app-topbar-parent-button):not(.app-topbar-running) {
+    display: none !important;
+  }
+  html[data-plus-style="clean"] .app-topbar-subrow {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--plus-s3);
+  }
+  html[data-plus-style="clean"] .app-topbar-subitem {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text-dim);
+    font-family: var(--font-ui);
+    font-size: var(--plus-fs-1);
+    cursor: pointer;
+    transition: color var(--plus-dur-1) ease;
+  }
+  html[data-plus-style="clean"] .app-topbar-subitem:hover {
+    color: var(--text);
+  }
+  html[data-plus-style="clean"] .app-topbar-folder-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 28px;
+    padding: 0 8px;
+    margin-right: 4px;
+    border: 1px solid var(--plus-stroke);
+    border-radius: calc(var(--plus-r-ctl) + 2px);
+    background: var(--surface);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background var(--plus-dur-1) ease, border-color var(--plus-dur-1) ease;
+  }
+  html[data-plus-style="clean"] .app-topbar-folder-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--plus-stroke-strong);
+    color: var(--text);
+  }
+
+  /* 3. Left Sidebar: top menu row, Claude brand lockup (hover -> search), 5 nav rows, workspace list. */
+  html[data-plus-style="clean"] .session-sidebar-header {
+    padding: 8px 10px 6px !important;
+    border-bottom: 0 !important;
+  }
+  html[data-plus-style="clean"] .sidebar-controls-row {
+    justify-content: flex-start !important;
+    gap: 6px;
+    height: 30px !important;
+    margin-bottom: 6px;
+  }
+  html[data-plus-style="clean"] .sidebar-top-menu-btn {
+    padding: 2px 6px;
+    border: 0;
+    border-radius: var(--plus-r-ctl);
+    background: transparent;
+    color: var(--text-muted);
+    font-family: var(--font-ui);
+    font-size: var(--plus-fs-1);
+    cursor: pointer;
+    transition: background var(--plus-dur-1) ease, color var(--plus-dur-1) ease;
+  }
+  html[data-plus-style="clean"] .sidebar-top-menu-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text);
+  }
+
+  /* Brand lockup & search box share one grid cell and cross-fade */
+  html[data-plus-style="clean"] .sidebar-brand-search-slot {
+    display: grid;
+    align-items: center;
+    min-height: 34px;
+    margin: 2px 0 8px;
+  }
+  html[data-plus-style="clean"] .sidebar-brand-search-slot > :is(.sidebar-brand-lockup, .sidebar-search-wrap) {
+    grid-area: 1 / 1;
+    margin: 0 !important;
+    padding: 0 !important;
+    transition: opacity var(--plus-dur-1) ease, visibility var(--plus-dur-1) ease;
+  }
+  html[data-plus-style="clean"] .sidebar-brand-lockup {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding-left: 6px !important;
+    color: var(--text);
+    pointer-events: none;
+  }
+  html[data-plus-style="clean"] .sidebar-brand-search-slot:not(:hover):not(:focus-within):not([data-has-query="true"]) > .sidebar-search-wrap {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+  html[data-plus-style="clean"] .sidebar-brand-search-slot:is(:hover, :focus-within, [data-has-query="true"]) > .sidebar-brand-lockup {
+    opacity: 0;
+    visibility: hidden;
+  }
+
+  /* Sidebar nav rows (+ 新会话 / 插件 / Skill·MCP / 自动化任务 / 更多) */
+  html[data-plus-style="clean"] :is(.sidebar-new-row, .sidebar-nav-row, .sidebar-scheduled-row) {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 8px !important;
+    width: 100%;
+    height: 30px !important;
+    min-height: 30px !important;
+    margin: 0 0 2px !important;
+    padding: 0 8px !important;
+    border: 0 !important;
+    border-radius: calc(var(--plus-r-ctl) + 2px) !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: var(--text) !important;
+    font-family: var(--font-ui);
+    font-size: var(--plus-fs-2) !important;
+    font-weight: 400 !important;
+    cursor: pointer;
+    transition: background var(--plus-dur-1) ease;
+  }
+  html[data-plus-style="clean"] :is(.sidebar-new-row, .sidebar-nav-row, .sidebar-scheduled-row):hover:not(:disabled) {
+    background: var(--bg-hover) !important;
+  }
+  html[data-plus-style="clean"] .sidebar-new-plus {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 18px !important;
+    height: 18px !important;
+    border-radius: 50% !important;
+    background: color-mix(in srgb, var(--text) 10%, transparent) !important;
+    color: var(--text) !important;
+  }
+  html[data-plus-style="clean"] .sidebar-new-row:not(:hover) .sidebar-new-kbd {
+    display: none !important;
+  }
+  html[data-plus-style="clean"] .sidebar-nav-more-item {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    height: 28px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: var(--plus-r-ctl);
+    background: transparent;
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: var(--plus-fs-2);
+    text-align: left;
+    cursor: pointer;
+  }
+  html[data-plus-style="clean"] .sidebar-nav-more-item:hover {
+    background: var(--bg-hover);
+  }
+
+  /* Workspace section & project tree */
+  html[data-plus-style="clean"] .sidebar-chats-header,
+  html[data-plus-style="clean"] .sidebar-chats-list {
+    display: none !important;
+  }
+  html[data-plus-style="clean"] .sidebar-project-tree-header:not(.sidebar-chats-header) {
+    margin-top: 4px !important;
+    padding: 8px 8px 6px !important;
+    border-top: 0 !important;
+  }
+  html[data-plus-style="clean"] .sidebar-project-tree-tools {
+    opacity: 0.78 !important;
+    pointer-events: auto !important;
+    gap: 2px;
+  }
+  html[data-plus-style="clean"] .sidebar-project-tree-header:hover .sidebar-project-tree-tools {
+    opacity: 1 !important;
+  }
+  html[data-plus-style="clean"] .sidebar-project-tree-search {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--plus-r-ctl);
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+  }
+  html[data-plus-style="clean"] .sidebar-project-tree-search:hover {
+    background: var(--bg-hover);
+    color: var(--text);
+  }
+  /* Clean editorial project headers (no bulky folder badge or count chip at rest) */
+  html[data-plus-style="clean"] .sidebar-project-tree-folder,
+  html[data-plus-style="clean"] .sidebar-project-tree-count {
+    display: none !important;
+  }
+  html[data-plus-style="clean"] .sidebar-project-tree-group + .sidebar-project-tree-group {
+    margin-top: 2px !important;
+  }
+  html[data-plus-style="clean"] .sidebar-project-tree-row-main {
+    min-height: 28px !important;
+    padding: 0 8px !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+  html[data-plus-style="clean"] .sidebar-project-tree-group.is-active > .sidebar-project-tree-row .sidebar-project-tree-row-main {
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+  html[data-plus-style="clean"] .sidebar-project-tree-name {
+    color: var(--text-muted) !important;
+    font-size: var(--plus-fs-2) !important;
+    font-weight: 400 !important;
+  }
+  html[data-plus-style="clean"] .sidebar-project-tree-group.is-active .sidebar-project-tree-name {
+    color: var(--text) !important;
+    font-weight: 500 !important;
+  }
+  html[data-plus-style="clean"] .sidebar-project-tree-group > .sidebar-project-tree-children {
+    margin: 2px 0 6px 0 !important;
+    padding-left: 0 !important;
+    border-left: 0 !important;
+  }
+
+  /* Session rows: hollow ○ circle glyph on the left, relative time always visible on the right,
+     selected row is a soft rounded pill with no vertical accent bar. */
+  html[data-plus-style="clean"] .session-item {
+    height: 30px !important;
+    min-height: 30px !important;
+    padding: 0 8px !important;
+    border-left: 0 !important;
+    border-radius: calc(var(--plus-r-ctl) + 2px) !important;
+  }
+  html[data-plus-style="clean"] .session-item.is-selected::before,
+  html[data-plus-style="clean"] .session-sidebar .session-tree-item[data-current] .session-item.is-selected::before {
+    content: none !important;
+    display: none !important;
+  }
+  html[data-plus-style="clean"] .session-item .session-item-glyph {
+    visibility: visible !important;
+    width: 6px !important;
+    height: 6px !important;
+    margin: 0 4px 0 2px;
+    border: 1.3px solid currentColor;
+    border-radius: 50%;
+    opacity: 0.55;
+    order: 0 !important;
+  }
+  html[data-plus-style="clean"] .session-item .session-item-glyph > * {
+    display: none !important;
+  }
+  html[data-plus-style="clean"] .session-item:not(:hover):not(:focus-within) .session-item-trailing {
+    display: flex !important;
+  }
+  html[data-plus-style="clean"] .session-item-time {
+    color: var(--text-dim) !important;
+    font-size: var(--plus-fs-1) !important;
+  }
+
+  /* Sidebar bottom account footer (海里的鱼 ⌄ + settings & theme icons) */
+  html[data-plus-style="clean"] .sidebar-footer {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 10px !important;
+    border-top: 1px solid var(--plus-stroke) !important;
+  }
+  html[data-plus-style="clean"] .sidebar-footer .sidebar-user-profile {
+    flex: 1 1 auto;
+    max-width: none;
+    padding: 4px 6px;
+  }
+  html[data-plus-style="clean"] .sidebar-user-chevron {
+    margin-left: auto;
+    color: var(--text-dim);
+    flex: none;
+  }
+  html[data-plus-style="clean"] .sidebar-footer-settings {
+    flex: 0 0 28px !important;
+    width: 28px !important;
+    height: 28px !important;
+    padding: 0 !important;
+    justify-content: center !important;
+  }
+  html[data-plus-style="clean"] .sidebar-footer-settings > span {
+    display: none !important;
+  }
+
+  /* 4. Messages, Thinking Fold, Markdown Table & Footer */
+  html[data-plus-style="clean"] .message-user-bubble:not(.is-editing) {
+    border-left: 0 !important;
+    border-radius: calc(var(--plus-r-overlay) + var(--plus-s1)) !important;
+    background: var(--user-bg) !important;
+    box-shadow: none !important;
+  }
+  html[data-plus-style="clean"] .work-group-trigger {
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 2px 0 !important;
+    color: var(--text-muted) !important;
+  }
+  html[data-plus-style="clean"] .work-group-trigger:hover,
+  html[data-plus-style="clean"] .work-group.is-open .work-group-trigger {
+    background: transparent !important;
+    color: var(--text) !important;
+  }
+  html[data-plus-style="clean"] .work-group-body {
+    margin-left: 2px !important;
+    padding-left: 10px !important;
+    border-left: 1px solid var(--plus-stroke) !important;
+  }
+  html[data-plus-style="clean"] .plus-thinking {
+    border: 0 !important;
+    background: transparent !important;
+    padding: 2px 0 !important;
+    box-shadow: none !important;
+  }
+  html[data-plus-style="clean"] .markdown-table-wrap {
+    border: 1px solid var(--plus-stroke) !important;
+    border-radius: var(--plus-r-overlay) !important;
+    background: var(--workbench-bg) !important;
+    overflow: hidden;
+  }
+  html[data-plus-style="clean"] .markdown-body th {
+    padding: 10px 16px !important;
+    background: var(--plus-code-header) !important;
+    border-bottom: 1px solid var(--plus-stroke) !important;
+    font-weight: 600 !important;
+  }
+  html[data-plus-style="clean"] .markdown-body td {
+    padding: 10px 16px !important;
+    background: transparent !important;
+    border-top: 1px solid var(--plus-stroke) !important;
+  }
+  html[data-plus-style="clean"] .message-assistant-footer {
+    justify-content: flex-start !important;
+    gap: 6px !important;
+  }
+  html[data-plus-style="clean"] .message-assistant-footer .message-copy-action {
+    order: 0 !important;
+    margin-left: 0 !important;
+    width: 24px !important;
+    height: 24px !important;
+  }
+  html[data-plus-style="clean"] .message-claude-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-right: 4px;
+    color: var(--text-dim);
+  }
+  html[data-plus-style="clean"] .message-claude-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: var(--plus-r-ctl);
+  }
+  html[data-plus-style="clean"] .message-assistant-footer > .message-meta + .message-meta::before {
+    content: none !important;
+  }
+  html[data-plus-style="clean"] .message-assistant-footer .message-footer-model {
+    opacity: 0;
+    transition: opacity var(--plus-dur-1) ease;
+  }
+  html[data-plus-style="clean"] .message-assistant:hover .message-assistant-footer .message-footer-model {
+    opacity: 0.75;
+  }
+
+  /* 5. Right-Edge Turn Navigator (Claude Code horizontal tick dashes) */
+  html[data-plus-style="clean"] .conversation-navigator {
+    right: 8px !important;
+    width: 24px !important;
+  }
+  html[data-plus-style="clean"] .conversation-navigator:not(:hover) .conversation-navigator-list-button {
+    opacity: 0 !important;
+  }
+  html[data-plus-style="clean"] .conversation-navigator-tick {
+    right: 2px !important;
+    width: 18px !important;
+    height: 2px !important;
+    border-radius: 999px !important;
+    background: var(--plus-stroke-strong) !important;
+    transform: scaleX(0.55);
+    transform-origin: 100% 50%;
+    transition: transform var(--plus-dur-1) ease, background var(--plus-dur-1) ease;
+  }
+  html[data-plus-style="clean"] .conversation-navigator-tick.is-active {
+    background: var(--text) !important;
+    transform: scaleX(1);
+  }
+
+  /* 6. Composer Card, Pixel Crab Mascot & Bottom Control Row */
+  html[data-plus-style="clean"] .chat-composer-frame:has(> .chat-composer-controls) {
+    background: transparent !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+  html[data-plus-style="clean"] .chat-composer-frame:has(> .chat-composer-controls):focus-within {
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+  html[data-plus-style="clean"] .chat-composer-frame:has(> .chat-composer-controls) > .chat-composer {
+    background: var(--workbench-bg) !important;
+    border: 1px solid var(--plus-stroke-strong) !important;
+    border-radius: calc(var(--plus-r-overlay) + 2px) !important;
+    box-shadow: var(--shadow-control) !important;
+    padding: 0 !important;
+    transition: border-color var(--plus-dur-1) ease, box-shadow var(--plus-dur-1) ease;
+  }
+  html[data-plus-style="clean"] .chat-composer-frame:has(> .chat-composer-controls) > .chat-composer:focus-within {
+    border-color: color-mix(in srgb, var(--text) 24%, transparent) !important;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 7%, transparent), var(--shadow-composer) !important;
+  }
+  html[data-plus-style="clean"] .chat-composer-editor {
+    background: transparent !important;
+    box-shadow: none !important;
+    min-height: 42px;
+    padding: 8px 68px 8px 14px !important;
+  }
+  html[data-plus-style="clean"] .chat-composer-editor .prompt-optimize-button {
+    margin-right: 4px;
+  }
+  html[data-plus-style="clean"] .chat-composer-frame .chat-input-textarea {
+    min-height: 24px !important;
+    line-height: 24px !important;
+  }
+  html[data-plus-style="clean"] .chat-composer-frame > .chat-composer-controls {
+    margin-top: 6px !important;
+    padding: 0 4px !important;
+    border-top: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+  }
+
+  /* Send / Return button inside the right edge of the input card */
+  html[data-plus-style="clean"] .composer-expand-corner-btn {
+    top: 8px !important;
+    right: 40px !important;
+  }
+  html[data-plus-style="clean"] .chat-composer-frame > .chat-composer-controls > .composer-send-group {
+    position: absolute;
+    right: 8px;
+    bottom: 42px;
+    z-index: 10;
+    margin: 0 !important;
+  }
+  html[data-plus-style="clean"] .composer-send-group .composer-send-button:not(.is-labeled) {
+    width: 26px !important;
+    height: 26px !important;
+    min-width: 26px !important;
+    flex: 0 0 26px !important;
+    border-radius: calc(var(--plus-r-ctl) + 2px) !important;
+    background: color-mix(in srgb, var(--text) 6%, transparent) !important;
+    color: var(--text-dim) !important;
+    box-shadow: none !important;
+  }
+  html[data-plus-style="clean"] .composer-send-group .composer-send-button:not(.is-labeled):not(:disabled),
+  html[data-plus-style="clean"] .composer-send-group .composer-send-button[data-action="stop"] {
+    background: color-mix(in srgb, var(--text) 8%, transparent) !important;
+    color: var(--text) !important;
+  }
+  html[data-plus-style="clean"] .composer-send-group .composer-send-button:not(.is-labeled):not(:disabled):hover {
+    background: var(--bg-hover) !important;
+  }
+  html[data-plus-style="clean"] .composer-send-group .composer-send-button[data-action="send"]:not(.is-labeled) > svg {
+    display: none;
+  }
+  html[data-plus-style="clean"] .composer-send-group .composer-send-button[data-action="send"]:not(.is-labeled)::after {
+    content: "";
+    width: 15px;
+    height: 15px;
+    background: currentColor;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linejoin='miter'%3E%3Cpath d='M8 3.75h5.25v7H3M6 7.75l-3 3 3 3'/%3E%3C/svg%3E") center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linejoin='miter'%3E%3Cpath d='M8 3.75h5.25v7H3M6 7.75l-3 3 3 3'/%3E%3C/svg%3E") center / contain no-repeat;
+  }
+
+  /* Bottom controls row order:
+     LEFT:  完全权限 (1) · + attach (2) · quick phrases / extensions / automation (3)
+     SPACE: spacer (4)
+     RIGHT: Model · Provider (5) · High (6) · 13% pie (7) */
+  html[data-plus-style="clean"] .chat-composer-controls .composer-tool-preset { order: 1 !important; }
+  html[data-plus-style="clean"] .chat-composer-controls .composer-attach-button { order: 2 !important; }
+  html[data-plus-style="clean"] .chat-composer-controls :is(.composer-quick-phrases, .composer-extensions-chip, .composer-automation) { order: 3 !important; }
+  html[data-plus-style="clean"] .chat-composer-controls .composer-controls-spacer { order: 4 !important; flex: 1 1 auto !important; }
+  html[data-plus-style="clean"] .chat-composer-controls .model-selector { order: 5 !important; }
+  html[data-plus-style="clean"] .chat-composer-controls .composer-thinking { order: 6 !important; }
+  html[data-plus-style="clean"] .chat-composer-controls .context-usage-ring { order: 7 !important; }
+
+  html[data-plus-style="clean"] .composer-tool-preset > button {
+    width: auto !important;
+    height: 28px !important;
+    padding: 0 8px !important;
+    color: var(--text-muted) !important;
+    font-size: var(--plus-fs-2) !important;
+  }
+  html[data-plus-style="clean"] .composer-tool-preset > button > svg {
+    display: none !important;
+  }
+  html[data-plus-style="clean"] .composer-tool-preset-label {
+    display: inline !important;
+  }
+  html[data-plus-style="clean"] .composer-attach-clip { display: none !important; }
+  html[data-plus-style="clean"] .composer-attach-plus { display: block !important; }
+  html[data-plus-style="clean"] .chat-composer-controls .composer-attach-button {
+    width: 28px !important;
+    height: 28px !important;
+  }
+
+  html[data-plus-style="clean"] .model-selector.is-toolbar > button {
+    max-width: 320px !important;
+    height: 28px !important;
+    padding: 0 6px !important;
+    color: var(--text-muted) !important;
+    font-size: var(--plus-fs-2) !important;
+    font-weight: 500 !important;
+  }
+  html[data-plus-style="clean"] .model-selector.is-toolbar .model-selector-dot,
+  html[data-plus-style="clean"] .model-selector.is-toolbar .model-selector-icon {
+    display: none !important;
+  }
+  html[data-plus-style="clean"] .composer-thinking > button {
+    height: 28px !important;
+    padding: 0 6px !important;
+    font-size: var(--plus-fs-2) !important;
+    font-weight: 500 !important;
+  }
+  html[data-plus-style="clean"] .composer-thinking > button > svg {
+    display: none !important;
+  }
+  html[data-plus-style="clean"] .composer-thinking[data-thinking-level="low"] > button {
+    color: color-mix(in srgb, var(--accent) 45%, var(--text-muted)) !important;
+  }
+  html[data-plus-style="clean"] .composer-thinking[data-thinking-level="medium"] > button {
+    color: color-mix(in srgb, var(--accent) 72%, var(--text-muted)) !important;
+  }
+  html[data-plus-style="clean"] .composer-thinking:is([data-thinking-level="high"], [data-thinking-level="xhigh"], [data-thinking-level="max"]) > button {
+    color: var(--accent) !important;
+  }
+}
+
+html:not([data-plus-style="clean"]) .composer-attach-plus,
+html:not([data-plus-style="clean"]) .sidebar-brand-lockup,
+html:not([data-plus-style="clean"]) .sidebar-nav-row,
+html:not([data-plus-style="clean"]) .sidebar-top-menu-btn,
+html:not([data-plus-style="clean"]) .app-topbar-subrow,
+html:not([data-plus-style="clean"]) .app-topbar-folder-btn,
+html:not([data-plus-style="clean"]) .message-claude-actions {
+  display: none !important;
+}
+
+/* 7. Clawd Pixel Crab Mascot (ported from dsh-claude-style features/mascot/crab.css) */
+.plus-composer-crab {
+  position: absolute;
+  right: 8px;
+  bottom: 100%;
+  z-index: 5;
+  width: 104px;
+  height: 72px;
+  pointer-events: none;
+}
+.plus-composer-crab:not([data-ready]) {
+  visibility: hidden;
+}
+.plus-composer-crab-sprite {
+  position: absolute;
+  left: calc(var(--plus-crab-x) * 2px);
+  top: calc(var(--plus-crab-y) * 2px);
+  width: calc(var(--plus-crab-w) * 2px);
+  height: calc(var(--plus-crab-h) * 2px);
+  overflow: hidden;
+}
+.plus-composer-crab-strip {
+  position: relative;
+  display: block;
+  width: calc(var(--plus-crab-cell-w) * 16px);
+  height: calc(var(--plus-crab-strip-h) * 2px);
+  background-image: var(--plus-crab-sheet);
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  image-rendering: pixelated;
+}
+.plus-composer-crab-strip::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--text-dim);
+  -webkit-mask: var(--plus-crab-ink) no-repeat 0 0 / 100% 100%;
+  mask: var(--plus-crab-ink) no-repeat 0 0 / 100% 100%;
+  image-rendering: pixelated;
+}
+.plus-composer-crab-hit {
+  position: absolute;
+  left: 48px;
+  top: 40px;
+  width: 48px;
+  height: 32px;
+  pointer-events: auto;
+  cursor: pointer;
+  touch-action: none;
 }

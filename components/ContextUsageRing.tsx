@@ -1,10 +1,42 @@
+import { useId } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import type { ContextUsage, SessionStatsInfo } from "@/lib/pi-types";
 
-const RING_SIZE = 14;
-const PIE_RADIUS = 6;
-/** High-risk red threshold (fixed, Claude-convention). Single accent below it. */
-const CTX_DANGER_PCT = 90;
+const PIE_SIZE = 16;
+const RADIUS = PIE_SIZE / 2;
+const CENTER = PIE_SIZE / 2;
+const SLICE_GAP = 1.2;
+const SLICE_LIFT = 2.6;
+const EVEN_SPLIT = 50;
+const LIFT_SPREAD = 35;
+const CTX_WARN_PCT = 55;
+const CTX_DANGER_PCT = 80;
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+function rad(deg: number): number {
+  return (deg * Math.PI) / 180;
+}
+
+function discPath(cx: number, cy: number, radius: number): string {
+  const x = round2(cx);
+  const top = round2(cy - radius);
+  const bottom = round2(cy + radius);
+  return `M ${x} ${top} A ${radius} ${radius} 0 1 1 ${x} ${bottom} A ${radius} ${radius} 0 1 1 ${x} ${top} Z`;
+}
+
+function sectorPath(cx: number, cy: number, radius: number, from: number, to: number): string {
+  const x = round2(cx);
+  const y = round2(cy);
+  const x0 = round2(cx + radius * Math.sin(rad(from)));
+  const y0 = round2(cy - radius * Math.cos(rad(from)));
+  const x1 = round2(cx + radius * Math.sin(rad(to)));
+  const y1 = round2(cy - radius * Math.cos(rad(to)));
+  const large = to - from > 180 ? 1 : 0;
+  return `M ${x} ${y} L ${x0} ${y0} A ${round2(radius)} ${round2(radius)} 0 ${large} 1 ${x1} ${y1} Z`;
+}
 
 function fmtWindow(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -20,40 +52,40 @@ interface ContextUsageRingProps {
 }
 
 /**
- * Plus 1.7: a small pie plus the percentage (the redesign mockup). A thin
- * accent arc with no number read as a loading spinner. The pie is the
- * neutral text colour; it turns red at the high-risk threshold.
+ * Claude Code Desktop split-sector context pie (ported from dsh-claude-style
+ * features/context-stats/context-meter-pie.ts) plus the percentage reading.
  *
- * Originally a text-free usage ring next to the model selector (C1). The arc shows live
- * context-window fullness in a single accent color; it turns red when usage
- * reaches the high-risk threshold (≥90%). Hover shows the session token and
- * context summary; click opens the top-bar session-stats panel.
- *
- * When there is no context usage yet (no session, or nothing has run), the ring
- * renders dimmed and inert, and no title is set — no dead "Context usage"
- * tooltip. Data only appears once the agent reports a context window.
+ * The smaller share keeps the box's radius so the pushed-out slice reaches the
+ * edge, and the larger one steps in by up to half the lift; two SVG masks cut
+ * the seam along both radii, the outer arc and the apex.
  */
 export function ContextUsageRing({ contextUsage, sessionStats, onOpenStats }: ContextUsageRingProps) {
   const { t } = useI18n();
+  const uid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
+  const greyMaskId = `plus-pie-grey-${uid}`;
+  const colorMaskId = `plus-pie-color-${uid}`;
 
-  const hasUsage = contextUsage != null;
-  const percent = contextUsage?.percent ?? null;
-  const windowSize = contextUsage?.contextWindow ?? 0;
-  // A context window object always carries the denominator; percent may be
-  // unknown (null) right after a compaction until the next LLM response.
+  const rawPercent = contextUsage?.percent ?? (
+    sessionStats && sessionStats.tokens.total > 0
+      ? Math.min(100, ((sessionStats.tokens.input + sessionStats.tokens.output) / (contextUsage?.contextWindow || 200_000)) * 100)
+      : 0
+  );
+  const hasUsage = contextUsage != null || (sessionStats != null && sessionStats.tokens.total > 0);
+  const percent = rawPercent;
+  const windowSize = contextUsage?.contextWindow ?? 200_000;
   const showTooltip = hasUsage && (percent !== null || windowSize > 0);
-  const pct = percent !== null ? Math.max(0, Math.min(100, percent)) : 0;
-  const color = percent === null
+  const pct = Math.max(0, Math.min(100, percent));
+  // Ensure a visible green slice when pct > 0 so small readings (1–8%) still show the split-sector pie clearly.
+  const visualPct = pct > 0 ? Math.max(8, pct) : 0;
+
+  const toneColor = percent === null
     ? "var(--text-dim)"
     : pct >= CTX_DANGER_PCT
       ? "var(--danger)"
-      : "var(--text-muted)";
-  // Wedge from 12 o'clock clockwise; a full circle once it is (nearly) full.
-  const c = RING_SIZE / 2;
-  const angle = (pct / 100) * 2 * Math.PI;
-  const wedge = pct >= 99.95
-    ? null
-    : `M${c} ${c} L${c} ${c - PIE_RADIUS} A${PIE_RADIUS} ${PIE_RADIUS} 0 ${pct > 50 ? 1 : 0} 1 ${(c + PIE_RADIUS * Math.sin(angle)).toFixed(2)} ${(c - PIE_RADIUS * Math.cos(angle)).toFixed(2)} Z`;
+      : pct >= CTX_WARN_PCT
+        ? "var(--warning)"
+        : "var(--success)";
+  const restColor = "var(--plus-pie-rest)";
 
   const tooltipParts: string[] = [];
   if (showTooltip) {
@@ -69,9 +101,14 @@ export function ContextUsageRing({ contextUsage, sessionStats, onOpenStats }: Co
   }
   const title = tooltipParts.length > 0 ? tooltipParts.join(" · ") : t("chat.ctxUsage");
 
-  // Nothing to report yet (new or dormant session): an empty grey ring read
-  // as a loading spinner, so leave the slot empty until usage arrives.
-  if (!hasUsage) return null;
+  const occupied = (visualPct / 100) * 360;
+  const pull = (SLICE_LIFT / 2) * Math.min(1, Math.abs(visualPct - EVEN_SPLIT) / LIFT_SPREAD);
+  const occupiedRadius = visualPct <= EVEN_SPLIT ? RADIUS : RADIUS - pull;
+  const greyRadius = visualPct <= EVEN_SPLIT ? RADIUS - pull : RADIUS;
+  const occupiedPath = visualPct > 0 && visualPct < 100 ? sectorPath(CENTER, CENTER, occupiedRadius, 0, occupied) : "";
+  const greyPath = visualPct > 0 && visualPct < 100 ? sectorPath(CENTER, CENTER, greyRadius, occupied, 360) : "";
+  const greyGap = (SLICE_GAP * (100 - visualPct)) / 100;
+  const occupiedGap = SLICE_GAP - greyGap;
 
   return (
     <button
@@ -85,29 +122,59 @@ export function ContextUsageRing({ contextUsage, sessionStats, onOpenStats }: Co
         if (hasUsage) onOpenStats?.();
       }}
       style={{
-        display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-        minWidth: 32, height: 32, padding: percent !== null ? "0 6px" : 0, flexShrink: 0,
-        color: "var(--text-dim)", fontSize: 12, fontVariantNumeric: "tabular-nums",
-        background: "none", border: "none", borderRadius: 9,
-        cursor: hasUsage ? "pointer" : "default",
-        transition: "background 0.12s, opacity 0.12s",
-        opacity: hasUsage ? 1 : 0.5,
+        display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5,
+        minWidth: 32, height: 28, padding: percent !== null ? "0 6px" : 0, flexShrink: 0,
+        color: "var(--text-muted)", fontSize: 13, fontWeight: 500, fontVariantNumeric: "tabular-nums",
+        background: "none", border: "none", borderRadius: 6,
+        cursor: "pointer",
+        transition: "background 0.12s, color 0.12s, opacity 0.12s",
+        opacity: 1,
       }}
       onMouseEnter={(e) => {
-        if (!hasUsage) return;
         e.currentTarget.style.background = "var(--bg-hover)";
+        e.currentTarget.style.color = "var(--text)";
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.background = "none";
+        e.currentTarget.style.color = "var(--text-muted)";
       }}
     >
-      <svg width={RING_SIZE} height={RING_SIZE} viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`} aria-hidden="true">
-        <circle cx={c} cy={c} r={PIE_RADIUS} fill="none" stroke={color} strokeWidth={1.2} opacity={percent === null ? 0.35 : 0.7} />
-        {percent !== null && pct > 0 && (wedge
-          ? <path d={wedge} fill={color} />
-          : <circle cx={c} cy={c} r={PIE_RADIUS} fill={color} />)}
+      <svg width={PIE_SIZE} height={PIE_SIZE} viewBox={`0 0 ${PIE_SIZE} ${PIE_SIZE}`} aria-hidden="true">
+        {visualPct <= 0 ? (
+          <path d={discPath(CENTER, CENTER, RADIUS - 1)} fill={restColor} />
+        ) : visualPct >= 99.95 ? (
+          <path d={discPath(CENTER, CENTER, RADIUS - 0.5)} fill={toneColor} />
+        ) : (
+          <>
+            <defs>
+              <mask id={greyMaskId} maskUnits="userSpaceOnUse" x="0" y="0" width={PIE_SIZE} height={PIE_SIZE}>
+                <rect x="0" y="0" width={PIE_SIZE} height={PIE_SIZE} fill="white" />
+                <path d={occupiedPath} fill="none" stroke="black" strokeWidth={round2(greyGap * 2)} strokeLinejoin="round" />
+              </mask>
+              <mask id={colorMaskId} maskUnits="userSpaceOnUse" x="0" y="0" width={PIE_SIZE} height={PIE_SIZE}>
+                <rect x="0" y="0" width={PIE_SIZE} height={PIE_SIZE} fill="white" />
+                <path d={greyPath} fill="none" stroke="black" strokeWidth={round2(occupiedGap * 2)} strokeLinejoin="round" />
+              </mask>
+            </defs>
+            {pct <= EVEN_SPLIT ? (
+              <>
+                <path d={greyPath} fill={restColor} mask={`url(#${greyMaskId})`} />
+                <path d={occupiedPath} fill={toneColor} mask={`url(#${colorMaskId})`} />
+              </>
+            ) : (
+              <>
+                <path d={occupiedPath} fill={toneColor} mask={`url(#${colorMaskId})`} />
+                <path d={greyPath} fill={restColor} mask={`url(#${greyMaskId})`} />
+              </>
+            )}
+          </>
+        )}
       </svg>
-      {percent !== null && <span style={{ color: pct >= CTX_DANGER_PCT ? "var(--danger)" : undefined }}>{Math.round(pct)}%</span>}
+      {percent !== null && (
+        <span style={{ color: pct >= CTX_DANGER_PCT ? "var(--danger)" : undefined }}>
+          {Math.round(pct)}%
+        </span>
+      )}
     </button>
   );
 }

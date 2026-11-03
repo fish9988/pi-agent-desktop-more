@@ -62,6 +62,7 @@ import { ComposerProjectChip, getProjectLabel } from "./ComposerProjectChip";
 import { ComposerOutbox, type ComposerQueueAction } from "./ComposerOutbox";
 import { useSessionMentionPalette } from "@/hooks/useSessionMentionPalette";
 import { PromptOptimizeButton } from "./PromptOptimizeButton";
+import { ComposerMascot } from "./ComposerMascot";
 import { QuickPhrasesButton } from "./QuickPhrasesButton";
 import { appNotify } from "@/lib/notification-store";
 import { scaleVar } from "@/lib/plus-design-scale";
@@ -380,18 +381,18 @@ const THINKING_LEVEL_LABEL_KEYS: Record<typeof THINKING_LEVELS[number], string> 
 
 function getToolPresetDisplayTitle(lvl: ToolPresetLabel, locale: string, t: (key: string) => string): string {
   if (locale === "zh-TW") {
-    if (lvl === "configured") return "已配置";
+    if (lvl === "configured") return "完全權限";
     if (lvl === "chat-only") return "僅對話";
-    if (lvl === "read-only") return "唯讀";
-    if (lvl === "default") return "標準";
-    return "完整";
+    if (lvl === "read-only") return "唯讀權限";
+    if (lvl === "default") return "標準權限";
+    return "完全權限";
   }
   if (locale.startsWith("zh")) {
-    if (lvl === "configured") return "已配置";
+    if (lvl === "configured") return "完全权限";
     if (lvl === "chat-only") return "仅对话";
-    if (lvl === "read-only") return "只读";
-    if (lvl === "default") return "标准";
-    return "完整";
+    if (lvl === "read-only") return "只读权限";
+    if (lvl === "default") return "标准权限";
+    return "完全权限";
   }
   return lvl === "chat-only" ? t("chat.chatOnly") : lvl;
 }
@@ -2210,17 +2211,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   // reports them, and manual compaction whenever it can start.
   const automationKnown = Boolean(onSetAutomation && automation && (automation.autoCompactionEnabled !== null || automation.autoRetryEnabled !== null || automation.steeringMode !== null));
   const canCompactNow = Boolean(onCompact && !isStreaming && !isCompacting);
-  // Plus 1.7: "Thinking · high" with the level in the UI language; a model's
-  // own level names (thinkingLevelMap) are shown as they are.
+  // Plus: Claude Code Desktop effort label ("High", "Medium", "Low", "Max", "Auto").
   const thinkingShortLabel = (() => {
     const lvl = resolvedThinkingLevel ?? "auto";
-    if (thinkingDisplayLabel !== lvl) return thinkingDisplayLabel;
-    const key = `plus.reasoningLevel.${lvl}`;
-    const named = t(key as Parameters<typeof t>[0]);
-    return named && named !== key ? named : lvl;
+    const raw = thinkingDisplayLabel !== lvl ? thinkingDisplayLabel : lvl;
+    return raw.length > 0 ? `${raw[0].toUpperCase()}${raw.slice(1)}` : raw;
   })();
   const runSettingsLabel = [
-    onThinkingLevelChange ? `${t("plus.reasoningShort")} · ${thinkingShortLabel}` : null,
+    onThinkingLevelChange ? thinkingShortLabel : null,
     chatOnly ? t("chat.chatWorkspace") : null,
     !onThinkingLevelChange && chatOnly ? toolPresetLabel : null,
   ].filter(Boolean).join(" · ");
@@ -2281,7 +2279,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       className="native-toolbar-button composer-attach-button"
       data-active={attachedImages.length > 0 || attachedFiles.length > 0 || undefined}
     >
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <svg className="composer-attach-plus" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <line x1="12" y1="5" x2="12" y2="19" />
+        <line x1="5" y1="12" x2="19" y2="12" />
+      </svg>
+      <svg className="composer-attach-clip" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="m21 11-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.6-8.6a3.7 3.7 0 0 1 5.2 5.2l-8.6 8.6a1.8 1.8 0 0 1-2.6-2.6L15 6.6" />
       </svg>
     </button>
@@ -3049,7 +3051,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             // Tints the card's hairline (native-theme.css): a shell command, or a
             // run that will take this message as a steer / follow-up.
             data-state={compact ? undefined : bashMode ? "bash" : undefined}
+            style={!compact ? { position: "relative", overflow: "visible" } : undefined}
           >
+          {!compact && plusStyle === "clean" && (
+            <ComposerMascot
+              isStreaming={isStreaming}
+              isCompacting={isCompacting}
+              hasError={Boolean(modelError || compactError)}
+            />
+          )}
           <div
             className="chat-composer-editor"
             style={{
@@ -3109,7 +3119,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 ? t(chatOnly ? "chat.composerHintChatOnly" : "plus.composerPlaceholder")
                 : t("chat.messagePlaceholder")
             }
-            rows={compact ? 4 : 3}
+            rows={compact ? 4 : plusStyle === "clean" ? 1 : 3}
             style={{
               flex: compact ? "none" : 1,
               minWidth: 0,
@@ -3122,7 +3132,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               fontSize: "var(--chat-content-font-size, 14px)",
               lineHeight: 1.6,
               fontFamily: "inherit",
-              minHeight: compact ? 96 : 68,
+              minHeight: compact ? 96 : plusStyle === "clean" ? 24 : 68,
               maxHeight: 240,
               overflow: "auto",
             }}
@@ -3289,7 +3299,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             }}>
             {/* Keep reasoning and Config as separate, consistent option menus. */}
             {(onThinkingLevelChange || chatOnly) && (
-              <div ref={thinkingDropdownRef} className="composer-thinking" style={{ position: "relative" }}>
+              <div ref={thinkingDropdownRef} className="composer-thinking" data-thinking-level={resolvedThinkingLevel ?? "auto"} style={{ position: "relative" }}>
                 <button
                   className="native-toolbar-button"
                   onClick={() => setThinkingDropdownOpen((v) => !v)}
