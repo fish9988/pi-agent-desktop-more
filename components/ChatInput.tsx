@@ -3478,15 +3478,18 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 </button>
                 {toolDropdownOpen && (() => {
                   const vh = typeof window !== "undefined" ? window.visualViewport?.height ?? window.innerHeight : 800;
-                  const rectTop = toolDropdownRef.current?.getBoundingClientRect().top ?? vh;
+                  const rect = toolDropdownRef.current?.getBoundingClientRect();
+                  const rectTop = rect?.top ?? vh;
                   const maxH = Math.max(120, Math.min(rectTop - 60, vh * 0.6));
                   const vw = window.innerWidth;
                   const width = Math.min(304, vw - 32);
-                  const anchorRight = toolDropdownRef.current?.getBoundingClientRect().right ?? vw - 16;
+                  const anchorRight = rect?.right ?? vw - 16;
                   const left = Math.max(16, Math.min(anchorRight - width, vw - width - 16));
+                  const alignLeft = plusStyle === "clean" && !isCompact;
                   return (
                   <div className="native-popover app-menu composer-tool-menu" role="listbox" aria-label={t("chat.changeToolPreset")} style={{
-                    position: "absolute", bottom: "calc(100% + 6px)", right: anchorRight - left - width,
+                    position: "absolute", bottom: "calc(100% + 6px)",
+                    ...(alignLeft ? { left: 0, width } : { right: anchorRight - left - width }),
                     zIndex: 100, background: "var(--bg)", border: "var(--hairline) solid var(--border)",
                     borderRadius: 8, boxShadow: "0 -4px 16px rgba(0,0,0,0.10)",
                     overflow: "hidden", minWidth: 120,

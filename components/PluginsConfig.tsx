@@ -2,6 +2,12 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
 import { sendAgentCommand } from "@/lib/agent-client";
+import {
+  DshPluginSlot,
+  notifyDshPluginsChanged,
+  useDshPluginSlots,
+  type DshPluginInfo,
+} from "@/lib/dsh-plugin-client";
 import type {
   PluginPackageInfo,
   PluginStandaloneExtensionInfo,
@@ -93,6 +99,16 @@ export function filteredPackagesKeptOn<T extends Pick<PluginPackageInfo, "disabl
 function extensionKey(extension: PluginStandaloneExtensionInfo): string {
   return `extension\0${extension.path}`;
 }
+
+function dshPluginKey(plugin: Pick<DshPluginInfo, "id"> | string): string {
+  const id = typeof plugin === "string" ? plugin : plugin.id;
+  return `dsh\0${id}`;
+}
+
+type SelectedCard =
+  | { kind: "dsh"; id: string; plugin: DshPluginInfo }
+  | { kind: "package"; key: string; pkg: PluginPackageInfo }
+  | { kind: "extension"; key: string; extension: PluginStandaloneExtensionInfo };
 
 function scopeLabel(scope: PluginScope, t: Translate): string {
   return scope === "project" ? t("skills.scope.project") : t("skills.scope.global");
@@ -671,6 +687,187 @@ function StandaloneExtensionCard({ extension, onOpen }: { extension: PluginStand
   );
 }
 
+function DshPluginCard({
+  plugin,
+  busy,
+  onOpen,
+  onToggle,
+}: {
+  plugin: DshPluginInfo;
+  busy: boolean;
+  onOpen: () => void;
+  onToggle: (enabled: boolean) => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <article className={`plus-plugin-card${plugin.enabled ? "" : " is-disabled"}`}>
+      <button type="button" className="plus-plugin-card-main" onClick={onOpen} title={plugin.id}>
+        <span className="plus-plugin-card-head">
+          <PluginAvatar name={plugin.name} />
+          <span className="plus-plugin-card-name">
+            <strong>{plugin.name}</strong>
+            <span>DSH GUI · v{plugin.version}</span>
+          </span>
+        </span>
+        <span className="plus-plugin-card-desc">
+          {plugin.description?.trim() || t("plus.plugins.noDescription")}
+        </span>
+        <span className="plus-plugin-tags">
+          <span className="plus-plugin-tag is-curated">DSH GUI</span>
+          <span className="plus-plugin-tag">v{plugin.version}</span>
+          {plugin.hasClientEntry && (
+            <span className="plus-plugin-tag">前端界面 (Client UI)</span>
+          )}
+          {plugin.registeredTools.length > 0 && (
+            <span className="plus-plugin-tag" title={plugin.registeredTools.join(", ")}>
+              {"工具 ×" + plugin.registeredTools.length}
+            </span>
+          )}
+          {plugin.registeredRoutes.length > 0 && (
+            <span className="plus-plugin-tag" title={plugin.registeredRoutes.join(", ")}>
+              {"RPC 路由 ×" + plugin.registeredRoutes.length}
+            </span>
+          )}
+        </span>
+      </button>
+      <div className="plus-plugin-card-foot">
+        <span className="plus-plugin-card-status">
+          <ConfigStatusDot active={plugin.enabled} color={plugin.enabled ? "var(--accent)" : "var(--text-dim)"} />
+          {plugin.enabled ? "已启用" : "未启用"}
+        </span>
+        <span className="plus-plugin-card-actions" style={{ alignItems: "center" }}>
+          {plugin.enabled && plugin.hasClientEntry && (
+            <ConfigButton size="small" variant="secondary" onClick={onOpen}>
+              配置界面
+            </ConfigButton>
+          )}
+          <ConfigSwitch
+            size="small"
+            checked={plugin.enabled}
+            loading={busy}
+            onChange={onToggle}
+            label={plugin.enabled ? t("i18n.disablePackage") : t("i18n.enablePackage")}
+          />
+        </span>
+      </div>
+    </article>
+  );
+}
+
+function DshPluginDetail({
+  plugin,
+  busy,
+  hasSlot,
+  actionError,
+  onToggle,
+}: {
+  plugin: DshPluginInfo;
+  busy: boolean;
+  hasSlot: boolean;
+  actionError: string | null;
+  onToggle: (enabled: boolean) => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <ConfigDetailStack>
+      <ConfigDetailHeader className="is-top-aligned">
+        <ConfigDetailHeaderInfo>
+          <PluginAvatar name={plugin.name} />
+          <span className="plus-plugin-detail-title">
+            <strong>{plugin.name}</strong>
+            <span title={plugin.installedPath}>{plugin.id} · v{plugin.version}</span>
+          </span>
+          <span className="plus-plugin-tag is-curated" style={{ flexShrink: 0 }}>DSH GUI</span>
+          {plugin.registeredTools.length > 0 && (
+            <span className="plus-plugin-tag" style={{ flexShrink: 0 }} title={plugin.registeredTools.join(", ")}>
+              {"工具 ×" + plugin.registeredTools.length}
+            </span>
+          )}
+        </ConfigDetailHeaderInfo>
+        <ConfigDetailActions>
+          <ConfigSwitch
+            checked={plugin.enabled}
+            loading={busy}
+            onChange={onToggle}
+            label={plugin.enabled ? t("i18n.disablePackage") : t("i18n.enablePackage")}
+          />
+        </ConfigDetailActions>
+      </ConfigDetailHeader>
+
+      {!(plugin.enabled && hasSlot) && (
+        <ConfigDetailGrid>
+          {plugin.description && (
+            <ConfigDetailGridRow label={t("i18n.description")}>
+              {plugin.description}
+            </ConfigDetailGridRow>
+          )}
+          <ConfigDetailGridRow
+            label={t("i18n.status")}
+            tone="plain"
+            style={{ color: plugin.enabled ? "var(--accent)" : "var(--text-dim)" }}
+          >
+            {plugin.enabled ? "已启用" : "未启用"}
+            {plugin.enabled && hasSlot ? " · 前端面板已就绪" : ""}
+          </ConfigDetailGridRow>
+          <ConfigDetailGridRow label={t("i18n.version")} mono>
+            v{plugin.version}
+          </ConfigDetailGridRow>
+          <ConfigDetailGridRow label={t("i18n.installedPath")} mono>
+            {shortenPath(plugin.installedPath)}
+          </ConfigDetailGridRow>
+          {plugin.registeredTools.length > 0 && (
+            <ConfigDetailGridRow label="工具 (Tools)" mono>
+              {plugin.registeredTools.join(", ")}
+            </ConfigDetailGridRow>
+          )}
+          {plugin.registeredRoutes.length > 0 && (
+            <ConfigDetailGridRow label="RPC 路由 (Routes)" mono>
+              <span title={plugin.registeredRoutes.join(", ")}>
+                {plugin.registeredRoutes.length > 4
+                  ? `${plugin.registeredRoutes.slice(0, 3).join(", ")} 等 ${plugin.registeredRoutes.length} 个端点`
+                  : plugin.registeredRoutes.join(", ")}
+              </span>
+            </ConfigDetailGridRow>
+          )}
+        </ConfigDetailGrid>
+      )}
+
+      {(plugin.error || actionError) && (
+        <div style={{ fontSize: 12, color: "var(--danger)", whiteSpace: "pre-wrap" }}>
+          {actionError ?? plugin.error}
+        </div>
+      )}
+
+      {plugin.enabled ? (
+        <DshPluginSlot
+          name="plugins.item"
+          pluginId={plugin.id}
+          props={{ view: "page" }}
+          fallback={
+            <div className="plus-plugins-empty">
+              该插件已启用（工具：{plugin.registeredTools.join(", ") || "无"}）
+            </div>
+          }
+        />
+      ) : (
+        <ConfigEmptyState>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
+            <span>该 DSH 全栈插件当前未启用，启用后即可加载其交互式管理界面。</span>
+            <ConfigButton
+              variant="primary"
+              size="small"
+              disabled={busy}
+              onClick={() => onToggle(true)}
+            >
+              {busy ? "正在启用…" : "启用插件以加载配置界面"}
+            </ConfigButton>
+          </div>
+        </ConfigEmptyState>
+      )}
+    </ConfigDetailStack>
+  );
+}
+
 type CatalogState =
   | { phase: "loading" }
   | { phase: "error"; message: string }
@@ -861,8 +1058,12 @@ export function PluginsConfig({
   /** The page's trust status for `cwd`; a new decision loads the list again. */
   trust?: ProjectTrustStatus | null;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const isZh = locale.startsWith("zh");
   const [data, setData] = useState<PluginsResponse | null>(null);
+  const [dshPlugins, setDshPlugins] = useState<DshPluginInfo[]>([]);
+  const [dshBusyId, setDshBusyId] = useState<string | null>(null);
+  const dshItemSlots = useDshPluginSlots("plugins.item");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(() => getLastSettingsSelection("plugins", cwd));
@@ -883,11 +1084,20 @@ export function PluginsConfig({
   const [view, setView] = useState<"installed" | "discover">("installed");
   const [filter, setFilter] = useState("");
   const [showDetail, setShowDetail] = useState(false);
+  const bodyRef = useRef<HTMLDivElement | null>(null);
 
   const packages = useMemo(() => data?.packages ?? [], [data?.packages]);
   const standaloneExtensions = useMemo(() => data?.standaloneExtensions ?? [], [data?.standaloneExtensions]);
+  const selectedDshPlugin = dshPlugins.find((plugin) => dshPluginKey(plugin) === selected || plugin.id === selected) ?? null;
   const selectedPackage = packages.find((pkg) => packageKey(pkg) === selected) ?? null;
   const selectedExtension = standaloneExtensions.find((extension) => extensionKey(extension) === selected) ?? null;
+  const selectedCard: SelectedCard | null = selectedDshPlugin
+    ? { kind: "dsh", id: selectedDshPlugin.id, plugin: selectedDshPlugin }
+    : selectedPackage
+      ? { kind: "package", key: packageKey(selectedPackage), pkg: selectedPackage }
+      : selectedExtension
+        ? { kind: "extension", key: extensionKey(selectedExtension), extension: selectedExtension }
+        : null;
   const projectResourcesLoaded = data?.projectResourcesLoaded ?? true;
 
   const groupedPackages = useMemo(() => {
@@ -901,21 +1111,41 @@ export function PluginsConfig({
     setError(null);
     setGroupStatus(null);
     try {
-      const res = await fetch(`/api/plugins?cwd=${encodeURIComponent(cwd)}`);
+      const [res, dshRes] = await Promise.all([
+        fetch(`/api/plugins?cwd=${encodeURIComponent(cwd)}`),
+        fetch("/api/dsh-plugins", { cache: "no-store" }).catch(() => null),
+      ]);
+      let nextDshPlugins: DshPluginInfo[] = [];
+      if (dshRes && dshRes.ok) {
+        try {
+          const dshData = (await dshRes.json()) as { plugins?: DshPluginInfo[] } | DshPluginInfo[];
+          nextDshPlugins = Array.isArray(dshData)
+            ? dshData
+            : Array.isArray(dshData?.plugins)
+              ? dshData.plugins
+              : [];
+          setDshPlugins(nextDshPlugins);
+        } catch {
+          // Ignore DSH plugin list parse failures so standard plugins still load.
+        }
+      }
       const next = (await res.json()) as PluginsResponse & { error?: string };
       if (!res.ok || next.error) throw new Error(next.error ?? `HTTP ${res.status}`);
       setData(next);
-      setAddMode((current) => (next.packages.length === 0 && next.standaloneExtensions.length === 0) || current);
+      setAddMode((current) => (next.packages.length === 0 && next.standaloneExtensions.length === 0 && nextDshPlugins.length === 0) || current);
       setSelected((current) => {
         if (current && (
-          next.packages.some((pkg) => packageKey(pkg) === current)
+          nextDshPlugins.some((plugin) => dshPluginKey(plugin) === current || plugin.id === current)
+          || next.packages.some((pkg) => packageKey(pkg) === current)
           || next.standaloneExtensions.some((extension) => extensionKey(extension) === current)
         )) return current;
         return next.packages[0]
           ? packageKey(next.packages[0])
           : next.standaloneExtensions[0]
             ? extensionKey(next.standaloneExtensions[0])
-            : null;
+            : nextDshPlugins[0]
+              ? dshPluginKey(nextDshPlugins[0])
+              : null;
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -923,6 +1153,33 @@ export function PluginsConfig({
       setLoading(false);
     }
   }, [cwd]);
+
+  const handleToggleDshPlugin = useCallback(async (plugin: DshPluginInfo, enabled: boolean) => {
+    setDshBusyId(plugin.id);
+    setActionError(null);
+    setActionMessage(null);
+    try {
+      const res = await fetch("/api/dsh-plugins", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "toggle", id: plugin.id, enabled }),
+      });
+      const next = (await res.json()) as { plugins?: DshPluginInfo[]; error?: string };
+      if (!res.ok || next.error) throw new Error(next.error ?? `HTTP ${res.status}`);
+      if (Array.isArray(next.plugins)) {
+        setDshPlugins(next.plugins);
+      } else {
+        setDshPlugins((current) =>
+          current.map((item) => (item.id === plugin.id ? { ...item, enabled } : item)),
+        );
+      }
+      notifyDshPluginsChanged();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDshBusyId(null);
+    }
+  }, []);
 
   useEffect(() => {
     setUpdateStatuses({});
@@ -1181,8 +1438,8 @@ export function PluginsConfig({
     (status) => status.state === "update-available",
   ).length;
   const hasCheckablePackages = packages.some((pkg) => pkg.canCheckForUpdates);
-  const footerBusy = loading || busyKey !== null || checkingUpdates.size > 0 || updatingAll;
-  const installedCount = packages.length + standaloneExtensions.length;
+  const footerBusy = loading || busyKey !== null || dshBusyId !== null || checkingUpdates.size > 0 || updatingAll;
+  const installedCount = dshPlugins.length + packages.length + standaloneExtensions.length;
   // Discover marks what is already here: npm names, by package name or by `npm:` source.
   const installedNames = useMemo(() => new Set(packages.flatMap((pkg) => [
     pkg.packageName ?? "",
@@ -1192,19 +1449,26 @@ export function PluginsConfig({
   const filterWords = view === "installed" ? filter.trim().toLowerCase() : "";
   const matchesFilter = (...fields: (string | null | undefined)[]) => !filterWords
     || fields.some((field) => field?.toLowerCase().includes(filterWords));
+  const shownDshPlugins = dshPlugins.filter((plugin) => matchesFilter(plugin.name, plugin.id, plugin.description));
   const shownExtensions = standaloneExtensions.filter((extension) => matchesFilter(extension.name, extension.path));
-  const detailOpen = view === "installed" && !addMode && showDetail && Boolean(selectedPackage || selectedExtension);
+  const detailOpen = view === "installed" && !addMode && showDetail && Boolean(selectedCard);
   const openCard = (key: string) => {
     setSelected(key);
     setShowDetail(true);
     setAddMode(false);
     setActionError(null);
     setActionMessage(null);
+    requestAnimationFrame(() => {
+      bodyRef.current?.scrollTo({ top: 0 });
+    });
   };
   const backToList = () => {
     setShowDetail(false);
     setAddMode(false);
     setActionError(null);
+    requestAnimationFrame(() => {
+      bodyRef.current?.scrollTo({ top: 0 });
+    });
   };
   const backLink = (
     <button type="button" className="plus-plugins-back" onClick={backToList}>
@@ -1276,7 +1540,7 @@ export function PluginsConfig({
             </div>
           )}
 
-          <div className="plus-plugins-body">
+          <div ref={bodyRef} className="plus-plugins-body">
             {addMode ? (
               <ConfigDetailStack className="plus-plugins-detail">
                 {backLink}
@@ -1302,7 +1566,15 @@ export function PluginsConfig({
             ) : detailOpen ? (
               <ConfigDetailStack className="plus-plugins-detail">
                 {backLink}
-                {selectedExtension ? (
+                {selectedCard?.kind === "dsh" ? (
+                  <DshPluginDetail
+                    plugin={selectedCard.plugin}
+                    busy={dshBusyId === selectedCard.plugin.id}
+                    hasSlot={dshItemSlots.some((slot) => slot.pluginId === selectedCard.plugin.id)}
+                    actionError={actionError}
+                    onToggle={(enabled) => void handleToggleDshPlugin(selectedCard.plugin, enabled)}
+                  />
+                ) : selectedExtension ? (
                   <StandaloneExtensionDetail extension={selectedExtension} />
                 ) : selectedPackage && (
                   <PackageDetail
@@ -1330,6 +1602,29 @@ export function PluginsConfig({
               <ConfigEmptyState>{t("i18n.noPlugins")}</ConfigEmptyState>
             ) : (
               <>
+                {dshPlugins.length > 0 && (shownDshPlugins.length > 0 || !filterWords) && (
+                  <section className="plus-plugins-group">
+                    <ConfigSidebarGroupLabel
+                      aside={<span className="plus-models-count">{dshPlugins.length}</span>}
+                    >
+                      {isZh ? "DSH 全栈插件（前端 UI + 工具网关）" : "DSH Full-Stack Plugins (GUI & Host)"}
+                    </ConfigSidebarGroupLabel>
+                    <div className="plus-plugins-grid">
+                      {shownDshPlugins.map((plugin) => {
+                        const key = dshPluginKey(plugin);
+                        return (
+                          <DshPluginCard
+                            key={key}
+                            plugin={plugin}
+                            busy={dshBusyId === plugin.id}
+                            onOpen={() => openCard(key)}
+                            onToggle={(enabled) => void handleToggleDshPlugin(plugin, enabled)}
+                          />
+                        );
+                      })}
+                    </div>
+                  </section>
+                )}
                 {shownExtensions.length > 0 && (
                   <section className="plus-plugins-group">
                     <ConfigSidebarGroupLabel>{t("i18n.extensions")}</ConfigSidebarGroupLabel>
@@ -1390,7 +1685,7 @@ export function PluginsConfig({
                     </section>
                   );
                 })}
-                {filterWords && shownExtensions.length === 0 && groupedPackages.every((group) => !group.packages.some((pkg) => matchesFilter(pluginDisplayName(pkg.source, pkg.packageName), pkg.source, pkg.description))) && (
+                {filterWords && shownDshPlugins.length === 0 && shownExtensions.length === 0 && groupedPackages.every((group) => !group.packages.some((pkg) => matchesFilter(pluginDisplayName(pkg.source, pkg.packageName), pkg.source, pkg.description))) && (
                   <ConfigEmptyState>{t("plus.plugins.noMatch")}</ConfigEmptyState>
                 )}
               </>

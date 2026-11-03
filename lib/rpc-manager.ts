@@ -42,6 +42,7 @@ import {
   type ExtensionCommandContextActionsLike,
 } from "./session-replacement";
 import { createHeadlessCustomUiTui, DEFAULT_CUSTOM_UI_COLUMNS, type HeadlessCustomUiTui } from "./custom-ui-terminal";
+import { createDshPluginsExtension } from "./dsh-plugin-host";
 import {
   createSubagentExtension,
   preferPiWebSubagentExtension,
@@ -2860,6 +2861,7 @@ export async function startRpcSession(
               extensionFactories: [
                 ...(builtins?.extensions ?? []),
                 createArtifactGuideExtension(),
+                createDshPluginsExtension(),
                 ...(chatGrants
                   ? [createChatDownloadsExtension({
                       grants: chatGrants,
@@ -2886,6 +2888,7 @@ export async function startRpcSession(
               ...(builtins?.extensions ?? []),
               createReadOnlyMcpPolicyExtension(),
               createArtifactGuideExtension(),
+              createDshPluginsExtension(),
               createProjectCommandBashExtension({
                 cwd: sessionCwd,
                 settings: settingsManager,

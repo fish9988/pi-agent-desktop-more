@@ -1487,7 +1487,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     const rowTitle = branchSubtitle ? `${group.projectRoot} · ${branchSubtitle}` : group.projectRoot;
 
     return (
-      <div key={group.projectRoot} className={`sidebar-project-tree-group${isCollapsed ? " is-collapsed" : ""}${isActive ? " is-active" : ""}`}>
+      <div key={group.projectRoot} className={`sidebar-project-tree-group${isCollapsed ? " is-collapsed" : " is-expanded"}${isActive ? " is-active" : ""}`}>
         <div
           className={`sidebar-project-tree-row${isMenuOpen ? " is-menu-open" : ""}`}
           onContextMenu={(e) => {
@@ -2032,7 +2032,10 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         aria-label={`${t("sidebar.chats")} / ${t("sidebar.projects")}`}
         onScroll={handleListScroll}
       >
-        <div className={`sidebar-project-tree-header sidebar-chats-header${chatsMenuOpen ? " is-menu-open" : ""}`}>
+        <div
+          className={`sidebar-project-tree-header sidebar-chats-header${chatsMenuOpen ? " is-menu-open" : ""}`}
+          data-empty={chatFamilies.length === 0 ? "true" : undefined}
+        >
           <button
             type="button"
             className="sidebar-chats-title"

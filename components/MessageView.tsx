@@ -27,6 +27,7 @@ import { SavedFileCard, isSavedFileInfo } from "./SavedFileCard";
 import type { SubagentToolDetails } from "@/lib/subagent-extension";
 import { CODEMODE_TOOL_NAME, codemodeCalls, codemodeScript, codemodeScriptPreview, stripCodemodeHeader } from "@/lib/codemode-view";
 import { CodemodeCallList } from "./CodemodeToolView";
+import { DshPluginSlot } from "@/lib/dsh-plugin-client";
 import { imageSource, resultImageFileName } from "@/lib/result-image";
 import { mcpToolLabel, prettyMcpResultText } from "@/lib/mcp-tool-display";
 import type {
@@ -1121,7 +1122,6 @@ function AssistantMessageView({
         display: "flex", alignItems: "center", gap: 10, marginTop: 4,
       }}>
         {textContent && !isStreaming && (
-          <>
           <button
             onClick={copyContent}
              title={t("i18n.copyMessage")}
@@ -1153,30 +1153,6 @@ function AssistantMessageView({
             )}
              <span className="message-copy-label">{copied ? t("i18n.copied") : t("i18n.copy")}</span>
           </button>
-          <span className="message-claude-actions" aria-hidden="true">
-            <span className="message-claude-icon">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M7 10v12" />
-                <path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z" />
-              </svg>
-            </span>
-            <span className="message-claude-icon">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M17 14V2" />
-                <path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z" />
-              </svg>
-            </span>
-            <span className="message-claude-icon">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="18" cy="5" r="3" />
-                <circle cx="6" cy="12" r="3" />
-                <circle cx="18" cy="19" r="3" />
-                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
-                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-              </svg>
-            </span>
-          </span>
-          </>
         )}
         {!isStreaming && branchDecision && onBranchSwitch && (
           <BranchPager decision={branchDecision} onSwitch={onBranchSwitch} locked={branchSwitchLocked} />
@@ -1502,6 +1478,22 @@ export function ToolCallBlock({ block, result, duration, aborted, defaultExpande
           </button>
         )}
       </div>}
+
+      {/* ── DSH Plugin custom tool view slot (`tool.call.toolview`, e.g. dsh-image-studio GenerateCard / UpscaleCard) ── */}
+      {expanded && (
+        <DshPluginSlot
+          name="tool.call.toolview"
+          slotKey={block.toolName}
+          props={{
+            call: block,
+            block,
+            result,
+            input: block.input,
+            output: result,
+            status: result ? (isError ? "error" : "success") : (aborted ? "aborted" : "running"),
+          }}
+        />
+      )}
 
       {/* ── Expanded: input args (only when no richer view exists); a codemode script in place of its JSON ── */}
       {expanded && (isStreamingInput || !isEditTool) && !patchFiles && (

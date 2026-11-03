@@ -66,6 +66,7 @@ import { newTerminalTab, restoreTerminalTabs, TERMINAL_TABS_KEY, type TerminalTa
 import { artifactPanelTab, artifactTabId, artifactTabsForSession, upsertArtifactTab, type ArtifactTab } from "./artifact-tabs";
 import { ArtifactPanel } from "./ArtifactPanel";
 import { setArtifactOpener, useArtifactTitles } from "@/lib/artifact-store";
+import { DshPluginSlot, useDshPluginClientRuntime } from "@/lib/dsh-plugin-client";
 import { useAudio } from "@/hooks/useAudio";
 import { agentStatusUrl, sendAgentCommand } from "@/lib/agent-client";
 import {
@@ -189,6 +190,7 @@ export function AppShell() {
   }, []);
   // The Scheduled page covers the chat area without unmounting it, so the open session keeps its state.
   const [scheduledOpen, setScheduledOpen] = useState(() => searchParams?.get("view") === "scheduled");
+  useDshPluginClientRuntime();
   // Read by restoreWorkspaceContext and handleSelectSession; those identities
   // must not change when the page opens.
   const scheduledOpenRef = useRef(scheduledOpen);
@@ -1896,22 +1898,6 @@ export function AppShell() {
           <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="9" y1="3" x2="9" y2="21" />
         </svg>
       </button>
-      <button
-        type="button"
-        className="sidebar-top-menu-btn"
-        onClick={openSettingsAtLastSection}
-        title={translate("common.settings")}
-      >
-        {locale.startsWith("zh") ? "应用" : "App"}
-      </button>
-      <button
-        type="button"
-        className="sidebar-top-menu-btn"
-        onClick={() => openSettingsSection("appearance")}
-        title={locale.startsWith("zh") ? "外观与主题" : "Appearance"}
-      >
-        {locale.startsWith("zh") ? "编辑" : "Edit"}
-      </button>
     </>
   );
 
@@ -2311,35 +2297,6 @@ export function AppShell() {
                 <span>{topBarBranch}</span>
               </small>
             )}
-            {!scheduledOpen && (
-              <div className="app-topbar-subrow" data-no-drag>
-                <button
-                  type="button"
-                  className="app-topbar-subitem"
-                  onClick={() => openSettingsSection("agents")}
-                  title={locale.startsWith("zh") ? "智能体团队" : "Agent Team"}
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                    <circle cx="9" cy="7" r="4" />
-                    <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                  </svg>
-                  <span>{locale.startsWith("zh") ? "智能体团队" : "Agents"}</span>
-                </button>
-                <button
-                  type="button"
-                  className="app-topbar-subitem"
-                  onClick={() => handleSystemInfoToggle("tools")}
-                  title={locale.startsWith("zh") ? "创造模式" : "Creative Mode"}
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
-                  </svg>
-                  <span>{locale.startsWith("zh") ? "创造模式" : "Creative"}</span>
-                </button>
-              </div>
-            )}
           </div>
           {showChat && !scheduledOpen && projectTrust?.requiresTrust && !projectTrust.trusted && (
             <button
@@ -2379,23 +2336,7 @@ export function AppShell() {
           )}
           {showChat && !scheduledOpen && (
             <div className="app-topbar-actions" style={{ display: "flex", alignItems: "stretch", height: "100%" }}>
-              {visibleProjectCwd && (
-                <button
-                  type="button"
-                  className="app-topbar-folder-btn"
-                  onClick={handleRightPanelToggle}
-                  title={visibleProjectCwd}
-                  aria-label={topBarSubtitle || visibleProjectCwd}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" fill="var(--warning)" opacity="0.88" />
-                    <rect x="13" y="12" width="9" height="8" rx="2" fill="var(--info)" />
-                  </svg>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <polyline points="6 9 12 15 18 9" />
-                  </svg>
-                </button>
-              )}
+              <DshPluginSlot name="conversation.session.header.utilities" />
               <button
                 className="native-toolbar-button"
                 onClick={handleViewFullHistory}

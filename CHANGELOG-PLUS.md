@@ -3,6 +3,30 @@
 Pi Agent Plus 是 [abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop) 的个人二次开发版（仅 Windows），
 与官方版可同时安装、互不覆盖。版本规则见 [VERSIONING-PLUS.md](./VERSIONING-PLUS.md)。
 
+## [1.24.0] - 2026-11-03
+
+打造**「Pi 原生 + DSH 全栈」双轨插件架构（Dual-Plugin Engine）**，彻底突破 `pi-web` 仅支持后端 TUI 扩展的局限，原生兼容 `@deepseek-ai/ds-harness`（DSH / Cordis）双入口全栈 GUI 插件，并修复输入框左侧弹出菜单裁切、侧栏搜索聚焦与非 Pi 原生假按钮问题。
+
+### 一、 「Pi 原生 + DSH 全栈」双轨插件引擎
+
+- **DSH 后端 Host 运行时与 API 路由网关（`lib/dsh-plugin-host.ts`、`app/api/dsh-plugins/**`）**：
+  - 自动扫描并发现 `~/.pi/agent/dsh-plugins/node_modules` 与本机 `~/.dsh/profiles/desktop/node_modules` 下安装的 DSH 插件（如 `dsh-supermemory`、`dsh-image-studio`、`dsh-exa-search`、`dsh-skill-mcp-panel`、`dsh-rewind-plugin` 等），持久化启用状态与独立配置至 `~/.pi/agent/desktop/dsh-plugins.json`，并自动兼容读取 `~/.dsh/.credentials.yaml` 凭据库引用；
+  - 完整实现 Cordis 风格 `ctx` 宿主接口：`ctx.tools.register`（自动将 Schemastery / JSON Schema 转为 TypeBox 注入 `AgentSession`）、`ctx.systemPrompt.section`（动态追加系统提示词分段）、`ctx.on("agent/pre-step" | "agent/turn-stopping")`（回合前后生命周期钩子）、`ctx.connection.fetch.register` & `ctx.webServer.register`（通过 `/api/dsh-plugins/rpc/[...slug]` 暴露插件专属 HTTP/RPC 路由）及 `ctx.effect` 停用清理。
+- **DSH 前端 Client 运行时、AMD/CJS 沙箱与 React 插槽系统（`lib/dsh-plugin-client.tsx`）**：
+  - 新增 `/api/dsh-plugins/client/[name]` 路由与浏览器端 AMD `define(...)` / CommonJS 模块沙箱，向插件 `lib/client.js` 注入宿主 `react`、`react-dom`、`react/jsx-runtime` 与 `@deepseek-ai/dsh-client-ui-primitives` 组件原语（`Tooltip`、`Switch`、`DisclosureRow`、`Menu`、`Toast` 等），自动重写插件 `fetch("/api/...")` 请求至本地 RPC 网关；
+  - 自动注入 `--dsw-alias-*` / `--dsw-specific-*` 主题令牌桥接层，使 DSH 插件自带样式在 Pi Agent Plus 的浅色与深色主题下均拥有原生边框、卡片层级与陶烬橙主按钮；
+  - 实装响应式 `useDshPluginSlots` 与 `<DshPluginSlot />`（含独立 ErrorBoundary 隔离），支持 `plugins.item`（插件管理台页面）、`tool.call.toolview`（`MessageView.tsx` 工具调用自定义 React 卡片，如 `image_generate` / `image_upscale`）与 `conversation.session.header.utilities`（顶栏右侧插槽），关闭插件时自动卸载全部 `<style>` 与插槽，零残留热插拔。
+- **设置 › 插件双轨管理台（`components/PluginsConfig.tsx`）**：
+  - 在「已安装」页顶部新增「**DSH 全栈插件（前端 UI + 工具网关）**」专区，展示插件能力标签（`前端界面 (Client UI)`、`工具 ×N`、`RPC 路由 ×N`）、一键开关与「配置界面」入口；
+  - 点击已启用的 DSH 插件直接挂载其 `plugins.item` React 管理台（实测 `dsh-supermemory` 记忆库管理与检索测试、`dsh-image-studio` 生图/图库/超分工作台、`dsh-exa-search` 搜索配置均在窗口内完整交互运行）。
+
+### 二、 界面去伪存真与弹出菜单裁切修复
+
+- **修复输入框左侧弹出菜单被侧栏裁切一半的 Bug（`components/ChatInput.tsx`、`app/plus-theme.css`）**：修复 `完全权限`（`.composer-tool-menu`）、`⚡ 快捷短语`（`.composer-quick-phrases-menu`）与 `⚙ 自动化` 挪至底栏左侧后仍按 `right: 0` 向左展开导致左半边飞入侧栏被裁切的问题，统一改为向右展开；同时修复右侧 `High` 思考菜单（`.composer-run-menu`）靠右对齐防溢出。
+- **移除非 Pi 原生假按钮并补齐真实交互（`components/AppShell.tsx`、`components/SessionSidebar.tsx`、`components/MessageView.tsx`）**：
+  - 移除顶栏硬塞的 `智能体团队 / 创造模式` 假按钮、右上角重复的彩色文件夹按钮、侧栏顶部 `应用 / 编辑` 假菜单与消息底栏无后端的 `👍 / 👎 / 分享` 图标，顶栏恢复展示真实的会话名、项目路径胶囊、Git 分支、子代理切换与运行计时；
+  - 修复点击侧栏「工作区」放大镜按钮或按 `Ctrl+K` 因 `visibility: hidden` 无法聚焦搜索框的问题；保留非空纯对话分组（`对话 (N)`）与折叠项目的会话计数徽章；提升发送按钮启用态（陶烬橙实心高亮）与禁用态对比度。
+
 ## [1.23.0] - 2026-11-03
 
 完整移植 `Nwflower/dsh-claude-style`（Claude Code Desktop 深度定制主题与交互），在保留 Pi Agent Plus 原有全部功能与扩展入口的基础上，1:1 复刻 Claude Code Desktop 的界面骨架、色板材质、像素小螃蟹桌宠与切缝饼图。
