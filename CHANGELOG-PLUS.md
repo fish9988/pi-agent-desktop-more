@@ -3,6 +3,33 @@
 Pi Agent Plus 是 [abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop) 的个人二次开发版（仅 Windows），
 与官方版可同时安装、互不覆盖。版本规则见 [VERSIONING-PLUS.md](./VERSIONING-PLUS.md)。
 
+## [1.25.0] - 2026-11-06
+
+把整个界面重做成 **Pi 品牌的 Claude Code Desktop（唯一外观，不再是一套可选主题）**：品牌词标换成 `✳ Pi`、像素桌宠从小螃蟹换成 π 形小精灵、内置 Claude 同款字体（Inter / Noto Serif / JetBrains Mono），外观设置只留浅色 / 深色切换，并把消息层里残留的 TUI 式样式全部换成现代卡片与胶囊。
+
+### 一、 Pi 品牌接管
+
+- **品牌词标（`components/SessionSidebar.tsx`、`app/plus-theme.css`）**：侧栏星芒标记旁的 `Claude` 字标改为 **`Pi`**（内联矢量字标换成 Pi Serif 真字，字重 500 / 19px，与星芒对齐），整套锁定行成为一个产品标记。
+- **Pi 像素桌宠（`scripts/build-pi-pet-sheets.mjs`、`lib/pi-pet-sheets.ts`、`components/ComposerMascot.tsx`）**：
+  - 小螃蟹换成 **π 形小精灵**：陶烬橙身躯 + 双臂，横梁上是脑袋、两条腿就是 π 的两竖，琥珀色眼睛带高光、小发芽头冠；
+  - 保留并重画了全部 19 套动画（待机 / 眨眼 / 挥手 / 敲键盘 / 思考 / 打字 / 听音乐 / 指挥 / 建东西 / 报错 X 眼 / 蹦跳 / 通知 / 压缩 / 睡着 / 醒来 / 左右戳 / 挠痒 / 拖拽），共 28.7 KB 图像数据，无外部资源依赖；
+  - 美术由脚本参数化绘制并可重生成（`node scripts/build-pi-pet-sheets.mjs`），帧率、9 宫格切片、交互（点击 / 双击 / 四连击 / 拖拽）全部不变。
+
+### 二、 Claude 字体与固定外观
+
+- **内置三款可变字体（`public/fonts/`）**：`Pi Sans`（Inter）、`Pi Serif`（Noto Serif）、`Pi Mono`（JetBrains Mono），均在 `app/plus-theme.css` 顶部用 `@font-face` 声明，不靠用户系统里装了什么；Anthropic 的 Styrene / Copernicus 不可分发，用这三款同形字体代替。
+- **字体层级（`lib/plus-theme-catalog.ts`）**：助手正文与标题改用 **Pi Serif 衬线**（16px / 1.7 行高，还原 Claude 的阅读手感），界面控件用 Pi Sans，代码与终端用 Pi Mono。
+- **固定唯一外观（`app/layout.tsx`）**：`<html data-plus-style="clean" data-plus-theme="clean">` 服务端直写，不再有主题引擎运行时、主题数据库、主题画廊、调色盘编辑器与字体选择器；这同时也消除了首帧闪烁与主题相关的水合不一致。
+- **外观设置只留浅色 / 深色（`components/AppearanceSettingsPage.tsx`）**：删掉主题预设卡片、强调色、四项字体选择、自定义 CSS 工作台与右侧预览区，只保留 **浅色 / 深色 / 跟随系统** 与聊天宽度、字号两项布局。
+- **自定义 CSS 不再自动覆盖**：界面既然只有一套设计，`app/layout.tsx` 不再挂载 `/api/custom-css` 样式表（文件与路由都在，旧的 `pi-claude-theme` 不会静默压掉新样式），`docs/CUSTOM-CSS.md` 改为纯设计变量清单。
+
+### 三、 去 TUI 化的现代消息层
+
+- **工具调用不再是灰色长条（`components/MessageView.tsx`、`app/plus-theme.css`）**：连续的工具调用合成一张 30px 行高的内嵌卡片（发丝边框 + 8px 圆角、行间 1px 分割、悬停浅色高亮、首尾圆角自适应），工具名用 Pi Sans、路径与命令用等宽小胶囊，参数改成共享列宽的两列表格，结果区变成带 320px 上限、底部渐隐遮罩的代码表面（不再出现双层边框与双滚动条）。
+- **思考过程改成内联折叠胶囊**：去掉通栏灰层与左侧强调竖条，改为 26px 小胶囊 + 展开后的 Pi Serif 衬线正文，耗时仍在右侧，视觉上稳稳属于次要信息。
+- **扩展消息 / 系统注入改成注释卡片**：`supermemory 隐藏的扩展消息` 这类块换成带文档图标的发丝边框卡片：单行摘要 + 展开后才是正文与操作按钮，不再在右缘挂一堆链接。
+- **输入栏底行统一**：`完全权限 +`、`扩展`、`快捷短语`、`⚙` 与右侧模型 / 思考 / 上下文饼图统一成 26px 幽灵胶囊（同圆角、同内边距、同图标尺寸），不再有 26/28/32px 混排的错位。
+
 ## [1.24.1] - 2026-11-03
 
 精简「设置 › 外观」页面，移除全部默认主题预设卡片与 CSS 预设按钮（仅保留字体设置与纯净自定义 CSS 编辑器），并实现 `dsh-claude-style` 插件启用时自动接管切换全局界面样式，无需手动选主题。

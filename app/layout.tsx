@@ -2,14 +2,13 @@ import type { Metadata, Viewport } from "next";
 import { Noto_Sans_Mono } from "next/font/google";
 import { PwaRegistration } from "@/components/PwaRegistration";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
-import { plusThemeInitScript } from "@/lib/plus-theme";
-import { BUILTIN_THEMES, builtinThemesCss } from "@/lib/plus-theme-catalog";
+import { builtinThemesCss } from "@/lib/plus-theme-catalog";
 import { PLUS_PREFS_SEED_SCRIPT } from "@/lib/plus-prefs";
 
-// Plus: every built-in theme palette, server-rendered so the first paint is right.
+// Plus: the one look (Claude Code Desktop) ships every built-in palette,
+// server-rendered so the first paint is right. There is no theme picker and no
+// client-side theme switch: data-plus-style / data-plus-theme are literal.
 const PLUS_BUILTIN_THEMES_CSS = builtinThemesCss();
-const PLUS_THEME_INIT_SCRIPT = plusThemeInitScript(Object.fromEntries(BUILTIN_THEMES.map((theme) => [theme.id, theme.base])));
-import { PlusAppearanceRuntime } from "@/components/PlusAppearanceRuntime";
 import "katex/dist/katex.min.css";
 import "./globals.css";
 import "./settings.css";
@@ -19,8 +18,6 @@ import "./native-theme.css";
 import "./plus.css";
 import "./plus-theme.css";
 import { PRODUCT_NAME } from "@/lib/branding";
-
-const CUSTOM_CSS_ACTIVATE_SCRIPT = `(function(){var l=document.querySelector("link[data-custom-css]");if(!l)return;var a=function(){l.media="all"};l.addEventListener("load",a);l.addEventListener("error",a);if(l.sheet)a()})();`;
 
 const notoSansMono = Noto_Sans_Mono({
   subsets: ["latin", "cyrillic"],
@@ -76,7 +73,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" translate="no" className={`${notoSansMono.variable} notranslate`} suppressHydrationWarning>
+    <html
+      lang="en"
+      translate="no"
+      className={`${notoSansMono.variable} notranslate`}
+      data-plus-style="clean"
+      data-plus-theme="clean"
+      suppressHydrationWarning
+    >
       <head>
         <meta name="google" content="notranslate" />
         {/* Plus: restore mirrored preferences into localStorage before any other script reads them. */}
@@ -87,22 +91,21 @@ export default function RootLayout({
         {/* Loaded with media="print" and switched to "all" once it arrives: the route
             cold-loads the whole pi SDK, and a blocking stylesheet held the first paint
             for it. The link keeps its place, so the cascade order is unchanged. */}
+        {/* Plus: the link is no longer mounted. The interface is one fixed design now and
+            the appearance page has no override switch, so a stale custom.css would silently
+            re-style everything (the old pi-claude-theme does exactly that). The route and the
+            file stay in place; see docs/CUSTOM-CSS.md. */}
         <script
           dangerouslySetInnerHTML={{
             __html: THEME_INIT_SCRIPT,
           }}
         />
-        {/* Plus: built-in theme palettes, then custom.css (loaded last so user rules win), then init script. */}
+        {/* Plus: built-in theme palettes (the single fixed look). */}
         <style id="plus-builtin-themes" dangerouslySetInnerHTML={{ __html: PLUS_BUILTIN_THEMES_CSS }} />
-        {/* eslint-disable-next-line @next/next/no-css-tags */}
-        <link rel="stylesheet" href="/api/custom-css" media="print" data-custom-css="" suppressHydrationWarning />
-        <script dangerouslySetInnerHTML={{ __html: CUSTOM_CSS_ACTIVATE_SCRIPT }} />
-        <script dangerouslySetInnerHTML={{ __html: PLUS_THEME_INIT_SCRIPT }} />
       </head>
       <body translate="no" className="notranslate" suppressHydrationWarning>
         {children}
         <PwaRegistration />
-        <PlusAppearanceRuntime />
       </body>
     </html>
   );

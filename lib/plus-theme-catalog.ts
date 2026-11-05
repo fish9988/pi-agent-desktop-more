@@ -9,8 +9,9 @@
  * composer, buttons, switches, sliders, menus and dialogs.
  *
  * Built-in themes are server-rendered into <head> (no flash on start).
- * Custom themes made with the palette editor use the same definition, stored
- * in the theme file's header (lib/plus-user-themes.ts).
+ * The app now has exactly one look (data-plus-style / data-plus-theme are
+ * literal "clean" attributes in app/layout.tsx); the other palettes stay as
+ * data only, and there is no theme picker or custom-theme editor left.
  */
 
 export type ThemeBase = "clean" | "native";
@@ -151,8 +152,18 @@ export const BUILTIN_THEMES: readonly BuiltinTheme[] = [
     name: { en: "Claude Code Desktop", zh: "Claude Code · 桌面", tw: "Claude Code · 桌面" },
     description: { en: "Claude Code Desktop (#ffffff canvas, #fafafa sidebar, #d97757 terracotta, #943333 inline code)", zh: "Claude Code Desktop 原生纯白画布、浅灰侧栏、陶烬橙与暖红行内代码" },
     base: "clean",
+    // Claude Code Desktop reads in a serif: assistant prose, headings and bold
+    // all use Pi Serif, with Pi Sans for chrome (app/plus-theme.css) and Pi Mono
+    // for code. Fixed on purpose — the appearance page no longer offers fonts.
+    typography: {
+      reading: "\"Pi Serif\", \"Noto Serif SC\", \"Source Han Serif SC\", Georgia, \"Times New Roman\", serif",
+      heading: "\"Pi Serif\", \"Noto Serif SC\", \"Source Han Serif SC\", Georgia, \"Times New Roman\", serif",
+      bold: "\"Pi Serif\", \"Noto Serif SC\", \"Source Han Serif SC\", Georgia, serif",
+      readingSize: 16,
+      readingLeading: 1.7,
+    },
     light: {
-      bg: "#f2f1ef", panel: "#f2f1ef", workbench: "#ffffff", surface: "#f8f7f5", text: "#161616", muted: "#70686a", dim: "#91888a",
+      bg: "#f2f1ef", panel: "#f2f1ef", workbench: "#ffffff", surface: "#f8f7f5", text: "#161616", muted: "#70686a", dim: "#7b7375",
       accent: "#d97757", fill: "#d97757", border: "#e9e9e9", user: "#f4f2f3",
       code: "#fafafa", codeHeader: "#f4f4f4", codeText: "#161616", inlineCode: "#943333", inlineCodeBg: "#f4f2f2", marker: "#d97757",
       danger: "#b4372a", success: "#3d7550", warning: "#a4621d",

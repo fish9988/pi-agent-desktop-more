@@ -2284,6 +2284,7 @@ function CustomMessageView({ message, cwd, onOpenFile }: { message: CustomMessag
   return (
     <div style={{ marginBottom: 16 }}>
       <div
+        className="plus-note-card"
         style={{
           border: "var(--hairline) solid var(--border)",
           borderRadius: 8,
@@ -2293,6 +2294,7 @@ function CustomMessageView({ message, cwd, onOpenFile }: { message: CustomMessag
         }}
       >
         <div
+          className="plus-note-head"
           style={{
             display: "flex",
             alignItems: "center",
@@ -2304,15 +2306,15 @@ function CustomMessageView({ message, cwd, onOpenFile }: { message: CustomMessag
             fontSize: 12,
           }}
         >
-          <span style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 650 }}>
+          <span className="plus-note-label" style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 650 }}>
             {title}
           </span>
-          {isHiddenDisplay && <span style={{ color: "var(--text-dim)", fontSize: 12 }}>{t("i18n.hiddenExtensionMessage")}</span>}
+          {isHiddenDisplay && <span className="plus-note-kind" style={{ color: "var(--text-dim)", fontSize: 12 }}>{t("i18n.hiddenExtensionMessage")}</span>}
           {time && <span className="message-meta" style={{ marginLeft: "auto", color: "var(--text-dim)", fontSize: 10 }}>{time}</span>}
         </div>
 
         {contentExpanded ? (
-          <div style={{ padding: "6px 9px" }}>
+          <div className="plus-note-body" style={{ padding: "6px 9px" }}>
             {images.length > 0 && (
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: text ? 8 : 0 }}>
                 {images.map((img, i) => {
@@ -2335,6 +2337,7 @@ function CustomMessageView({ message, cwd, onOpenFile }: { message: CustomMessag
           </div>
         ) : (
           <button
+            className="plus-note-preview"
             onClick={() => setContentExpanded(true)}
             style={{
               display: "block",
@@ -2353,6 +2356,7 @@ function CustomMessageView({ message, cwd, onOpenFile }: { message: CustomMessag
         )}
 
         <div
+          className="plus-note-foot"
           style={{
             display: "flex",
             alignItems: "center",
@@ -2402,6 +2406,7 @@ function CustomMessageView({ message, cwd, onOpenFile }: { message: CustomMessag
 
         {hasDetails && ((isHiddenDisplay && contentExpanded) || (!isHiddenDisplay && detailsExpanded)) && (
           <pre
+            className="plus-note-details"
             style={{
               margin: 0,
               padding: "9px 10px",

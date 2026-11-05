@@ -1,15 +1,15 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
-import { themesDir, userThemeVersion } from "@/lib/plus-user-themes";
 
 /**
- * Plus: cheap fingerprints (mtime + size) of custom.css and, with `?theme=`,
- * of the active imported theme. The page polls this and re-applies whichever
- * changed, so edits made in any editor apply without reloading the window.
+ * Plus: a cheap fingerprint (mtime + size) of custom.css. Callers can poll this
+ * to re-point their stylesheet link when the file changes without reloading the
+ * window. The app itself has one fixed look and no longer polls; the route stays
+ * with the shared custom.css endpoint.
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   const agentDir = getAgentDir();
   let version = "none";
   let exists = false;
@@ -20,7 +20,5 @@ export async function GET(request: NextRequest) {
   } catch {
     // no custom.css
   }
-  const theme = request.nextUrl.searchParams.get("theme");
-  const themeVersion = theme ? await userThemeVersion(themesDir(agentDir), theme) : undefined;
-  return NextResponse.json({ version, exists, themeVersion }, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json({ version, exists }, { headers: { "Cache-Control": "no-store" } });
 }

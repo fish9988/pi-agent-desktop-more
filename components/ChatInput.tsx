@@ -36,7 +36,6 @@ import { useMenuNavigation } from "@/hooks/useMenuNavigation";
 import { useEnterSendMode } from "@/hooks/useEnterSendMode";
 import { useI18n } from "@/hooks/useI18n";
 import { usePlusStyle } from "@/hooks/usePlusStyle";
-import { useDshClaudeStyleEnabled } from "@/lib/dsh-plugin-client";
 import type { ReactNode } from "react";
 import type { ContextUsage, SessionStatsInfo } from "@/lib/pi-types";
 import { ContextUsageRing } from "./ContextUsageRing";
@@ -307,6 +306,33 @@ export function getTopbarBoundary(element: HTMLElement): number {
     }
   }
   return boundary;
+}
+
+// The `/` palette scrolls a list of fixed-height rows; a popover that ends
+// halfway through a card reads as broken. Once the height cap is in place the
+// list viewport is shortened to its last whole row, keeping whatever gap the
+// next row would have used (never more than the list's own padding), and the
+// scrollable flag drives the bottom fade so a short list is not faded at all.
+function fitSuggestionMenuToRows(menu: HTMLElement): void {
+  const scroller = menu.querySelector<HTMLElement>("[data-suggestion-scroll]");
+  if (!scroller) return;
+  scroller.style.maxHeight = "";
+  const bounds = scroller.getBoundingClientRect();
+  const limit = bounds.top + scroller.clientTop + scroller.clientHeight;
+  const rects = Array.from(scroller.querySelectorAll<HTMLElement>("[data-suggestion-item]"))
+    .map((item) => item.getBoundingClientRect());
+  const lastVisible = rects.reduce((max, rect) => (rect.bottom <= limit + 1 ? Math.max(max, rect.bottom) : max), 0);
+  if (lastVisible > 0) {
+    const lastRow = lastVisible - bounds.top;
+    const nextTop = rects.reduce((min, rect) => {
+      const top = rect.top - bounds.top;
+      return top > lastRow + 0.5 ? Math.min(min, top) : min;
+    }, Infinity);
+    const paddingBottom = parseFloat(window.getComputedStyle(scroller).paddingBottom) || 0;
+    const breathing = Number.isFinite(nextTop) ? Math.min(paddingBottom, Math.max(0, nextTop - lastRow)) : paddingBottom;
+    scroller.style.maxHeight = `${Math.floor(lastRow + breathing)}px`;
+  }
+  scroller.dataset.scrollable = String(scroller.scrollHeight > scroller.clientHeight + 1);
 }
 
 type ComposerTier = "normal" | "compact" | "narrow";
@@ -2177,6 +2203,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   }, [slashMenuOpen, slashQuery]);
 
   useLayoutEffect(() => {
+    if (!slashMenuOpen || slashQuery === null) return;
+    const menu = slashMenuRef.current;
+    if (menu) fitSuggestionMenuToRows(menu);
+  }, [slashMenuOpen, slashQuery, slashMenuMaxHeight, displayedSlashCommands.length]);
+
+  useLayoutEffect(() => {
     if (!atMenuOpen || atQuery === null) {
       setAtMenuMaxHeight(null);
       return;
@@ -2270,7 +2302,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   // · Stop) at its end, under the text; narrow and compact layouts keep both
   // beside the text as before.
   const plusStyle = usePlusStyle();
-  const claudeStyleEnabled = useDshClaudeStyleEnabled();
   const toolsLayout = !compact && !isNarrow && plusStyle === "clean";
   const attachButton = (
     <button
@@ -2782,7 +2813,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           )}
           {slashMenuOpen && slashQuery !== null && (
             <div
-              className="native-popover app-menu app-suggestion-menu"
+              className="native-popover app-menu app-suggestion-menu app-slash-menu"
               ref={slashMenuRef}
               style={{
                 position: "absolute",
@@ -2817,9 +2848,19 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 }}
               >
                  <span>{slashCommandsLoading ? t("chat.loadingCommands") : t("chat.slashCommands", { label: slashCommandCountLabel })}</span>
-                 <span style={{ fontFamily: "var(--font-mono)" }}>{t("chat.tabEnter")}</span>
+                 {/* The label is a pair of key names ("Tab / Enter"); each one
+                     is a real <kbd> so it reads as a key, not as mono text. */}
+                 <span className="app-suggestion-keys">
+                   {t("chat.tabEnter").split("/").map((keyName) => keyName.trim()).filter(Boolean).map((keyName) => (
+                     <kbd key={keyName} className="app-suggestion-kbd">{keyName}</kbd>
+                   ))}
+                 </span>
               </div>
-              <div style={{ flex: "1 1 auto", minHeight: 0, overflowY: "auto", padding: 10 }}>
+              <div
+                className="app-suggestion-scroll"
+                data-suggestion-scroll=""
+                style={{ flex: "1 1 auto", minHeight: 0, overflowY: "auto", padding: 10 }}
+              >
                 {!slashCommandsLoading && filteredSlashCommands.length === 0 ? (
                   <div style={{ padding: "2px 2px 4px", fontSize: 12, color: "var(--text-dim)" }}>
                      {t("chat.noCommands")}
@@ -2828,6 +2869,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   groupedSlashCommands.map((group) => (
                     <section key={group.source} style={{ marginBottom: 12 }}>
                       <div
+                        data-suggestion-item=""
+                        className="app-suggestion-group"
                         style={{
                           position: "sticky",
                           top: -10,
@@ -2848,10 +2891,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                         <span style={{ fontFamily: "var(--font-mono)", fontWeight: 500 }}>{group.items.length}</span>
                       </div>
                       <div
-                        className="app-menu-items"
+                        className="app-menu-items app-suggestion-grid"
                         style={{
                           display: "grid",
-                          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
                           gap: 8,
                         }}
                       >
@@ -2861,6 +2903,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                           return (
                             <button
                               key={`${command.source}:${command.name}`}
+                              className="app-suggestion-row"
+                              data-suggestion-item=""
                               ref={(node) => {
                                 slashItemRefs.current[index] = node;
                               }}
@@ -2873,12 +2917,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                               style={{
                                 width: "100%",
                                 minWidth: 0,
-                                minHeight: 58,
+                                minHeight: 52,
                                 display: "flex",
                                 flexDirection: "column",
                                 gap: 4,
                                 justifyContent: "center",
-                                padding: "9px 10px",
+                                padding: "6px 12px",
                                 border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
                                 borderRadius: 8,
                                 background: active ? "var(--bg-selected)" : "var(--bg-panel)",
@@ -2888,7 +2932,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                                 boxShadow: active ? "0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent)" : "none",
                               }}
                             >
-                              <span style={{
+                              <span className="app-suggestion-name" style={{
                                 fontSize: 13,
                                 fontFamily: "var(--font-mono)",
                                 overflowWrap: "anywhere",
@@ -2911,10 +2955,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                                 )}
                               </span>
                                {command.description && (
-                                <span style={{
-                                  display: "-webkit-box",
-                                  WebkitBoxOrient: "vertical",
-                                  WebkitLineClamp: 2,
+                                <span className="app-suggestion-desc" style={{
+                                  // One line: with two columns every row is the
+                                  // same height, so the list can end on a whole row.
                                   overflow: "hidden",
                                   fontSize: 12,
                                   lineHeight: 1.35,
@@ -3055,7 +3098,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             data-state={compact ? undefined : bashMode ? "bash" : undefined}
             style={!compact ? { position: "relative", overflow: "visible" } : undefined}
           >
-          {!compact && plusStyle === "clean" && claudeStyleEnabled && (
+          {!compact && plusStyle === "clean" && (
             <ComposerMascot
               isStreaming={isStreaming}
               isCompacting={isCompacting}
@@ -3121,7 +3164,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 ? t(chatOnly ? "chat.composerHintChatOnly" : "plus.composerPlaceholder")
                 : t("chat.messagePlaceholder")
             }
-            rows={compact ? 4 : (plusStyle === "clean" && claudeStyleEnabled) ? 1 : 3}
+            rows={compact ? 4 : plusStyle === "clean" ? 1 : 3}
             style={{
               flex: compact ? "none" : 1,
               minWidth: 0,
@@ -3134,7 +3177,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               fontSize: "var(--chat-content-font-size, 14px)",
               lineHeight: 1.6,
               fontFamily: "inherit",
-              minHeight: compact ? 96 : (plusStyle === "clean" && claudeStyleEnabled) ? 24 : 68,
+              minHeight: compact ? 96 : plusStyle === "clean" ? 24 : 68,
               maxHeight: 240,
               overflow: "auto",
             }}

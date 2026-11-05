@@ -22,7 +22,7 @@
 | 开发服务器 | `127.0.0.1:30141`（`next dev`） |
 | 会话、模型、主题等数据 | `~/.pi/agent/`（所有安装共用） |
 | Plus 的设置镜像 | `~/.pi/agent/desktop/plus-prefs.json`（测试版用 `plus-prefs.test.json`） |
-| 用户主题 | `~/.pi/agent/desktop/plus-themes/*.css` |
+| 用户主题 | 已删除（1.25.0）——界面现在是唯一一套固定外观 |
 | 优化提示词设置 | `~/.pi/agent/desktop/plus-prompt-optimizer.json` |
 | 截图 / Playwright 脚本 | `C:\pi-project\plus-shots\` |
 | 研究用的其它仓库 | `C:\pi-project\research\`（opencode、PI-Desktop 等） |
@@ -94,9 +94,10 @@ npx eslint components lib hooks app scripts --quiet
 | 品牌、版本、测试版 | `lib/branding.ts`（`PRODUCT_NAME`、`APP_VERSION` 来自 `plus-version.json`、`PLUS_TEST_FLAVOR`）、`plus-version.json` |
 | 端口与外壳 | `src-tauri/src/lib.rs`（`desktop_server_port()`，编译期变量 `PI_PLUS_SERVER_PORT`；`choose_port` 最多等 4 秒）、`shell/window.rs`、`shell/platform_tray.rs`（名字取自 `package_info().name`） |
 | 设置镜像（localStorage ↔ 文件） | `lib/plus-prefs.ts`（`PLUS_PREFS_SEED_SCRIPT` 放在 `<head>` 最前面）、`app/api/plus-prefs/route.ts` |
-| 主题系统 | `lib/plus-theme.ts`（设置、字体栈、初始化脚本）、`lib/plus-theme-catalog.ts`（调色板转 CSS 变量、内置主题、`compileThemeCss`）、`lib/plus-user-themes.ts` 加 `app/api/plus-themes/**`、`lib/plus-theme-import.ts`（导入 VS Code 主题）、`lib/plus-theme-gallery-opencode.ts`（由 `scripts/build-theme-gallery.mjs` 生成）、`hooks/usePlusTheme.ts`、`components/PlusAppearanceRuntime.tsx`、`PlusThemeEditor.tsx`、`PlusThemeGallery.tsx` |
-| 字体 | `lib/system-fonts.ts` 加 `/api/system-fonts`、`components/FontPicker.tsx`（角色：ui、chat、chatBold、code） |
-| 外观设置页 | `components/AppearanceSettingsPage.tsx`、`AppearancePreview.tsx`（用真实组件渲染示例对话）、`PlusAppearanceSettings.tsx`、`lib/settings-navigation.ts`（分区 `appearance`） |
+| 固定外观（1.25.0） | `<html data-plus-style="clean" data-plus-theme="clean">` 直接写在 `app/layout.tsx`；配色表 `lib/plus-theme-catalog.ts`（`builtinThemesCss()` 服务端注入 `<style id="plus-builtin-themes">`，当前只有 `clean` 生效）；不再有主题运行时、主题库、画廊与导入 |
+| 字体 | `public/fonts/` 内置 `Pi Sans`（Inter）/ `Pi Serif`（Noto Serif）/ `Pi Mono`（JetBrains Mono），`@font-face` 在 `app/plus-theme.css` 顶部；UI 用 `--font-ui`，正文/标题用 Pi Serif（catalog 里 `clean` 的 `typography`），代码用 `--font-mono` |
+| 外观设置页 | `components/AppearanceSettingsPage.tsx`（只有明暗模式 + 聊天宽度/字号）、`lib/settings-navigation.ts`（分区 `appearance`） |
+| 像素桌宠 | `scripts/build-pi-pet-sheets.mjs`（参数化绘制并输出模块）、`lib/pi-pet-sheets.ts`（19 套动画的 base64 帧表）、`components/ComposerMascot.tsx`（播放器 + 点击交互；CSS 类名仍是 `.plus-composer-crab*`） |
 | 聊天宽度与字号 | `hooks/useChatAppearance.ts`（`terminalFontSize()` 让终端跟随聊天字号，移植 pi-web #1329）、`components/ChatColumnResizeHandles.tsx` |
 | 工作过程 | `lib/work-details.ts` 加 `hooks/useWorkDetails.ts`（四档：精简、标准、详细、完整）、`components/WorkGroups.tsx`、**时间线** `lib/work-timeline.ts` 加 `components/WorkTimeline.tsx`（只在精简、标准档使用） |
 | 流式渲染（移植 pi-web #1191） | `lib/streaming-message.ts`（`createStreamingStore`）、`hooks/useStreamingSelector.ts`、`components/LiveStream.tsx`；`useAgentSession` 返回 `streamingStore` |
@@ -114,20 +115,19 @@ npx eslint components lib hooks app scripts --quiet
 
 - **Plus 的 CSS 只写在 `app/plus.css` 和 `app/plus-theme.css`。** 它们在 `layout.tsx` 里最后引入。
 - `globals.css` 和 `settings.css` 必须与上游**逐字节一致**，`scripts/upstream-css-baseline.test.mjs` 会检查。`native-theme.css` 属于 abcwyc 那一层，尽量也别动。
-- **主题分层（1.9 起，用户定的规则）：Plus 是底层，主题叠在上面，只改颜色和字体。**
-  - 判断一个样式归谁，只问一句：**“换一个主题时，它应不应该跟着变？”** 应该变 → 写成变量（Plus 给默认值，主题可覆盖）；不该变 → 写在底层，或用阶梯变量。
-  - **底层**（主题碰不到）：布局（两层外壳、侧栏、标题栏、输入框卡片、整页设置、插件卡片…）、间距、界面字号阶梯、**圆角**、控件高度、层次关系（哪块是窗口底色/内容面板/卡片）、阴影形状、动效、层级、图标、交互状态“变多少”。
-  - **主题**（只能写这些）：颜色（`ThemePalette` 的字段：底色三层、文字三档、强调/按钮色、边框、用户气泡、代码块、行内代码、状态色、代码高亮）和字体（`ThemeTypography`：正文/标题/粗体字体、正文字号和行高、思考斜体）。主题没写的项一律用 Plus 的值（`lib/plus-theme-catalog.ts` 的 `resolveThemeDefinition`：`mergePalette` + 字体合并 + 圆角固定用底层的）。
-  - 层次兜底：`layeredPalette` 保证窗口底色和内容面板、内容面板和卡片之间至少一档色差（`LAYER_MIN_*`），只往黑或白推，内容面板永远是主题自己的阅读底色。
-  - 用户在外观页选的字体优先级最高。「原生」是另一种底层（上游原样），不叠加主题；纯 CSS 主题（custom.css 风格）是自负其责的出口，不受这些规则约束。
+- **主题分层（1.9 起的规则）：Plus 是底层，颜色与排版是一张变量表。** 1.25.0 起只有**一套**外观（Claude Code Desktop + Pi 品牌），主题引擎已移除，但分层规则仍然适用：
+  - 判断一个样式归谁，只问一句：**“换配色时，它应不应该跟着变？”** 应该变 → 写成变量（`lib/plus-theme-catalog.ts` 给值）；不该变 → 写在底层，或用阶梯变量。
+  - **底层**（配色碰不到）：布局（两层外壳、侧栏、标题栏、输入框卡片、整页设置、插件卡片…）、间距、界面字号阶梯、**圆角**、控件高度、层次关系（哪块是窗口底色/内容面板/卡片）、阴影形状、动效、层级、图标、交互状态“变多少”。
+  - **配色/字体**：`ThemePalette`（底色三层、文字三档、强调/按钮色、边框、用户气泡、代码块、行内代码、状态色、代码高亮）与 `ThemeTypography`（`clean` 的正文/标题/粗体都是 Pi Serif，`readingSize: 16`，`readingLeading: 1.7`）。`resolveThemeDefinition` 会把缺项兜底，`layeredPalette` 保证底色与面板/卡片之间至少一档色差。
+  - `custom.css` 不再自动叠加（`app/layout.tsx` 不再挂 `/api/custom-css`）；文件与路由还在，`docs/CUSTOM-CSS.md` 现在只是一份设计变量清单。
 - **写 CSS 的 6 条硬规则**（`lib/plus-theme-layering.test.mjs` 有只降不升的棘轮）：
-  1. 底层 CSS 不写死颜色：用 `var(--…)` 或 `color-mix(… var(--…) …)`；`var(--x, 兜底值)` 里的兜底、`transparent`、`currentColor` 允许。
-  2. 底层 CSS 不写死字体名：只用 `--font-ui`、`--font-mono`、`--plus-reading-font`、`--plus-heading-font`、`--plus-bold-font`。
+  1. CSS 不写死颜色：用 `var(--…)` 或 `color-mix(… var(--…) …)`；`var(--x, 兜底值)` 里的兜底、`transparent`、`currentColor` 允许。
+  2. CSS 不写死字体名：只用 `--font-ui`、`--font-mono`、`--plus-reading-font`、`--plus-heading-font`、`--plus-bold-font`。唯一例外是文件顶部那四个 `@font-face`（`Pi Sans` / `Pi Serif` / `Pi Mono`）。
   3. 尺寸用阶梯变量 `--plus-fs-*`、`--plus-r-*`、`--plus-s*`（`plus-design-scale.test.mjs`）。
-  4. 主题不写选择器：主题是一张“变量 = 值”的表。想让某样东西能被主题改，先在底层加变量（Plus 给默认值），再让主题能填它。
-  5. 布局规则只挂 `html[data-plus-style="clean"]`，**永远不按主题名写选择器**（`data-plus-theme=` 在 CSS 文件里必须是 0 处）。底层的值在 `BASE_LIGHT_SELECTOR`（`html[data-plus-style="clean"]:root`），主题在其后、同优先级，自然覆盖，不用 `!important`。
+  4. 配色是一张“变量 = 值”的表，不写在选择器里。想让某样东西能被配色改，先在底层加变量，再给变量赋值。
+  5. 布局规则只挂 `html[data-plus-style="clean"]`（现在是常量），`data-plus-theme=` 在 CSS 文件里必须是 0 处。
   6. 组件行内样式不写颜色和字体；状态色用 `var(--danger)` / `var(--success)` / `var(--warning)`。例外：xterm 这类要真实色值的第三方配置（`TerminalPanel`）。
-- 其他主题细节：语法高亮颜色映射到 `--plus-syn-*`；custom.css 只是可选的叠加层（`customCssOverlay`，默认关闭）。
+- 其他细节：语法高亮颜色映射到 `--plus-syn-*`；正文、标题与粗体用 Pi Serif（“助手回复是衜线”就是 Claude 的阅读手感），界面用 Pi Sans，代码/终端用 Pi Mono。
 - **设计阶梯（1.7 起）**：字号 12/13/14/16/20、圆角 4/8/12、间距 4 的倍数，CSS 用 `--plus-fs-*`、`--plus-r-*`、`--plus-s*`，组件行内样式用 `lib/plus-design-scale.ts` 的 `scaleVar()`。`lib/plus-design-scale.test.mjs` 是只降不升的棘轮：新代码不要再写阶梯外的字号和圆角；迁移一批后把基线调低。
 - **重设计层**：`plus-theme.css` 末尾的 "Redesign layer" 按步骤分组（外壳、消息、输入框、运行、扩展面板），覆盖前面的引擎规则。外壳只在 ≥769px 生效；新元素（改动卡目录、运行中按钮、扩展面板外框、ANSI 色）的基础样式在 `plus.css`，对所有主题生效。
 - 弹层统一使用 zIndex 2400，否则会被设置窗口挡住。

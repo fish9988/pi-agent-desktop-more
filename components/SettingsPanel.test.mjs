@@ -165,6 +165,30 @@ test("offers light, dark and system theme selection with native radios", () => {
   assert.match(themeSource, /const setThemePreference = useCallback/);
 });
 
+test("the Appearance page keeps only dark/light/system plus content layout", () => {
+  // One fixed look: the appearance page no longer offers theme presets, fonts,
+  // imported themes, a palette editor, a live preview or the custom.css opener.
+  for (const removed of [
+    "PlusAppearanceSettings",
+    "AppearancePreview",
+    "plus-appearance-layout",
+    "plus-appearance-preview-pane",
+    "plus-live-preview-sticky-bar",
+    "plusLivePreview",
+    "customCssOpen",
+  ]) {
+    assert.doesNotMatch(appearanceSource, new RegExp(removed));
+  }
+  // The mode row is the only theme choice left, and it still drives useTheme().
+  assert.match(appearanceSource, /THEME_OPTIONS\.map/);
+  assert.match(appearanceSource, /setThemePreference\(option\.id\)/);
+  // Chat width and size stay: they are content layout, not theme presets.
+  assert.match(appearanceSource, /settings-chat-range-option/g);
+  assert.equal((appearanceSource.match(/type="range"/g) ?? []).length, 2);
+  assert.match(appearanceSource, /useChatAppearance\(\)/);
+  assert.doesNotMatch(appearanceSource, /FontPicker|font-picker/);
+});
+
 test("keeps language selection in General settings", () => {
   assert.match(panelSource, /t\("common\.language"\)/);
   assert.match(panelSource, /className="settings-language-options"/);

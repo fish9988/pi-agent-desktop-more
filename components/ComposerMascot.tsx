@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
-import { CRAB_FRAME_MS, CRAB_GUTTER, CRAB_SHEETS, CRAB_SHEET_URLS } from "@/lib/crab-sheets";
+import { PI_PET_FRAME_MS, PI_PET_GUTTER, PI_PET_SHEETS, PI_PET_SHEET_URLS } from "@/lib/pi-pet-sheets";
 
 type PlayMode = "loop" | "once";
 
@@ -34,13 +34,13 @@ function isReducedMotion(): boolean {
 }
 
 function cellSize(key: string): [number, number] {
-  const sheet = CRAB_SHEETS[key] ?? CRAB_SHEETS.idle;
-  return [sheet.box[2] + CRAB_GUTTER * 2, sheet.box[3] + CRAB_GUTTER * 2];
+  const sheet = PI_PET_SHEETS[key] ?? PI_PET_SHEETS.idle;
+  return [sheet.box[2] + PI_PET_GUTTER * 2, sheet.box[3] + PI_PET_GUTTER * 2];
 }
 
 function frameOffset(key: string, frame: number): string {
   const [cellWidth, cellHeight] = cellSize(key);
-  return `translate(${-((frame % 8) * cellWidth + CRAB_GUTTER) * 2}px, ${-(Math.floor(frame / 8) * cellHeight + CRAB_GUTTER) * 2}px)`;
+  return `translate(${-((frame % 8) * cellWidth + PI_PET_GUTTER) * 2}px, ${-(Math.floor(frame / 8) * cellHeight + PI_PET_GUTTER) * 2}px)`;
 }
 
 export function ComposerMascot({
@@ -107,7 +107,7 @@ export function ComposerMascot({
       s.animation.cancel();
       s.animation = null;
     }
-    const sheet = CRAB_SHEETS[key] ?? CRAB_SHEETS.idle;
+    const sheet = PI_PET_SHEETS[key] ?? PI_PET_SHEETS.idle;
     const still = isReducedMotion() && s.reaction === null;
     if (still || typeof strip.animate !== "function") {
       strip.style.transform = frameOffset(key, sheet.still);
@@ -127,7 +127,7 @@ export function ComposerMascot({
       transform: frameOffset(key, mode === "loop" ? 0 : sheet.frames - 1),
     });
     const anim = strip.animate(keyframes, {
-      duration: sheet.frames * CRAB_FRAME_MS,
+      duration: sheet.frames * PI_PET_FRAME_MS,
       iterations: mode === "loop" ? Infinity : 1,
       fill: "forwards",
     });
@@ -146,8 +146,8 @@ export function ComposerMascot({
 
   const showPick = useCallback((root: HTMLElement, strip: HTMLElement, next: MascotPick, now: number) => {
     const s = stageRef.current;
-    const sheet = CRAB_SHEETS[next.key] ?? CRAB_SHEETS.idle;
-    const urls = CRAB_SHEET_URLS[next.key] ?? CRAB_SHEET_URLS.idle;
+    const sheet = PI_PET_SHEETS[next.key] ?? PI_PET_SHEETS.idle;
+    const urls = PI_PET_SHEET_URLS[next.key] ?? PI_PET_SHEET_URLS.idle;
     const [cellWidth, cellHeight] = cellSize(next.key);
     s.current = { key: next.key, mode: next.mode, priority: next.priority, start: now };
     if (s.reaction !== null && s.reaction.key === next.key) {
@@ -176,7 +176,7 @@ export function ComposerMascot({
     if (s.quietSince === 0) s.quietSince = now;
 
     if (s.current !== null && s.current.mode === "once" && !s.current.done) {
-      const dur = (CRAB_SHEETS[s.current.key]?.frames ?? 24) * CRAB_FRAME_MS;
+      const dur = (PI_PET_SHEETS[s.current.key]?.frames ?? 24) * PI_PET_FRAME_MS;
       if (now - s.current.start >= dur) {
         s.current.done = true;
         finishOnce(s.current.key, now);
@@ -243,7 +243,7 @@ export function ComposerMascot({
     if (s.moment !== null) wakeAt = Math.min(wakeAt, s.moment.until);
     if (switching && !settled && s.current !== null) wakeAt = Math.min(wakeAt, s.current.start + MIN_SHOW_MS);
     if (s.current !== null && s.current.mode === "once" && !s.current.done) {
-      const dur = (CRAB_SHEETS[s.current.key]?.frames ?? 24) * CRAB_FRAME_MS;
+      const dur = (PI_PET_SHEETS[s.current.key]?.frames ?? 24) * PI_PET_FRAME_MS;
       wakeAt = Math.min(wakeAt, s.current.start + dur);
     }
     if (!s.asleep && s.level.key === "idle") {

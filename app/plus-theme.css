@@ -7,28 +7,56 @@
    custom themes choose either base.
    -------------------------------------------------------------------------- */
 
-/* ---- fonts (Settings > Appearance > Fonts) -------------------------------- */
+/* ---- fonts ----------------------------------------------------------------
+   Fixed Claude-style trio. Appearance settings no longer offer font pickers:
+   Pi Sans (Inter) is the chrome, Pi Serif (Noto Serif) the assistant prose and
+   brand wordmark, Pi Mono (JetBrains Mono) every code and terminal surface. */
 
-html[data-plus-ui-font]:root {
-  --font-ui: var(--plus-font-ui, sans-serif);
-  --font-display: var(--plus-font-ui, sans-serif);
+@font-face {
+  font-family: "Pi Sans";
+  src: url("/fonts/PiSansVariable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
 }
-html[data-plus-ui-font] body { font-family: var(--plus-font-ui, sans-serif); }
-
-html[data-plus-chat-font] .markdown-body,
-html[data-plus-chat-font] .message-user,
-html[data-plus-chat-font] .message-user textarea {
-  font-family: var(--plus-font-chat, sans-serif) !important;
+@font-face {
+  font-family: "Pi Serif";
+  src: url("/fonts/PiSerifVariable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Pi Mono";
+  src: url("/fonts/PiMonoVariable.ttf") format("truetype");
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Pi Mono";
+  src: url("/fonts/PiMonoItalicVariable.ttf") format("truetype");
+  font-weight: 100 800;
+  font-style: italic;
+  font-display: swap;
 }
 
-html[data-plus-code-font]:root { --font-mono: var(--plus-font-code, monospace); }
-html[data-plus-code-font] .markdown-body pre,
-html[data-plus-code-font] .markdown-body pre *,
-html[data-plus-code-font] .markdown-body code,
-html[data-plus-code-font] .markdown-body .markdown-inline-code,
-html[data-plus-code-font] .xterm,
-html[data-plus-code-font] .cm-editor .cm-content {
-  font-family: var(--plus-font-code, monospace) !important;
+html[data-plus-style="clean"]:root {
+  --font-ui: "Pi Sans", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+  --font-display: var(--font-ui);
+  --font-mono: "Pi Mono", "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code",
+    Consolas, "Microsoft YaHei UI", monospace;
+  --plus-font-ui: var(--font-ui);
+  --plus-font-chat: "Pi Serif", "Noto Serif SC", "Source Han Serif SC", Georgia, "Times New Roman", serif;
+  --plus-font-chatBold: var(--plus-font-chat);
+  --plus-font-code: var(--font-mono);
+}
+
+/* Code and terminals always take the mono stack, monospace hinting aside. */
+html[data-plus-style="clean"] :is(.markdown-body pre, .markdown-body pre *, .markdown-body code,
+  .markdown-body .markdown-inline-code, .xterm, .cm-editor .cm-content) {
+  font-family: var(--font-mono);
 }
 
 /* ==========================================================================
@@ -130,6 +158,7 @@ html[data-plus-code-font] .cm-editor .cm-content {
   --plus-surface-alpha: 0%;
   --plus-composer-min-height: 44px;
   --plus-pie-rest: color-mix(in srgb, var(--text) 16%, transparent);
+  --plus-block-gap: var(--plus-s2);
   --plus-crab-sheet: none;
   --plus-crab-ink: none;
   --plus-crab-x: 0;
@@ -550,38 +579,9 @@ html[data-plus-style="clean"] :is(.linenumber, .react-syntax-highlighter-line-nu
 
 /* ---- thinking, tool cards, work groups ---------------------------------- */
 
-html[data-plus-style="clean"] .plus-thinking {
-  border: var(--hairline) solid var(--separator) !important;
-  border-left: 2px solid color-mix(in srgb, var(--plus-marker) 60%, transparent) !important;
-  border-radius: var(--plus-radius) !important;
-  background: color-mix(in srgb, var(--surface) 55%, transparent) !important;
-  font-family: var(--font-ui) !important;
-  color: var(--text-muted);
-}
-html[data-plus-style="clean"] .plus-thinking-body {
-  font-family: var(--plus-reading-font);
-  font-style: var(--plus-thinking-style);
-  font-size: calc(13px + var(--chat-font-size-offset, 0px)) !important;
-  line-height: 1.7 !important;
-  color: var(--text-muted) !important;
-}
-html[data-plus-style="clean"] .plus-tool-card {
-  border: var(--hairline) solid var(--border) !important;
-  border-radius: var(--plus-radius) !important;
-  background: var(--tool-bg) !important;
-}
-html[data-plus-style="clean"] .plus-tool-card.is-error {
-  border-color: color-mix(in srgb, var(--danger) 45%, transparent) !important;
-  background: color-mix(in srgb, var(--danger) 6%, transparent) !important;
-}
-html[data-plus-style="clean"] .plus-tool-card.is-aborted { background: var(--bg-subtle) !important; }
-html[data-plus-style="clean"] .plus-tool-card:not(.is-error):not(.is-aborted) .plus-tool-name { color: var(--accent) !important; }
-html[data-plus-style="clean"] .plus-tool-card :is([style*="34, 197, 94"], [style*="34,197,94"]) { border-top-color: var(--separator) !important; }
-html[data-plus-style="clean"] .plus-tool-card :is([style*="248, 113, 113"], [style*="248,113,113"]) { border-top-color: color-mix(in srgb, var(--danger) 25%, transparent) !important; }
-html[data-plus-style="clean"] .plus-tool-io {
-  background: var(--plus-code-bg) !important;
-  font-family: var(--font-mono) !important;
-}
+/* Thinking blocks, tool rows and extension notes are redesigned as modern
+   cards at the end of this file ("modern message layer"); only the work-group
+   chrome still lives here. */
 html[data-plus-style="clean"] :is([style*="rgba(34, 197, 94, 0.12)"], [style*="rgba(34,197,94,0.12)"]) { background: color-mix(in srgb, var(--success) 14%, transparent) !important; }
 html[data-plus-style="clean"] :is([style*="rgba(248, 113, 113, 0.13)"], [style*="rgba(248,113,113,0.13)"]) { background: color-mix(in srgb, var(--danger) 13%, transparent) !important; }
 
@@ -2400,14 +2400,14 @@ html[data-plus-style="clean"] .plus-svg-symbol-card > span {
 @media (min-width: 769px) {
   /* 1. Seamless full-bleed canvas: sidebar hairline runs top-to-bottom,
         main column and topbar sit on one continuous --workbench-bg sheet. */
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .app-sidebar {
+  html[data-plus-style="clean"] .app-sidebar {
     background: color-mix(in srgb, var(--bg-panel) 45%, var(--workbench-bg)) !important;
     border-right: 1px solid var(--plus-stroke) !important;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .app-main-column {
+  html[data-plus-style="clean"] .app-main-column {
     background: var(--workbench-bg) !important;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .app-topbar {
+  html[data-plus-style="clean"] .app-topbar {
     justify-content: space-between;
     gap: var(--plus-s4);
     height: 48px !important;
@@ -2415,7 +2415,7 @@ html[data-plus-style="clean"] .plus-svg-symbol-card > span {
     background: var(--workbench-bg) !important;
     border-bottom: 0 !important;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .app-content-layer {
+  html[data-plus-style="clean"] .app-content-layer {
     margin: 0 !important;
     border-radius: 0 !important;
     background: var(--workbench-bg) !important;
@@ -2423,7 +2423,7 @@ html[data-plus-style="clean"] .plus-svg-symbol-card > span {
   }
 
   /* 2. Topbar: clean single-row session header with real Pi chips (project, branch, subagents, running). */
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .app-topbar-title {
+  html[data-plus-style="clean"] .app-topbar-title {
     display: flex !important;
     flex: 1 1 0% !important;
     flex-direction: row !important;
@@ -2432,7 +2432,7 @@ html[data-plus-style="clean"] .plus-svg-symbol-card > span {
     min-width: 0 !important;
     overflow: hidden !important;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .app-topbar-title > span:first-child {
+  html[data-plus-style="clean"] .app-topbar-title > span:first-child {
     display: block;
     flex: 0 1 auto;
     min-width: 0;
@@ -2448,11 +2448,11 @@ html[data-plus-style="clean"] .plus-svg-symbol-card > span {
 }
 
 /* 3. Left Sidebar: Claude brand lockup (hover/focus -> search), 5 nav rows, workspace list. */
-html[data-dsh-claude-style="1"][data-plus-style="clean"] .session-sidebar-header {
+html[data-plus-style="clean"] .session-sidebar-header {
   padding: 8px 10px 6px !important;
   border-bottom: 0 !important;
 }
-html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-controls-row {
+html[data-plus-style="clean"] .sidebar-controls-row {
   justify-content: flex-start !important;
   gap: 6px;
   height: 30px !important;
@@ -2460,19 +2460,19 @@ html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-controls-row {
 }
 
 /* Brand lockup & search box share one grid cell and cross-fade */
-html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-brand-search-slot {
+html[data-plus-style="clean"] .sidebar-brand-search-slot {
   display: grid;
   align-items: center;
   min-height: 34px;
   margin: 2px 0 8px;
 }
-html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-brand-search-slot > :is(.sidebar-brand-lockup, .sidebar-search-wrap) {
+html[data-plus-style="clean"] .sidebar-brand-search-slot > :is(.sidebar-brand-lockup, .sidebar-search-wrap) {
   grid-area: 1 / 1;
   margin: 0 !important;
   padding: 0 !important;
   transition: opacity var(--plus-dur-1) ease;
 }
-html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-brand-lockup {
+html[data-plus-style="clean"] .sidebar-brand-lockup {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -2480,17 +2480,32 @@ html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-brand-lockup {
   color: var(--text);
   pointer-events: none;
 }
-html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-brand-search-slot:not(:hover):not(:focus-within):not([data-has-query="true"]) > .sidebar-search-wrap {
+/* Claude's wordmark is a set serif logotype; Pi's is the same treatment in the
+   bundled Pi Serif, so the lockup reads as one product mark. */
+html[data-plus-style="clean"] .sidebar-brand-wordmark {
+  font-family: var(--plus-font-chat);
+  font-size: 19px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+html[data-plus-style="clean"] .sidebar-brand-starburst {
+  width: 17px;
+  height: 17px;
+  flex: none;
+}
+html[data-plus-style="clean"] .sidebar-brand-search-slot:not(:hover):not(:focus-within):not([data-has-query="true"]) > .sidebar-search-wrap {
   opacity: 0;
   pointer-events: none;
 }
-html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-brand-search-slot:is(:hover, :focus-within, [data-has-query="true"]) > .sidebar-brand-lockup {
+html[data-plus-style="clean"] .sidebar-brand-search-slot:is(:hover, :focus-within, [data-has-query="true"]) > .sidebar-brand-lockup {
   opacity: 0;
   pointer-events: none;
 }
 
 /* Sidebar nav rows (+ 新会话 / 插件 / Skill·MCP / 自动化任务 / 更多) */
-html[data-dsh-claude-style="1"][data-plus-style="clean"] :is(.sidebar-new-row, .sidebar-nav-row, .sidebar-scheduled-row) {
+html[data-plus-style="clean"] :is(.sidebar-new-row, .sidebar-nav-row, .sidebar-scheduled-row) {
   display: flex !important;
   align-items: center !important;
   justify-content: flex-start !important;
@@ -2511,10 +2526,10 @@ html[data-dsh-claude-style="1"][data-plus-style="clean"] :is(.sidebar-new-row, .
   cursor: pointer;
   transition: background var(--plus-dur-1) ease;
 }
-html[data-dsh-claude-style="1"][data-plus-style="clean"] :is(.sidebar-new-row, .sidebar-nav-row, .sidebar-scheduled-row):hover:not(:disabled) {
+html[data-plus-style="clean"] :is(.sidebar-new-row, .sidebar-nav-row, .sidebar-scheduled-row):hover:not(:disabled) {
   background: var(--bg-hover) !important;
 }
-html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-new-plus {
+html[data-plus-style="clean"] .sidebar-new-plus {
   display: inline-flex !important;
   align-items: center;
   justify-content: center;
@@ -2524,10 +2539,10 @@ html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-new-plus {
   background: color-mix(in srgb, var(--text) 10%, transparent) !important;
   color: var(--text) !important;
 }
-html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-new-row:not(:hover) .sidebar-new-kbd {
+html[data-plus-style="clean"] .sidebar-new-row:not(:hover) .sidebar-new-kbd {
   display: none !important;
 }
-html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-nav-more-item {
+html[data-plus-style="clean"] .sidebar-nav-more-item {
   display: flex;
   align-items: center;
   width: 100%;
@@ -2542,29 +2557,29 @@ html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-nav-more-item 
   text-align: left;
   cursor: pointer;
 }
-html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-nav-more-item:hover {
+html[data-plus-style="clean"] .sidebar-nav-more-item:hover {
   background: var(--bg-hover);
 }
 
 /* Workspace section & project tree */
-html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-chats-header[data-empty="true"],
-html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-chats-empty {
+html[data-plus-style="clean"] .sidebar-chats-header[data-empty="true"],
+html[data-plus-style="clean"] .sidebar-chats-empty {
   display: none !important;
 }
-html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-project-tree-header:not(.sidebar-chats-header) {
+html[data-plus-style="clean"] .sidebar-project-tree-header:not(.sidebar-chats-header) {
   margin-top: 4px !important;
   padding: 8px 8px 6px !important;
   border-top: 0 !important;
 }
-html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-project-tree-tools {
+html[data-plus-style="clean"] .sidebar-project-tree-tools {
   opacity: 0.78 !important;
   pointer-events: auto !important;
   gap: 2px;
 }
-html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-project-tree-header:hover .sidebar-project-tree-tools {
+html[data-plus-style="clean"] .sidebar-project-tree-header:hover .sidebar-project-tree-tools {
   opacity: 1 !important;
 }
-html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-project-tree-search {
+html[data-plus-style="clean"] .sidebar-project-tree-search {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2577,38 +2592,38 @@ html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-project-tree-s
   color: var(--text-dim);
   cursor: pointer;
 }
-html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-project-tree-search:hover {
+html[data-plus-style="clean"] .sidebar-project-tree-search:hover {
   background: var(--bg-hover);
   color: var(--text);
 }
 /* Clean editorial project headers (no bulky folder badge; count chip only when collapsed) */
-html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-project-tree-folder,
-html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-project-tree-group.is-expanded .sidebar-project-tree-count {
+html[data-plus-style="clean"] .sidebar-project-tree-folder,
+html[data-plus-style="clean"] .sidebar-project-tree-group.is-expanded .sidebar-project-tree-count {
   display: none !important;
 }
-html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-project-tree-group + .sidebar-project-tree-group {
+html[data-plus-style="clean"] .sidebar-project-tree-group + .sidebar-project-tree-group {
   margin-top: 2px !important;
 }
-html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-project-tree-row-main {
+html[data-plus-style="clean"] .sidebar-project-tree-row-main {
   min-height: 28px !important;
   padding: 0 8px !important;
   background: transparent !important;
   box-shadow: none !important;
 }
-html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-project-tree-group.is-active > .sidebar-project-tree-row .sidebar-project-tree-row-main {
+html[data-plus-style="clean"] .sidebar-project-tree-group.is-active > .sidebar-project-tree-row .sidebar-project-tree-row-main {
   background: transparent !important;
   box-shadow: none !important;
 }
-html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-project-tree-name {
+html[data-plus-style="clean"] .sidebar-project-tree-name {
   color: var(--text-muted) !important;
   font-size: var(--plus-fs-2) !important;
   font-weight: 400 !important;
 }
-html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-project-tree-group.is-active .sidebar-project-tree-name {
+html[data-plus-style="clean"] .sidebar-project-tree-group.is-active .sidebar-project-tree-name {
   color: var(--text) !important;
   font-weight: 500 !important;
 }
-html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-project-tree-group > .sidebar-project-tree-children {
+html[data-plus-style="clean"] .sidebar-project-tree-group > .sidebar-project-tree-children {
   margin: 2px 0 6px 0 !important;
   padding-left: 0 !important;
   border-left: 0 !important;
@@ -2616,19 +2631,19 @@ html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-project-tree-g
 
 /* Session rows: hollow ○ circle glyph on the left, relative time always visible on the right,
    selected row is a soft rounded pill with no vertical accent bar. */
-html[data-dsh-claude-style="1"][data-plus-style="clean"] .session-item {
+html[data-plus-style="clean"] .session-item {
   height: 30px !important;
   min-height: 30px !important;
   padding: 0 8px !important;
   border-left: 0 !important;
   border-radius: calc(var(--plus-r-ctl) + 2px) !important;
 }
-html[data-dsh-claude-style="1"][data-plus-style="clean"] .session-item.is-selected::before,
-html[data-dsh-claude-style="1"][data-plus-style="clean"] .session-sidebar .session-tree-item[data-current] .session-item.is-selected::before {
+html[data-plus-style="clean"] .session-item.is-selected::before,
+html[data-plus-style="clean"] .session-sidebar .session-tree-item[data-current] .session-item.is-selected::before {
   content: none !important;
   display: none !important;
 }
-html[data-dsh-claude-style="1"][data-plus-style="clean"] .session-item .session-item-glyph {
+html[data-plus-style="clean"] .session-item .session-item-glyph {
   visibility: visible !important;
   width: 6px !important;
   height: 6px !important;
@@ -2638,124 +2653,118 @@ html[data-dsh-claude-style="1"][data-plus-style="clean"] .session-item .session-
   opacity: 0.55;
   order: 0 !important;
 }
-html[data-dsh-claude-style="1"][data-plus-style="clean"] .session-item .session-item-glyph > * {
+html[data-plus-style="clean"] .session-item .session-item-glyph > * {
   display: none !important;
 }
-html[data-dsh-claude-style="1"][data-plus-style="clean"] .session-item:not(:hover):not(:focus-within) .session-item-trailing {
+html[data-plus-style="clean"] .session-item:not(:hover):not(:focus-within) .session-item-trailing {
   display: flex !important;
 }
-html[data-dsh-claude-style="1"][data-plus-style="clean"] .session-item-time {
+html[data-plus-style="clean"] .session-item-time {
   color: var(--text-dim) !important;
   font-size: var(--plus-fs-1) !important;
 }
 
 /* Sidebar bottom account footer (海里的鱼 ⌄ + settings & theme icons) */
-html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-footer {
+html[data-plus-style="clean"] .sidebar-footer {
   display: flex;
   align-items: center;
   gap: 4px;
   padding: 8px 10px !important;
   border-top: 1px solid var(--plus-stroke) !important;
 }
-html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-footer .sidebar-user-profile {
+html[data-plus-style="clean"] .sidebar-footer .sidebar-user-profile {
   flex: 1 1 auto;
   max-width: none;
   padding: 4px 6px;
 }
-html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-user-chevron {
+html[data-plus-style="clean"] .sidebar-user-chevron {
   margin-left: auto;
   color: var(--text-dim);
   flex: none;
 }
-html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-footer-settings {
+html[data-plus-style="clean"] .sidebar-footer-settings {
   flex: 0 0 28px !important;
   width: 28px !important;
   height: 28px !important;
   padding: 0 !important;
   justify-content: center !important;
 }
-html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-footer-settings > span {
+html[data-plus-style="clean"] .sidebar-footer-settings > span {
   display: none !important;
 }
 
 @media (min-width: 769px) {
   /* 4. Messages, Thinking Fold, Markdown Table & Footer */
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .message-user-bubble:not(.is-editing) {
+  html[data-plus-style="clean"] .message-user-bubble:not(.is-editing) {
     border-left: 0 !important;
     border-radius: calc(var(--plus-r-overlay) + var(--plus-s1)) !important;
     background: var(--user-bg) !important;
     box-shadow: none !important;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .work-group-trigger {
+  html[data-plus-style="clean"] .work-group-trigger {
     border: 0 !important;
     background: transparent !important;
     box-shadow: none !important;
     padding: 2px 0 !important;
     color: var(--text-muted) !important;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .work-group-trigger:hover,
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .work-group.is-open .work-group-trigger {
+  html[data-plus-style="clean"] .work-group-trigger:hover,
+  html[data-plus-style="clean"] .work-group.is-open .work-group-trigger {
     background: transparent !important;
     color: var(--text) !important;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .work-group-body {
+  html[data-plus-style="clean"] .work-group-body {
     margin-left: 2px !important;
     padding-left: 10px !important;
     border-left: 1px solid var(--plus-stroke) !important;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .plus-thinking {
-    border: 0 !important;
-    background: transparent !important;
-    padding: 2px 0 !important;
-    box-shadow: none !important;
-  }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .markdown-table-wrap {
+  html[data-plus-style="clean"] .markdown-table-wrap {
     border: 1px solid var(--plus-stroke) !important;
     border-radius: var(--plus-r-overlay) !important;
     background: var(--workbench-bg) !important;
     overflow: hidden;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .markdown-body th {
+  html[data-plus-style="clean"] .markdown-body th {
     padding: 10px 16px !important;
     background: var(--plus-code-header) !important;
     border-bottom: 1px solid var(--plus-stroke) !important;
     font-weight: 600 !important;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .markdown-body td {
+  html[data-plus-style="clean"] .markdown-body td {
     padding: 10px 16px !important;
     background: transparent !important;
     border-top: 1px solid var(--plus-stroke) !important;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .message-assistant-footer {
+  html[data-plus-style="clean"] .message-assistant-footer {
     justify-content: flex-start !important;
     gap: 6px !important;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .message-assistant-footer .message-copy-action {
+  html[data-plus-style="clean"] .message-assistant-footer .message-copy-action {
     order: 0 !important;
     margin-left: 0 !important;
     width: 24px !important;
     height: 24px !important;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .message-assistant-footer > .message-meta + .message-meta::before {
+  html[data-plus-style="clean"] .message-assistant-footer > .message-meta + .message-meta::before {
     content: none !important;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .message-assistant-footer .message-footer-model {
+  html[data-plus-style="clean"] .message-assistant-footer .message-footer-model {
     opacity: 0;
     transition: opacity var(--plus-dur-1) ease;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .message-assistant:hover .message-assistant-footer .message-footer-model {
+  html[data-plus-style="clean"] .message-assistant:hover .message-assistant-footer .message-footer-model {
     opacity: 0.75;
   }
 
   /* 5. Right-Edge Turn Navigator (Claude Code horizontal tick dashes) */
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .conversation-navigator {
+  html[data-plus-style="clean"] .conversation-navigator {
     right: 8px !important;
     width: 24px !important;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .conversation-navigator:not(:hover) .conversation-navigator-list-button {
+  html[data-plus-style="clean"] .conversation-navigator:not(:hover) .conversation-navigator-list-button {
     opacity: 0 !important;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .conversation-navigator-tick {
+  html[data-plus-style="clean"] .conversation-navigator-tick {
     right: 2px !important;
     width: 18px !important;
     height: 2px !important;
@@ -2765,23 +2774,23 @@ html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-footer-setting
     transform-origin: 100% 50%;
     transition: transform var(--plus-dur-1) ease, background var(--plus-dur-1) ease;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .conversation-navigator-tick.is-active {
+  html[data-plus-style="clean"] .conversation-navigator-tick.is-active {
     background: var(--text) !important;
     transform: scaleX(1);
   }
 
   /* 6. Composer Card, Pixel Crab Mascot & Bottom Control Row */
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .chat-composer-frame:has(> .chat-composer-controls) {
+  html[data-plus-style="clean"] .chat-composer-frame:has(> .chat-composer-controls) {
     background: transparent !important;
     border: 0 !important;
     border-radius: 0 !important;
     box-shadow: none !important;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .chat-composer-frame:has(> .chat-composer-controls):focus-within {
+  html[data-plus-style="clean"] .chat-composer-frame:has(> .chat-composer-controls):focus-within {
     border: 0 !important;
     box-shadow: none !important;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .chat-composer-frame:has(> .chat-composer-controls) > .chat-composer {
+  html[data-plus-style="clean"] .chat-composer-frame:has(> .chat-composer-controls) > .chat-composer {
     background: var(--workbench-bg) !important;
     border: 1px solid var(--plus-stroke-strong) !important;
     border-radius: calc(var(--plus-r-overlay) + 2px) !important;
@@ -2789,24 +2798,24 @@ html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-footer-setting
     padding: 0 !important;
     transition: border-color var(--plus-dur-1) ease, box-shadow var(--plus-dur-1) ease;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .chat-composer-frame:has(> .chat-composer-controls) > .chat-composer:focus-within {
+  html[data-plus-style="clean"] .chat-composer-frame:has(> .chat-composer-controls) > .chat-composer:focus-within {
     border-color: color-mix(in srgb, var(--text) 24%, transparent) !important;
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 7%, transparent), var(--shadow-composer) !important;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .chat-composer-editor {
+  html[data-plus-style="clean"] .chat-composer-editor {
     background: transparent !important;
     box-shadow: none !important;
     min-height: 42px;
     padding: 8px 68px 8px 14px !important;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .chat-composer-editor .prompt-optimize-button {
+  html[data-plus-style="clean"] .chat-composer-editor .prompt-optimize-button {
     margin-right: 4px;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .chat-composer-frame .chat-input-textarea {
+  html[data-plus-style="clean"] .chat-composer-frame .chat-input-textarea {
     min-height: 24px !important;
     line-height: 24px !important;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .chat-composer-frame > .chat-composer-controls {
+  html[data-plus-style="clean"] .chat-composer-frame > .chat-composer-controls {
     margin-top: 6px !important;
     padding: 0 4px !important;
     border-top: 0 !important;
@@ -2815,18 +2824,18 @@ html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-footer-setting
   }
 
   /* Send / Return button inside the right edge of the input card */
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .composer-expand-corner-btn {
+  html[data-plus-style="clean"] .composer-expand-corner-btn {
     top: 8px !important;
     right: 40px !important;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .chat-composer-frame > .chat-composer-controls > .composer-send-group:not(:has(.is-labeled)) {
+  html[data-plus-style="clean"] .chat-composer-frame > .chat-composer-controls > .composer-send-group:not(:has(.is-labeled)) {
     position: absolute;
     right: 8px;
     bottom: 42px;
     z-index: 10;
     margin: 0 !important;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .composer-send-group .composer-send-button:not(.is-labeled) {
+  html[data-plus-style="clean"] .composer-send-group .composer-send-button:not(.is-labeled) {
     width: 26px !important;
     height: 26px !important;
     min-width: 26px !important;
@@ -2836,24 +2845,24 @@ html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-footer-setting
     color: var(--text-dim) !important;
     box-shadow: none !important;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .composer-send-group .composer-send-button[data-action="send"]:not(.is-labeled):not(:disabled) {
+  html[data-plus-style="clean"] .composer-send-group .composer-send-button[data-action="send"]:not(.is-labeled):not(:disabled) {
     background: var(--accent) !important;
     color: var(--accent-contrast) !important;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .composer-send-group .composer-send-button[data-action="send"]:not(.is-labeled):not(:disabled):hover {
+  html[data-plus-style="clean"] .composer-send-group .composer-send-button[data-action="send"]:not(.is-labeled):not(:disabled):hover {
     background: var(--plus-fill-hover) !important;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .composer-send-group .composer-send-button[data-action="stop"] {
+  html[data-plus-style="clean"] .composer-send-group .composer-send-button[data-action="stop"] {
     background: color-mix(in srgb, var(--text) 8%, transparent) !important;
     color: var(--text) !important;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .composer-send-group .composer-send-button[data-action="stop"]:hover {
+  html[data-plus-style="clean"] .composer-send-group .composer-send-button[data-action="stop"]:hover {
     background: var(--bg-hover) !important;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .composer-send-group .composer-send-button[data-action="send"]:not(.is-labeled) > svg {
+  html[data-plus-style="clean"] .composer-send-group .composer-send-button[data-action="send"]:not(.is-labeled) > svg {
     display: none;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .composer-send-group .composer-send-button[data-action="send"]:not(.is-labeled)::after {
+  html[data-plus-style="clean"] .composer-send-group .composer-send-button[data-action="send"]:not(.is-labeled)::after {
     content: "";
     width: 15px;
     height: 15px;
@@ -2866,44 +2875,44 @@ html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-footer-setting
      LEFT:  完全权限 (1) · + attach (2) · quick phrases / extensions / automation (3)
      SPACE: spacer (4)
      RIGHT: Model · Provider (5) · High (6) · 13% pie (7) · streaming controls (8) */
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .chat-composer-controls .composer-tool-preset { order: 1 !important; }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .chat-composer-controls .composer-attach-button { order: 2 !important; }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .chat-composer-controls :is(.composer-quick-phrases, .composer-extensions-chip, .composer-automation) { order: 3 !important; }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .chat-composer-controls .composer-controls-spacer { order: 4 !important; flex: 1 1 auto !important; }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .chat-composer-controls .model-selector { order: 5 !important; }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .chat-composer-controls .composer-thinking { order: 6 !important; }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .chat-composer-controls .context-usage-ring { order: 7 !important; }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .chat-composer-controls > .composer-send-group { order: 8 !important; }
+  html[data-plus-style="clean"] .chat-composer-controls .composer-tool-preset { order: 1 !important; }
+  html[data-plus-style="clean"] .chat-composer-controls .composer-attach-button { order: 2 !important; }
+  html[data-plus-style="clean"] .chat-composer-controls :is(.composer-quick-phrases, .composer-extensions-chip, .composer-automation) { order: 3 !important; }
+  html[data-plus-style="clean"] .chat-composer-controls .composer-controls-spacer { order: 4 !important; flex: 1 1 auto !important; }
+  html[data-plus-style="clean"] .chat-composer-controls .model-selector { order: 5 !important; }
+  html[data-plus-style="clean"] .chat-composer-controls .composer-thinking { order: 6 !important; }
+  html[data-plus-style="clean"] .chat-composer-controls .context-usage-ring { order: 7 !important; }
+  html[data-plus-style="clean"] .chat-composer-controls > .composer-send-group { order: 8 !important; }
 
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .composer-tool-preset > button {
+  html[data-plus-style="clean"] .composer-tool-preset > button {
     width: auto !important;
     height: 28px !important;
     padding: 0 8px !important;
     color: var(--text-muted) !important;
     font-size: var(--plus-fs-2) !important;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .composer-tool-preset > button > svg {
+  html[data-plus-style="clean"] .composer-tool-preset > button > svg {
     display: none !important;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .composer-tool-preset-label {
+  html[data-plus-style="clean"] .composer-tool-preset-label {
     display: inline !important;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] :is(.composer-tool-menu, .composer-quick-phrases-menu, .composer-automation .native-popover) {
+  html[data-plus-style="clean"] :is(.composer-tool-menu, .composer-quick-phrases-menu, .composer-automation .native-popover) {
     left: 0 !important;
     right: auto !important;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .composer-thinking .composer-run-menu {
+  html[data-plus-style="clean"] .composer-thinking .composer-run-menu {
     right: 0 !important;
     left: auto !important;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .composer-attach-clip { display: none !important; }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .composer-attach-plus { display: block !important; }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .chat-composer-controls .composer-attach-button {
+  html[data-plus-style="clean"] .composer-attach-clip { display: none !important; }
+  html[data-plus-style="clean"] .composer-attach-plus { display: block !important; }
+  html[data-plus-style="clean"] .chat-composer-controls .composer-attach-button {
     width: 28px !important;
     height: 28px !important;
   }
 
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .model-selector.is-toolbar > button {
+  html[data-plus-style="clean"] .model-selector.is-toolbar > button {
     max-width: 320px !important;
     height: 28px !important;
     padding: 0 6px !important;
@@ -2911,34 +2920,30 @@ html[data-dsh-claude-style="1"][data-plus-style="clean"] .sidebar-footer-setting
     font-size: var(--plus-fs-2) !important;
     font-weight: 500 !important;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .model-selector.is-toolbar .model-selector-dot,
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .model-selector.is-toolbar .model-selector-icon {
+  html[data-plus-style="clean"] .model-selector.is-toolbar .model-selector-dot,
+  html[data-plus-style="clean"] .model-selector.is-toolbar .model-selector-icon {
     display: none !important;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .composer-thinking > button {
+  html[data-plus-style="clean"] .composer-thinking > button {
     height: 28px !important;
     padding: 0 6px !important;
     font-size: var(--plus-fs-2) !important;
     font-weight: 500 !important;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .composer-thinking > button > svg {
+  html[data-plus-style="clean"] .composer-thinking > button > svg {
     display: none !important;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .composer-thinking[data-thinking-level="low"] > button {
+  html[data-plus-style="clean"] .composer-thinking[data-thinking-level="low"] > button {
     color: color-mix(in srgb, var(--accent) 45%, var(--text-muted)) !important;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .composer-thinking[data-thinking-level="medium"] > button {
+  html[data-plus-style="clean"] .composer-thinking[data-thinking-level="medium"] > button {
     color: color-mix(in srgb, var(--accent) 72%, var(--text-muted)) !important;
   }
-  html[data-dsh-claude-style="1"][data-plus-style="clean"] .composer-thinking:is([data-thinking-level="high"], [data-thinking-level="xhigh"], [data-thinking-level="max"]) > button {
+  html[data-plus-style="clean"] .composer-thinking:is([data-thinking-level="high"], [data-thinking-level="xhigh"], [data-thinking-level="max"]) > button {
     color: var(--accent) !important;
   }
 }
 
-html:not([data-dsh-claude-style="1"]) :is(.composer-attach-plus, .sidebar-brand-lockup, .sidebar-nav-row, .sidebar-project-tree-search),
-html:not([data-plus-style="clean"]) .sidebar-user-profile {
-  display: none !important;
-}
 
 /* 7. Clawd Pixel Crab Mascot (ported from dsh-claude-style features/mascot/crab.css) */
 .plus-composer-crab {
@@ -2989,4 +2994,683 @@ html:not([data-plus-style="clean"]) .sidebar-user-profile {
   pointer-events: auto;
   cursor: pointer;
   touch-action: none;
+}
+/* ==========================================================================
+   Modern message layer.
+
+   The shell already reads as a desktop app; what still read as a terminal was
+   the transcript: one full-bleed grey plank per tool call, a bordered thinking
+   strip with an accent bar, mono labels in running text, and four differently
+   sized control chips in the composer footer.
+
+   Everything below is a quiet card or an inline disclosure: hairline strokes,
+   8px corners, sans-serif labels for chrome and mono only for code and
+   identifiers. Information density stays where it was - Claude is compact.
+   ========================================================================== */
+
+/* ---- 1. tool call rows ---------------------------------------------------
+   A run of calls is one inset card: 30px rows, a hairline between them, a
+   hover tint on the row. Consecutive cards take back the message column's
+   block gap, so a run shares one top and bottom corner and one 1px line
+   between rows instead of a plank per call. */
+
+html[data-plus-style="clean"] .message-assistant-content { --plus-block-gap: var(--plus-s2); }
+html[data-plus-style="clean"] .message-assistant.is-work-step .message-assistant-content { --plus-block-gap: var(--plus-s1); }
+
+html[data-plus-style="clean"] .plus-tool-card {
+  border: 1px solid var(--plus-stroke) !important;
+  border-radius: var(--plus-r-card) !important;
+  background: color-mix(in srgb, var(--surface) 55%, transparent) !important;
+  font-size: var(--plus-fs-1) !important;
+  transition: border-color var(--plus-dur-1) ease, background-color var(--plus-dur-1) ease;
+}
+html.dark[data-plus-style="clean"] .plus-tool-card {
+  background: color-mix(in srgb, var(--surface) 35%, transparent) !important;
+}
+html[data-plus-style="clean"] .plus-tool-card.is-error {
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent) !important;
+  background: color-mix(in srgb, var(--danger) 5%, transparent) !important;
+}
+html[data-plus-style="clean"] .plus-tool-card.is-aborted {
+  border-color: var(--plus-stroke) !important;
+  background: color-mix(in srgb, var(--text) 3%, transparent) !important;
+}
+/* Inside the work timeline the row above is already the frame, so a bare block
+   drops the card chrome and keeps only its detail surfaces. */
+html[data-plus-style="clean"] .plus-tool-card.is-bare {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+html[data-plus-style="clean"] .plus-tool-card.is-bare > .plus-tool-args {
+  padding-top: 0 !important;
+  border-top: 0 !important;
+}
+html[data-plus-style="clean"] .plus-tool-card.is-bare > .plus-tool-result,
+html[data-plus-style="clean"] .plus-tool-card.is-bare > .plus-tool-io {
+  margin: var(--plus-s2) 0 0 !important;
+}
+html[data-plus-style="clean"] .plus-tool-card:not(.is-bare) + .plus-tool-card:not(.is-bare) {
+  margin-top: calc(-1 * var(--plus-block-gap, 8px)) !important;
+  border-top-color: transparent !important;
+  border-top-left-radius: 0 !important;
+  border-top-right-radius: 0 !important;
+}
+html[data-plus-style="clean"] .plus-tool-card:not(.is-bare):has(+ .plus-tool-card:not(.is-bare)) {
+  border-bottom-left-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+}
+
+/* the 30px row: sans label, mono target, duration then chevron on the right */
+html[data-plus-style="clean"] .plus-tool-card:not(.is-bare) > div:first-child { min-height: 30px; }
+html[data-plus-style="clean"] .plus-tool-card:not(.is-bare) > div:first-child > button {
+  height: 30px;
+  padding: 0 var(--plus-s3) !important;
+  gap: var(--plus-s2) !important;
+  transition: background-color var(--plus-dur-1) ease;
+}
+html[data-plus-style="clean"] .plus-tool-card:not(.is-bare) > div:first-child > button:hover {
+  background: color-mix(in srgb, var(--text) 5%, transparent) !important;
+}
+html[data-plus-style="clean"] .plus-tool-card .plus-tool-name {
+  font-family: var(--font-ui) !important;
+  font-weight: 600 !important;
+  font-size: var(--plus-fs-1) !important;
+  letter-spacing: 0.01em;
+  color: var(--text-muted) !important;
+}
+html[data-plus-style="clean"] .plus-tool-card.is-error .plus-tool-name { color: var(--danger) !important; }
+html[data-plus-style="clean"] .plus-tool-card.is-aborted .plus-tool-name { color: var(--text-dim) !important; }
+/* the subagent shortcut is a ghost icon, not a boxed cell */
+html[data-plus-style="clean"] .plus-tool-card:not(.is-bare) > div:first-child > button + button {
+  width: 30px !important;
+  border-left: 0 !important;
+  color: var(--text-dim) !important;
+  transition: color var(--plus-dur-1) ease, background-color var(--plus-dur-1) ease;
+}
+html[data-plus-style="clean"] .plus-tool-card:not(.is-bare) > div:first-child > button + button:hover {
+  color: var(--text) !important;
+  background: color-mix(in srgb, var(--text) 5%, transparent) !important;
+}
+
+/* arguments: one key column shared by every row (subgrid), value as a chip */
+html[data-plus-style="clean"] .plus-tool-args {
+  display: grid !important;
+  grid-template-columns: max-content minmax(0, 1fr) !important;
+  gap: 2px var(--plus-s3) !important;
+  align-items: baseline;
+  margin: 0 !important;
+  padding: var(--plus-s2) var(--plus-s3) var(--plus-s3) !important;
+  border: 0 !important;
+  border-top: 1px solid var(--plus-stroke) !important;
+  background: transparent !important;
+  font-family: var(--font-mono) !important;
+  font-size: var(--plus-fs-1) !important;
+  line-height: 1.5;
+}
+html[data-plus-style="clean"] .plus-tool-arg {
+  display: grid !important;
+  grid-column: 1 / -1;
+  grid-template-columns: max-content minmax(0, 1fr);
+  grid-template-columns: subgrid;
+  gap: 0 !important;
+  align-items: baseline;
+}
+html[data-plus-style="clean"] .plus-tool-arg-key {
+  font-family: var(--font-ui) !important;
+  font-size: var(--plus-fs-1) !important;
+  color: var(--text-dim) !important;
+  text-align: right;
+}
+html[data-plus-style="clean"] .plus-tool-arg-value {
+  justify-self: start;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0 var(--plus-s1) !important;
+  border-radius: var(--plus-r-ctl) !important;
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+  color: var(--text-muted) !important;
+  font-size: var(--plus-fs-1) !important;
+  text-align: left !important;
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+html[data-plus-style="clean"] .plus-tool-arg.is-clamped .plus-tool-arg-value { font-style: normal; }
+
+/* input JSON and the result body: one bordered mono surface, capped, fading */
+html[data-plus-style="clean"] .plus-tool-card > .plus-tool-io {
+  margin: var(--plus-s2) !important;
+  border: 1px solid var(--plus-stroke) !important;
+  border-radius: var(--plus-r-card) !important;
+  background: var(--plus-code-bg) !important;
+}
+html[data-plus-style="clean"] .plus-tool-result {
+  margin: var(--plus-s2) !important;
+  border: 1px solid var(--plus-stroke) !important;
+  border-radius: var(--plus-r-card) !important;
+  background: var(--plus-code-bg) !important;
+  overflow: hidden;
+}
+html[data-plus-style="clean"] .plus-tool-result > .plus-tool-io {
+  border: 0 !important;
+  background: transparent !important;
+}
+html[data-plus-style="clean"] .plus-tool-card .plus-tool-io {
+  padding: var(--plus-s2) var(--plus-s3) var(--plus-s3) !important;
+  max-height: 320px !important;
+  overflow: auto !important;
+  color: var(--text-muted) !important;
+  font-family: var(--font-mono) !important;
+  font-size: var(--plus-fs-1) !important;
+  line-height: 1.55 !important;
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 12px), transparent);
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 12px), transparent);
+}
+
+/* ---- 2. thinking block: an inline disclosure, not a plank ---------------- */
+
+html[data-plus-style="clean"] .plus-thinking {
+  width: max-content;
+  max-width: 100%;
+  min-height: 26px;
+  align-self: flex-start;
+  align-items: center !important;
+  padding: 0 var(--plus-s2) !important;
+  gap: var(--plus-s1) !important;
+  border: 1px solid var(--plus-stroke) !important;
+  border-radius: var(--plus-r-card) !important;
+  background: color-mix(in srgb, var(--surface) 45%, transparent) !important;
+  color: var(--text-muted) !important;
+  font-family: var(--font-ui) !important;
+  font-size: var(--plus-fs-1) !important;
+  line-height: 1.45 !important;
+  transition: background-color var(--plus-dur-1) ease, border-color var(--plus-dur-1) ease;
+}
+html.dark[data-plus-style="clean"] .plus-thinking {
+  background: color-mix(in srgb, var(--surface) 30%, transparent) !important;
+}
+html[data-plus-style="clean"] .plus-thinking:hover { border-color: var(--plus-stroke-strong) !important; }
+html[data-plus-style="clean"] .plus-thinking > button { padding: var(--plus-s1) 0 !important; }
+html[data-plus-style="clean"] .plus-thinking > button > span {
+  color: var(--text-dim);
+  font-family: var(--plus-font-chat);
+  font-style: italic;
+}
+html[data-plus-style="clean"] .plus-thinking:has(.plus-thinking-body) {
+  width: 100%;
+  align-self: stretch;
+  align-items: flex-start !important;
+  padding: var(--plus-s2) !important;
+  background: color-mix(in srgb, var(--surface) 30%, transparent) !important;
+}
+html[data-plus-style="clean"] .plus-thinking-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 10px var(--plus-s3) !important;
+  font-family: var(--plus-font-chat) !important;
+  font-style: italic;
+  font-size: var(--plus-fs-2) !important;
+  line-height: 1.7 !important;
+  opacity: 0.9;
+}
+
+/* ---- 3. extension / system notes ---------------------------------------- */
+/* A muted note card: icon and 13px sans label, one truncated preview line with
+   a chevron, hairline border. The copy / expand links sit in a footer that only
+   shows on hover or focus, so no row ends in a pair of dangling text links. */
+
+html[data-plus-style="clean"] .plus-note-card {
+  border: 1px solid var(--plus-stroke) !important;
+  border-radius: var(--plus-r-card) !important;
+  background: color-mix(in srgb, var(--surface) 40%, transparent) !important;
+  opacity: 1 !important;
+  transition: border-color var(--plus-dur-1) ease;
+}
+html[data-plus-style="clean"] .plus-note-card:hover { border-color: var(--plus-stroke-strong) !important; }
+html[data-plus-style="clean"] .plus-note-head {
+  min-height: 30px;
+  padding: 0 var(--plus-s2) 0 var(--plus-s3) !important;
+  gap: var(--plus-s2) !important;
+  border-bottom: 0 !important;
+  background: transparent !important;
+}
+html[data-plus-style="clean"] .plus-note-head::before {
+  content: "";
+  flex: none;
+  width: 14px;
+  height: 14px;
+  background: currentColor;
+  opacity: 0.6;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 2.75h9v10.5h-9z'/%3E%3Cpath d='M6 6.25h4M6 8.75h2.75'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 2.75h9v10.5h-9z'/%3E%3Cpath d='M6 6.25h4M6 8.75h2.75'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+html[data-plus-style="clean"] .plus-note-label {
+  font-family: var(--font-ui) !important;
+  font-size: var(--plus-fs-2) !important;
+  font-weight: 600 !important;
+  letter-spacing: 0;
+  color: var(--text-muted) !important;
+}
+html[data-plus-style="clean"] .plus-note-kind {
+  padding: 0 var(--plus-s1);
+  border: 1px solid var(--plus-stroke);
+  border-radius: var(--plus-r-ctl);
+  color: var(--text-dim) !important;
+  font-size: var(--plus-fs-1) !important;
+  line-height: 1.6;
+}
+html[data-plus-style="clean"] .plus-note-head .message-meta {
+  margin-left: auto !important;
+  color: var(--text-dim) !important;
+  font-size: var(--plus-fs-1) !important;
+}
+html[data-plus-style="clean"] .plus-note-body { padding: var(--plus-s2) var(--plus-s3) var(--plus-s3) !important; }
+html[data-plus-style="clean"] .plus-note-body .markdown-custom-message {
+  font-size: var(--plus-fs-2);
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+html[data-plus-style="clean"] .plus-note-preview {
+  position: relative;
+  padding: var(--plus-s2) var(--plus-s5) var(--plus-s2) var(--plus-s3) !important;
+  color: var(--text-dim) !important;
+  font-family: var(--font-ui) !important;
+  font-size: var(--plus-fs-1) !important;
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color var(--plus-dur-1) ease, background-color var(--plus-dur-1) ease;
+}
+html[data-plus-style="clean"] .plus-note-preview:hover {
+  color: var(--text-muted) !important;
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+html[data-plus-style="clean"] .plus-note-preview::after {
+  content: "";
+  position: absolute;
+  right: var(--plus-s2);
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  transform: translateY(-50%);
+  background: currentColor;
+  opacity: 0.65;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 3.5 10.5 8 6 12.5'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 3.5 10.5 8 6 12.5'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+html[data-plus-style="clean"] .plus-note-foot {
+  padding: 0 var(--plus-s3) var(--plus-s2) !important;
+  border-top: 0 !important;
+  background: transparent !important;
+  opacity: 0;
+  transition: opacity var(--plus-dur-1) ease;
+}
+html[data-plus-style="clean"] .plus-note-foot > button {
+  padding: 0 var(--plus-s1) !important;
+  border-radius: var(--plus-r-ctl) !important;
+  color: var(--text-dim) !important;
+  font-family: var(--font-ui) !important;
+  font-size: var(--plus-fs-1) !important;
+  line-height: 1.6;
+  transition: color var(--plus-dur-1) ease, background-color var(--plus-dur-1) ease;
+}
+html[data-plus-style="clean"] .plus-note-foot > button:hover {
+  color: var(--text) !important;
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+}
+/* A collapsed note is one line plus a chevron; the copy / collapse links only
+   appear once the note is open. */
+html[data-plus-style="clean"] .plus-note-card:not(:has(.plus-note-body)) .plus-note-foot { display: none; }
+html[data-plus-style="clean"] .plus-note-card:has(.plus-note-body) .plus-note-foot,
+html[data-plus-style="clean"] .plus-note-card:focus-within .plus-note-foot { opacity: 1; }
+html[data-plus-style="clean"] .plus-note-details {
+  margin: var(--plus-s2) !important;
+  padding: var(--plus-s2) var(--plus-s3) var(--plus-s3) !important;
+  border: 1px solid var(--plus-stroke) !important;
+  border-radius: var(--plus-r-card) !important;
+  background: var(--plus-code-bg) !important;
+  color: var(--text-muted) !important;
+  font-family: var(--font-mono) !important;
+  font-size: var(--plus-fs-1) !important;
+  line-height: 1.55 !important;
+  max-height: 320px !important;
+  overflow: auto !important;
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 12px), transparent);
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 12px), transparent);
+}
+
+/* ---- 4. composer footer: four identical ghost pills ---------------------- */
+
+@media (min-width: 769px) {
+  html[data-plus-style="clean"] .chat-composer-frame .chat-composer-controls:has(> .composer-send-group) { gap: 6px !important; }
+  html[data-plus-style="clean"] .chat-composer-frame .chat-composer-controls :is(.composer-tool-preset, .composer-quick-phrases, .composer-automation) > button,
+  html[data-plus-style="clean"] .chat-composer-frame .chat-composer-controls .composer-extensions-chip,
+  html[data-plus-style="clean"] .chat-composer-frame .chat-composer-controls .model-selector.is-toolbar > button,
+  html[data-plus-style="clean"] .chat-composer-frame .chat-composer-controls .composer-thinking > button {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: var(--plus-s1) !important;
+    width: auto !important;
+    min-width: 0 !important;
+    height: 26px !important;
+    padding: 0 var(--plus-s2) !important;
+    border: 0 !important;
+    border-radius: var(--plus-r-card) !important;
+    background: transparent !important;
+    color: var(--text-muted) !important;
+    font-family: var(--font-ui) !important;
+    font-size: var(--plus-fs-1) !important;
+    font-weight: 500 !important;
+    line-height: 1 !important;
+    box-shadow: none !important;
+    transition: color var(--plus-dur-1) ease, background-color var(--plus-dur-1) ease;
+  }
+  html[data-plus-style="clean"] .chat-composer-frame .chat-composer-controls :is(.composer-tool-preset, .composer-quick-phrases, .composer-automation) > button:hover:not(:disabled),
+  html[data-plus-style="clean"] .chat-composer-frame .chat-composer-controls .composer-extensions-chip:hover:not(:disabled),
+  html[data-plus-style="clean"] .chat-composer-frame .chat-composer-controls .model-selector.is-toolbar > button:hover:not(:disabled),
+  html[data-plus-style="clean"] .chat-composer-frame .chat-composer-controls .composer-thinking > button:hover:not(:disabled) {
+    color: var(--text) !important;
+    background: color-mix(in srgb, var(--text) 6%, transparent) !important;
+  }
+  html[data-plus-style="clean"] .chat-composer-frame .chat-composer-controls :is(.composer-tool-preset, .composer-quick-phrases, .composer-automation) > button > svg,
+  html[data-plus-style="clean"] .chat-composer-frame .chat-composer-controls .composer-extensions-chip > svg,
+  html[data-plus-style="clean"] .chat-composer-frame .chat-composer-controls .composer-thinking > button > svg {
+    width: 14px !important;
+    height: 14px !important;
+    flex: none;
+  }
+  /* the icon-only controls keep a 26px square */
+  html[data-plus-style="clean"] .chat-composer-frame .chat-composer-controls .composer-automation > button,
+  html[data-plus-style="clean"] .chat-composer-frame .chat-composer-controls .composer-attach-button {
+    width: 26px !important;
+    height: 26px !important;
+    padding: 0 !important;
+    border-radius: var(--plus-r-card) !important;
+    color: var(--text-muted) !important;
+  }
+  html[data-plus-style="clean"] .chat-composer-frame .chat-composer-controls .composer-attach-button:hover:not(:disabled) {
+    color: var(--text) !important;
+    background: color-mix(in srgb, var(--text) 6%, transparent) !important;
+  }
+  html[data-plus-style="clean"] .chat-composer-frame .composer-extensions-count {
+    color: var(--text-dim) !important;
+    font-size: var(--plus-fs-1) !important;
+    font-weight: 500 !important;
+  }
+}
+
+/* ==========================================================================
+   Plus 1.25 layout pass: the eight measurement defects from the audit.
+
+   Each block below is a fix for a number that was wrong in the running app
+   at 1920x1028, not a restyle: the Settings window was a phone column, the
+   Scheduled page lost its right half, the `/` palette read as six cramped
+   columns and cut a card in half, the topbar could not shrink its chips,
+   four controls were shorter than 24px, a compaction preview laid ~124k px
+   of text on one line, the mascot hung outside its frame with a half-size
+   hit rect, and the extension widget popover clipped at 144px with no shadow
+   in light mode. Every value is a token or a measured size.
+   ========================================================================== */
+
+/* 1. Settings: a desktop two-pane window. It was min(920px) x min(680px)
+      with a 216px nav, so the page body measured 694px on a 1920 screen and
+      every page read as one narrow column. */
+@media (min-width: 769px) {
+  html[data-plus-style="clean"] .is-plus-page .settings-dialog-surface {
+    grid-template-columns: 240px minmax(0, 1fr);
+    width: min(1080px, 94vw);
+    height: min(760px, 88vh);
+    background: linear-gradient(to right, var(--bg-panel) 240px, var(--workbench-bg) 240px);
+  }
+  /* Reading pages keep a 720px measure and stay left-aligned instead of
+     stretching edge to edge just because the window got wider. */
+  html[data-plus-style="clean"] .is-plus-page :is(.settings-general, .plus-appearance-page) {
+    max-width: 720px;
+    margin-right: auto;
+  }
+  /* The config pages (Plugins / MCP / Models / Skills) keep their own two
+     panes: the detail column takes the extra width, the list rail does not. */
+  html[data-plus-style="clean"] .is-plus-page .config-panel-root.is-embedded {
+    width: 100%;
+  }
+  html[data-plus-style="clean"] .is-plus-page .config-panel-root.is-embedded :is(.config-sidebar, .config-list) {
+    flex: 0 0 auto;
+  }
+  /* Docked to the right the window is only min(620px, 48vw) wide; the wider
+     rail belongs to the floating window, not to this column. */
+  html[data-plus-style="clean"][data-plus-settings-dock="right"] .is-plus-page .settings-dialog-surface {
+    grid-template-columns: 216px minmax(0, 1fr);
+    background: linear-gradient(to right, var(--bg-panel) 216px, var(--workbench-bg) 216px);
+  }
+}
+
+/* 2. Scheduled page: one centred column. The shell was 880px inside a 1655px
+      page, so the right half read as empty. */
+html[data-plus-style="clean"] .scheduled-shell {
+  width: 100%;
+  max-width: min(1120px, 100%);
+  margin-inline: auto;
+  gap: var(--plus-s4);
+}
+html[data-plus-style="clean"] :is(.scheduled-header, .scheduled-notice, .scheduled-list, .scheduled-empty, .scheduled-facts, .scheduled-section) {
+  width: 100%;
+}
+html[data-plus-style="clean"] .scheduled-card {
+  gap: var(--plus-s3);
+  padding: var(--plus-s3) var(--plus-s4);
+  border-radius: var(--plus-r-card);
+}
+/* Title (and its schedule line) on the left, status tag and unread count on
+   the right, however wide the row gets. */
+html[data-plus-style="clean"] .scheduled-card-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+html[data-plus-style="clean"] .scheduled-card-meta {
+  flex: 0 0 auto;
+  margin-left: auto;
+  align-items: flex-end;
+  text-align: right;
+}
+html[data-plus-style="clean"] .scheduled-unread-count { flex: none; }
+
+/* 3a. `/` palette: two columns (one below 1100px) with a single-line
+       description, so every row is the same height and reads left to right. */
+html[data-plus-style="clean"] .app-slash-menu .app-suggestion-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+/* One column when the window cannot give a card a readable measure. */
+@media (max-width: 1099px) {
+  html[data-plus-style="clean"] .app-slash-menu .app-suggestion-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+html[data-plus-style="clean"] .app-slash-menu .app-suggestion-row {
+  height: 52px;
+  border-radius: var(--plus-r-card);
+}
+html[data-plus-style="clean"] .app-slash-menu .app-suggestion-name {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+html[data-plus-style="clean"] .app-slash-menu .app-suggestion-desc {
+  display: block;
+  min-width: 0;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* 3b. The list never ends on a half-drawn card: the rows are fitted by
+       ChatInput, the scrollport keeps a scroll pad and fades its last 12px. */
+html[data-plus-style="clean"] .app-slash-menu .app-suggestion-scroll {
+  scroll-padding-block: var(--plus-s2);
+  overscroll-behavior: contain;
+}
+/* 3c. Tab / Enter are keys, so they are <kbd>: 20px tall, hairline border,
+       an 8px corner and the UI font instead of a mono string. */
+html[data-plus-style="clean"] .app-suggestion-keys {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--plus-s1);
+}
+html[data-plus-style="clean"] .app-suggestion-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 var(--plus-s1);
+  border: 1px solid var(--plus-stroke-strong);
+  border-radius: var(--plus-r-card);
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: var(--plus-fs-1);
+  font-weight: 500;
+  line-height: 1;
+}
+
+/* 4. Topbar: the chips give way instead of overflowing. They were flex:none
+      with a 220px cap, so a long title could only be saved by hiding them. */
+html[data-plus-style="clean"] .app-topbar-title { min-width: 0; }
+html[data-plus-style="clean"] .app-topbar-title > .app-topbar-chip {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 220px;
+}
+html[data-plus-style="clean"] .app-topbar-title > .app-topbar-branch { max-width: 160px; }
+html[data-plus-style="clean"] .app-topbar-title > .app-topbar-chip > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Below 1280px the two lowest-priority chips (the branch, and the parent
+   session jump) step aside rather than clip the title or the actions. */
+@media (max-width: 1279px) {
+  html[data-plus-style="clean"] .app-topbar-title > :is(.app-topbar-branch, .app-topbar-parent-button) {
+    display: none !important;
+  }
+}
+
+/* 5. Hit targets: still drawn small, padded to 24px, pulled back with a
+      negative margin so no row moves. */
+html[data-plus-style="clean"] .turn-files-diff-btn {
+  height: 24px !important;
+  margin: -2px 0 !important;
+  padding: 0 var(--plus-s2) !important;
+}
+html[data-plus-style="clean"] .work-details-menu-trigger {
+  height: 26px !important;
+  margin: -2px 0 !important;
+}
+html[data-plus-style="clean"] .chat-load-earlier {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  margin-block: -4px;
+  padding: 0 var(--plus-s3);
+}
+/* Absolute, so the box grows around the same glyph: 26px square, icon 14px. */
+html[data-plus-style="clean"] .conversation-navigator-list-button {
+  right: 0;
+  bottom: calc(100% + 5px);
+  width: 26px;
+  height: 26px;
+}
+html[data-plus-style="clean"] .conversation-navigator-list-button > svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* 6. Compaction preview: the summary was one `white-space: pre` line, so its
+      scrollWidth was ~124,000px. Three clamped lines at a 100% measure. */
+html[data-plus-style="clean"] .compaction-card-preview {
+  display: -webkit-box;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.5;
+}
+
+/* 7. Composer mascot: the frame must not clip its own absolutely-positioned
+      child, the pet sits a few pixels inside the card instead of hanging
+      fully outside it, and the hit rect covers the whole body (the sprite
+      box, not just its lower half), while the art stays 52px. */
+html[data-plus-style="clean"] .chat-composer-frame {
+  overflow: visible !important;
+  contain: none !important;
+  isolation: auto !important;
+}
+html[data-plus-style="clean"] .plus-composer-crab {
+  z-index: 6;
+  right: 6px;
+  bottom: calc(100% - 4px);
+}
+html[data-plus-style="clean"] .plus-composer-crab-hit {
+  left: 34px;
+  top: 2px;
+  width: 70px;
+  height: 68px;
+}
+
+/* 8. Extension widget popover: 60vh with internal scroll, an overlay corner,
+      a hairline and a real shadow in light mode (it was 144px, square and
+      unshadowed, so it read as text floating over the transcript). */
+html[data-plus-style="clean"] .extension-widget-panels {
+  max-height: 60vh;
+  margin-bottom: var(--plus-s2);
+  border: 1px solid var(--plus-stroke-strong);
+  border-radius: var(--plus-r-overlay);
+  background: var(--bg-panel);
+  box-shadow: var(--shadow-popover);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+html[data-plus-style="clean"] .extension-widget-panels .extension-widget-panel-heading {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg-panel);
+}
+
+/* The fade only exists while the list actually scrolls, so a filtered list
+   that fits is not faded at its last row. */
+html[data-plus-style="clean"] .app-slash-menu .app-suggestion-scroll[data-scrollable="true"] {
+  mask-image: linear-gradient(to bottom, var(--text) calc(100% - 12px), transparent);
+  -webkit-mask-image: linear-gradient(to bottom, var(--text) calc(100% - 12px), transparent);
+}
+
+/* ==========================================================================
+   Plus 1.25 final pass: light-mode contrast + list-edge polish.
+   The audit measured three pairs under 4.5:1 in light mode only.
+   ========================================================================== */
+
+/* 10px timestamps and 12px summaries were #91888a on white = 3.45:1. */
+html[data-plus-style="clean"] :is(.message-meta, .session-item-time, .app-topbar-running-time, .plus-thinking-duration) {
+  color: var(--text-muted);
+}
+
+/* A checked option's label was pure accent on the accent tint = 2.77:1:
+   mix it toward the text colour so the label stays readable at 12px/600. */
+html[data-plus-style="clean"] .settings-theme-option:has(input:checked) .settings-theme-option-label {
+  color: color-mix(in srgb, var(--accent) 66%, var(--text));
+}
+
+/* The plugins grid cut a card row off at the scroll edge; fade it like the
+   slash palette (8px, so a list that fits barely notices). */
+html[data-plus-style="clean"] .plus-plugins-body {
+  mask-image: linear-gradient(to bottom, var(--text) calc(100% - 8px), transparent);
+  -webkit-mask-image: linear-gradient(to bottom, var(--text) calc(100% - 8px), transparent);
 }

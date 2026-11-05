@@ -1,10 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme } from "@/hooks/useTheme";
 import { THEME_OPTIONS } from "@/lib/theme";
-import { openPathNative, isTauriDesktop } from "@/lib/desktop-native";
 import {
   CHAT_CONTENT_FONT_SIZE_DEFAULT,
   CHAT_CONTENT_FONT_SIZE_MAX,
@@ -19,8 +17,6 @@ import {
 } from "@/hooks/useChatAppearance";
 import { ThemeIcon } from "./ThemeIcon";
 import { ConfigButton } from "./SettingsUi";
-import { PlusAppearanceSettings } from "./PlusAppearanceSettings";
-import { AppearancePreview } from "./AppearancePreview";
 
 function ResetIcon() {
   return (
@@ -31,13 +27,14 @@ function ResetIcon() {
 }
 
 /**
- * Plus: Settings › Appearance. Controls on the left; on the right a live
- * preview built from the real chat components, so each change shows at once
- * without closing Settings.
+ * Plus: Settings › Appearance. The app has exactly one look — the Claude Code
+ * Desktop layout, server-rendered as html[data-plus-style="clean"]
+ * [data-plus-theme="clean"] — so the only theme choice left is dark / light /
+ * follow-system. Chat width and size stay here because they are content
+ * layout, not a theme preset.
  */
 export function AppearanceSettingsPage() {
-  const { t, locale } = useI18n();
-  const isZh = locale.startsWith("zh");
+  const { t } = useI18n();
   const { preference, setThemePreference } = useTheme();
   const {
     width: chatContentWidth,
@@ -54,213 +51,109 @@ export function AppearanceSettingsPage() {
   const chatWidthIsDefault = chatWidthIsPercent
     ? chatContentWidthPercent === CHAT_CONTENT_WIDTH_PERCENT_DEFAULT
     : chatContentWidth === CHAT_CONTENT_WIDTH_DEFAULT;
-  const desktop = isTauriDesktop();
-  const [customCssBusy, setCustomCssBusy] = useState(false);
-  const [customCssError, setCustomCssError] = useState<string | null>(null);
-  const [livePreviewMode, setLivePreviewMode] = useState(false);
-
-  useEffect(() => {
-    const root = document.documentElement;
-    if (livePreviewMode) {
-      root.dataset.plusLivePreview = "1";
-    } else {
-      delete root.dataset.plusLivePreview;
-    }
-    return () => {
-      delete root.dataset.plusLivePreview;
-    };
-  }, [livePreviewMode]);
-
-  const openCustomCss = async () => {
-    setCustomCssBusy(true);
-    setCustomCssError(null);
-    try {
-      const response = await fetch("/api/custom-css", { method: "POST" });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = (await response.json()) as { path?: string };
-      if (!data.path) throw new Error("Missing path in response");
-      await openPathNative(data.path);
-    } catch (error) {
-      console.error("Failed to open custom.css:", error);
-      setCustomCssError(t("appSettings.customCssOpenError"));
-    } finally {
-      setCustomCssBusy(false);
-    }
-  };
-
-  const closeSettingsFromPreview = () => {
-    setLivePreviewMode(false);
-    document.querySelector<HTMLButtonElement>(".settings-dialog-close")?.click();
-  };
 
   return (
-    <div className={`settings-general plus-appearance-page${livePreviewMode ? " is-floating-preview" : ""}`}>
-      {livePreviewMode && (
-        <div className="plus-live-preview-sticky-bar" role="region" aria-label={isZh ? "全局界面实时预览" : "Global Live Preview"}>
-          <div className="plus-live-preview-sticky-title">
-            <span className="plus-live-preview-dot" aria-hidden="true" />
-            <strong>{isZh ? "全局界面实时预览" : "Global Live Preview"}</strong>
-          </div>
-          <div className="plus-live-preview-sticky-actions">
-            <button
-              type="button"
-              className="config-button config-button-small config-button-primary"
-              onClick={() => setLivePreviewMode(false)}
-            >
-              {isZh ? "退出预览" : "Exit preview"}
-            </button>
-            <button
-              type="button"
-              className="plus-settings-win-btn is-close"
-              onClick={closeSettingsFromPreview}
-              title={isZh ? "关闭设置 (Esc)" : "Close settings (Esc)"}
-              aria-label={isZh ? "关闭设置" : "Close settings"}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      )}
+    <div className="settings-general plus-appearance-page">
       <h2 className="settings-general-title">{t("settings.appearance")}</h2>
-      <div className="plus-appearance-layout">
-        <div className="plus-appearance-controls">
-          <section className="settings-general-section">
-            <h3 className="settings-general-heading">{t("plus.appearanceMode")}</h3>
-            <div role="radiogroup" aria-label={t("plus.appearanceMode")} className="settings-theme-options">
-              {THEME_OPTIONS.map((option) => (
-                <label key={option.id} className="settings-theme-option">
-                  <input
-                    type="radio"
-                    name="theme"
-                    value={option.id}
-                    checked={preference === option.id}
-                    onChange={() => setThemePreference(option.id)}
-                    className="sr-only"
-                  />
-                  <ThemeIcon preference={option.id} />
-                  <span className="settings-theme-option-label">{t(option.label)}</span>
-                </label>
-              ))}
-            </div>
-          </section>
 
-          <section className="settings-general-section">
-            <PlusAppearanceSettings
-              livePreviewMode={livePreviewMode}
-              onToggleLivePreview={() => setLivePreviewMode((v) => !v)}
-            />
-          </section>
-
-          <section className="settings-general-section">
-            <h3 className="settings-general-heading">{t("plus.chatLayout")}</h3>
-            <div className="settings-chat-options">
-              <div className="settings-chat-option settings-chat-range-option">
-                <div className="settings-chat-range-header">
-                  <label htmlFor="settings-chat-content-width">{t("settings.chatContentWidth")}</label>
-                  <div className="settings-choice-group settings-chat-width-unit" role="radiogroup" aria-label={t("settings.chatContentWidthUnit")}>
-                    {(["px", "percent"] as const).map((unit) => (
-                      <button
-                        key={unit}
-                        type="button"
-                        role="radio"
-                        aria-checked={chatContentWidthUnit === unit}
-                        className={`config-button config-button-small ${chatContentWidthUnit === unit ? "config-button-primary" : "config-button-secondary"}`}
-                        onClick={() => setChatContentWidthUnit(unit)}
-                      >
-                        {unit === "px" ? "px" : "%"}
-                      </button>
-                    ))}
-                  </div>
-                  <output htmlFor="settings-chat-content-width">
-                    {chatWidthIsPercent ? `${chatContentWidthPercent}%` : `${chatContentWidth}px`}
-                  </output>
-                  <ConfigButton
-                    variant="ghost"
-                    size="small"
-                    className="settings-chat-reset"
-                    title={t("settings.resetChatContentWidth")}
-                    aria-label={t("settings.resetChatContentWidth")}
-                    disabled={chatWidthIsDefault}
-                    onClick={resetChatContentWidth}
-                  >
-                    <ResetIcon />
-                  </ConfigButton>
-                </div>
-                <input
-                  id="settings-chat-content-width"
-                  type="range"
-                  min={chatWidthIsPercent ? CHAT_CONTENT_WIDTH_PERCENT_MIN : CHAT_CONTENT_WIDTH_MIN}
-                  max={chatWidthIsPercent ? CHAT_CONTENT_WIDTH_PERCENT_MAX : CHAT_CONTENT_WIDTH_MAX}
-                  step={chatWidthIsPercent ? 1 : 10}
-                  value={chatWidthIsPercent ? chatContentWidthPercent : chatContentWidth}
-                  onChange={(event) => {
-                    const value = Number(event.target.value);
-                    if (chatWidthIsPercent) setChatContentWidthPercent(value);
-                    else setChatContentWidth(value);
-                  }}
-                />
-                <p className="settings-option-hint">{t("settings.chatContentWidthDragHint")}</p>
-              </div>
-              <div className="settings-chat-option settings-chat-range-option">
-                <div className="settings-chat-range-header">
-                  <label htmlFor="settings-chat-content-font-size">{t("settings.chatContentFontSize")}</label>
-                  <output htmlFor="settings-chat-content-font-size">{fontSize}px</output>
-                  <ConfigButton
-                    variant="ghost"
-                    size="small"
-                    className="settings-chat-reset"
-                    title={t("settings.resetChatContentFontSize")}
-                    aria-label={t("settings.resetChatContentFontSize")}
-                    disabled={fontSize === CHAT_CONTENT_FONT_SIZE_DEFAULT}
-                    onClick={() => setFontSize(CHAT_CONTENT_FONT_SIZE_DEFAULT)}
-                  >
-                    <ResetIcon />
-                  </ConfigButton>
-                </div>
-                <input
-                  id="settings-chat-content-font-size"
-                  type="range"
-                  min={CHAT_CONTENT_FONT_SIZE_MIN}
-                  max={CHAT_CONTENT_FONT_SIZE_MAX}
-                  step={1}
-                  value={fontSize}
-                  onChange={(event) => setFontSize(Number(event.target.value))}
-                />
-              </div>
-            </div>
-          </section>
-
-          <section className="settings-general-section">
-            <div className="settings-option-list">
-              <div className="settings-option">
-                <span className="settings-option-text">
-                  <span className="settings-option-title">{t("appSettings.customCss")}</span>
-                  <span className="settings-option-hint">{t("appSettings.customCssHint")}</span>
-                </span>
-                {desktop && (
-                  <ConfigButton
-                    variant="secondary"
-                    size="small"
-                    className="settings-option-action"
-                    disabled={customCssBusy}
-                    onClick={() => void openCustomCss()}
-                  >
-                    {customCssBusy ? t("appSettings.customCssOpening") : t("appSettings.customCssOpen")}
-                  </ConfigButton>
-                )}
-              </div>
-            </div>
-            {customCssError && <p role="alert" className="settings-general-error">{customCssError}</p>}
-          </section>
+      <section className="settings-general-section">
+        <h3 className="settings-general-heading">{t("plus.appearanceMode")}</h3>
+        <div role="radiogroup" aria-label={t("plus.appearanceMode")} className="settings-theme-options">
+          {THEME_OPTIONS.map((option) => (
+            <label key={option.id} className="settings-theme-option">
+              <input
+                type="radio"
+                name="theme"
+                value={option.id}
+                checked={preference === option.id}
+                onChange={() => setThemePreference(option.id)}
+                className="sr-only"
+              />
+              <ThemeIcon preference={option.id} />
+              <span className="settings-theme-option-label">{t(option.label)}</span>
+            </label>
+          ))}
         </div>
+      </section>
 
-        <aside className="plus-appearance-preview-pane">
-          <AppearancePreview />
-        </aside>
-      </div>
+      <section className="settings-general-section">
+        <h3 className="settings-general-heading">{t("plus.chatLayout")}</h3>
+        <div className="settings-chat-options">
+          <div className="settings-chat-option settings-chat-range-option">
+            <div className="settings-chat-range-header">
+              <label htmlFor="settings-chat-content-width">{t("settings.chatContentWidth")}</label>
+              <div className="settings-choice-group settings-chat-width-unit" role="radiogroup" aria-label={t("settings.chatContentWidthUnit")}>
+                {(["px", "percent"] as const).map((unit) => (
+                  <button
+                    key={unit}
+                    type="button"
+                    role="radio"
+                    aria-checked={chatContentWidthUnit === unit}
+                    className={`config-button config-button-small ${chatContentWidthUnit === unit ? "config-button-primary" : "config-button-secondary"}`}
+                    onClick={() => setChatContentWidthUnit(unit)}
+                  >
+                    {unit === "px" ? "px" : "%"}
+                  </button>
+                ))}
+              </div>
+              <output htmlFor="settings-chat-content-width">
+                {chatWidthIsPercent ? `${chatContentWidthPercent}%` : `${chatContentWidth}px`}
+              </output>
+              <ConfigButton
+                variant="ghost"
+                size="small"
+                className="settings-chat-reset"
+                title={t("settings.resetChatContentWidth")}
+                aria-label={t("settings.resetChatContentWidth")}
+                disabled={chatWidthIsDefault}
+                onClick={resetChatContentWidth}
+              >
+                <ResetIcon />
+              </ConfigButton>
+            </div>
+            <input
+              id="settings-chat-content-width"
+              type="range"
+              min={chatWidthIsPercent ? CHAT_CONTENT_WIDTH_PERCENT_MIN : CHAT_CONTENT_WIDTH_MIN}
+              max={chatWidthIsPercent ? CHAT_CONTENT_WIDTH_PERCENT_MAX : CHAT_CONTENT_WIDTH_MAX}
+              step={chatWidthIsPercent ? 1 : 10}
+              value={chatWidthIsPercent ? chatContentWidthPercent : chatContentWidth}
+              onChange={(event) => {
+                const value = Number(event.target.value);
+                if (chatWidthIsPercent) setChatContentWidthPercent(value);
+                else setChatContentWidth(value);
+              }}
+            />
+            <p className="settings-option-hint">{t("settings.chatContentWidthDragHint")}</p>
+          </div>
+          <div className="settings-chat-option settings-chat-range-option">
+            <div className="settings-chat-range-header">
+              <label htmlFor="settings-chat-content-font-size">{t("settings.chatContentFontSize")}</label>
+              <output htmlFor="settings-chat-content-font-size">{fontSize}px</output>
+              <ConfigButton
+                variant="ghost"
+                size="small"
+                className="settings-chat-reset"
+                title={t("settings.resetChatContentFontSize")}
+                aria-label={t("settings.resetChatContentFontSize")}
+                disabled={fontSize === CHAT_CONTENT_FONT_SIZE_DEFAULT}
+                onClick={() => setFontSize(CHAT_CONTENT_FONT_SIZE_DEFAULT)}
+              >
+                <ResetIcon />
+              </ConfigButton>
+            </div>
+            <input
+              id="settings-chat-content-font-size"
+              type="range"
+              min={CHAT_CONTENT_FONT_SIZE_MIN}
+              max={CHAT_CONTENT_FONT_SIZE_MAX}
+              step={1}
+              value={fontSize}
+              onChange={(event) => setFontSize(Number(event.target.value))}
+            />
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
